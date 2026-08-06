@@ -36,12 +36,11 @@ const OPTIONS_TYPES = new Set(["dropdown", "multi_select"]);
 
 /** Starter palette for color fields. */
 const PRESET_COLORS: { hex: string; name: string }[] = [
+  { hex: "#007582", name: "AACC Teal" },
+  { hex: "#BE5513", name: "AACC Orange" },
   { hex: "#ef4444", name: "Red" },
-  { hex: "#f97316", name: "Orange" },
   { hex: "#eab308", name: "Yellow" },
   { hex: "#22c55e", name: "Green" },
-  { hex: "#14b8a6", name: "Teal" },
-  { hex: "#3b82f6", name: "Blue" },
   { hex: "#8b5cf6", name: "Purple" },
   { hex: "#ec4899", name: "Pink" },
   { hex: "#64748b", name: "Slate" },

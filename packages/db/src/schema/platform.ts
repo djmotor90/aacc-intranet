@@ -63,8 +63,14 @@ export const users = pgTable(
     // Break-glass admin: never overwritten by the Entra sync job.
     isProtectedAdmin: boolean("is_protected_admin").notNull().default(false),
     isActive: boolean("is_active").notNull().default(true),
+    /**
+     * Optional local password hash (`scrypt$salt$hash` from `@aitim/shared`).
+     * Used for pre-Entra / DEV_AUTH local sign-in. Null = Entra-only (or open
+     * email-only dev login when DEV_AUTH is on and no hash is set).
+     */
+    passwordHash: text("password_hash"),
     lastSyncedAt: timestamp("last_synced_at", { withTimezone: true }),
-    /** Last successful app sign-in (Entra or dev login). */
+    /** Last successful app sign-in (Entra or local credentials). */
     lastSignedInAt: timestamp("last_signed_in_at", { withTimezone: true }),
     /** Last client heartbeat while the app was open — drives the "online now" presence indicator. */
     lastActiveAt: timestamp("last_active_at", { withTimezone: true }),

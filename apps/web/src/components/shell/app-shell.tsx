@@ -8,6 +8,7 @@
  * License: Proprietary. All rights reserved. See LICENSE / COPYRIGHT.
  */
 import { ChevronLeft, ChevronRight } from "lucide-react";
+import Image from "next/image";
 import Link from "next/link";
 import {
   useCallback,
@@ -178,26 +179,39 @@ export function AppShell({
         {/* Brand */}
         <div
           className={cn(
-            "flex h-14 shrink-0 items-center border-b border-sidebar-border",
-            collapsed ? "justify-center px-1" : "px-3",
+            "relative flex shrink-0 items-center border-b border-sidebar-border bg-sidebar",
+            "after:absolute after:inset-x-0 after:bottom-0 after:h-0.5 after:bg-brand-orange",
+            collapsed ? "h-14 justify-center px-1" : "h-28 px-4 py-3",
           )}
         >
           <Link
             href="/"
             className={cn(
               "font-semibold tracking-tight",
-              collapsed ? "text-base" : "px-1 text-lg",
+              collapsed ? "text-base" : "w-full",
             )}
-            title="AITIM Intranet"
+            title="AACC Operations Hub"
           >
             {collapsed ? (
               <span className="flex size-8 items-center justify-center rounded-md bg-primary text-sm font-bold text-primary-foreground">
                 A
               </span>
             ) : (
-              <>
-                AITIM <span className="text-muted-foreground">Intranet</span>
-              </>
+              <span className="flex w-full flex-col items-center gap-1.5">
+                <span className="block w-full overflow-hidden rounded-sm bg-white px-2 py-1 shadow-sm ring-1 ring-black/5">
+                  <Image
+                    src="/brand/aacc-logo.jpg"
+                    alt="Anne Arundel Community College"
+                    width={1263}
+                    height={715}
+                    className="mx-auto h-16 w-auto max-w-full"
+                    priority
+                  />
+                </span>
+                <span className="text-[10px] font-bold uppercase tracking-[0.24em] text-primary">
+                  Operations Hub
+                </span>
+              </span>
             )}
           </Link>
         </div>
@@ -268,10 +282,10 @@ export function AppShell({
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-        <header className="flex h-14 shrink-0 items-center justify-end border-b bg-background px-4 sm:px-6">
+        <header className="flex h-14 shrink-0 items-center justify-end border-b border-t-[3px] border-t-primary bg-background px-4 sm:px-6">
           {header}
         </header>
-        <main className="min-w-0 flex-1 overflow-x-auto overflow-y-auto p-6">{children}</main>
+        <main className="min-w-0 flex-1 overflow-x-auto overflow-y-auto bg-background p-6">{children}</main>
       </div>
     </div>
     </UserProfileProvider>

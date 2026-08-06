@@ -6,6 +6,7 @@
  * License: Proprietary. All rights reserved. See LICENSE / COPYRIGHT.
  */
 import type { Metadata } from "next";
+import Image from "next/image";
 import { redirect } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -14,10 +15,10 @@ import { auth, signIn } from "@/lib/auth";
 
 export const metadata: Metadata = {
   title: "Sign in",
-  description: "Sign in to AITIM Intranet with your work account",
+  description: "Sign in to AACC Operations Hub with your work account",
   openGraph: {
-    title: "AITIM Intranet",
-    description: "Sign in to AITIM Group intranet — tasks, workspaces, and internal tools.",
+    title: "AACC Operations Hub",
+    description: "A shared workspace for AACC workflows, knowledge, and collaboration.",
   },
 };
 
@@ -32,10 +33,26 @@ export default async function LoginPage() {
   );
 
   return (
-    <main className="flex min-h-svh items-center justify-center bg-muted/40 p-4">
-      <Card className="w-full max-w-sm">
+    <main className="relative flex min-h-svh items-center justify-center overflow-hidden bg-brand-aqua/35 p-4 dark:bg-background">
+      <div className="pointer-events-none absolute -left-24 -top-24 size-80 rounded-full bg-primary/15 blur-3xl" />
+      <div className="pointer-events-none absolute -bottom-28 -right-16 size-80 rounded-full bg-brand-orange/15 blur-3xl" />
+      <div className="absolute inset-x-0 top-0 h-2 bg-primary">
+        <div className="ml-auto h-full w-1/4 bg-brand-orange" />
+      </div>
+      <Card className="relative w-full max-w-md border-primary/15 bg-card/95 shadow-2xl shadow-brand-teal-deep/15 backdrop-blur">
         <CardHeader className="text-center">
-          <CardTitle className="text-xl">AITIM Group Intranet</CardTitle>
+          <div className="mx-auto mb-4 w-full max-w-[260px] rounded-md bg-white p-3 shadow-sm ring-1 ring-black/5">
+            <Image
+              src="/brand/aacc-logo.jpg"
+              alt="Anne Arundel Community College"
+              width={1263}
+              height={715}
+              className="h-auto w-full"
+              priority
+            />
+          </div>
+          <p className="text-xs font-bold uppercase tracking-[0.28em] text-primary">Operations Hub</p>
+          <CardTitle className="mt-1 text-2xl">Welcome back</CardTitle>
           <CardDescription>
             {entraEnabled
               ? "Sign in with your work account"
@@ -70,14 +87,27 @@ export default async function LoginPage() {
               action={async (formData: FormData) => {
                 "use server";
                 await signIn("dev", {
-                  email: String(formData.get("email") ?? "dev@aitim.local"),
+                  email: String(formData.get("email") ?? ""),
+                  password: String(formData.get("password") ?? ""),
                   redirectTo: "/",
                 });
               }}
             >
-              <Input name="email" type="email" defaultValue="dev@aitim.local" />
+              <Input
+                name="email"
+                type="email"
+                autoComplete="username"
+                placeholder="you@aacc.edu"
+                required
+              />
+              <Input
+                name="password"
+                type="password"
+                autoComplete="current-password"
+                placeholder="Password"
+              />
               <Button type="submit" variant={entraEnabled ? "secondary" : "default"} className="w-full">
-                Dev login
+                Sign in
               </Button>
             </form>
           )}

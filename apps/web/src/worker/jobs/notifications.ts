@@ -97,25 +97,25 @@ export async function sendNotificationEmail(notificationId: string): Promise<str
   const detail = rowDetail(n.type, n.payload);
 
   const html = `
-    <div style="font-family:system-ui,-apple-system,sans-serif;max-width:520px;line-height:1.45;color:#0f172a">
+    <div style="font-family:system-ui,-apple-system,sans-serif;max-width:520px;line-height:1.45;color:#173438;border-top:4px solid #007582;padding-top:20px">
       <h2 style="margin:0 0 8px;font-size:18px">${escapeHtml(title)}</h2>
-      ${actor ? `<p style="margin:0 0 4px;color:#64748b">by ${escapeHtml(actor.displayName)}</p>` : ""}
+      ${actor ? `<p style="margin:0 0 4px;color:#53686b">by ${escapeHtml(actor.displayName)}</p>` : ""}
       ${task ? `<p style="margin:0 0 4px"><strong>${escapeHtml(task.number)}</strong> — ${escapeHtml(task.title)}</p>` : ""}
-      ${detail ? `<p style="margin:0 0 12px;color:#334155">${escapeHtml(detail)}</p>` : ""}
+      ${detail ? `<p style="margin:0 0 12px;color:#15515a">${escapeHtml(detail)}</p>` : ""}
       <p style="margin:16px 0 0">
-        <a href="${taskLink}" style="display:inline-block;background:#2563eb;color:#fff;text-decoration:none;padding:8px 14px;border-radius:8px;font-size:14px">
-          Open in AITIM Intranet
+        <a href="${taskLink}" style="display:inline-block;background:#007582;color:#fff;text-decoration:none;padding:8px 14px;border-radius:8px;font-size:14px">
+          Open in AACC Operations Hub
         </a>
       </p>
       <p style="margin:16px 0 0;font-size:12px;color:#94a3b8">
-        <a href="${base}/notifications" style="color:#64748b">All notifications</a>
+        <a href="${base}/notifications" style="color:#007582">All notifications</a>
         · manage email in Settings → Preferences
       </p>
     </div>`;
 
   await sendMail({
     to: recipient.email,
-    subject: `[AITIM] ${title}${task ? ` · ${task.number}` : ""}`,
+    subject: `[AACC Operations Hub] ${title}${task ? ` · ${task.number}` : ""}`,
     html,
   });
   await db
@@ -211,9 +211,9 @@ export async function runHourlyEmailDigest(): Promise<string> {
         return `
           <tr>
             <td style="padding:12px 0;border-bottom:1px solid #e2e8f0;vertical-align:top">
-              <div style="font-weight:600;font-size:14px;color:#0f172a">${escapeHtml(title)}</div>
-              ${actor ? `<div style="font-size:12px;color:#64748b;margin-top:2px">by ${escapeHtml(actor.displayName)}</div>` : ""}
-              ${task ? `<div style="font-size:13px;margin-top:4px"><a href="${link}" style="color:#2563eb;text-decoration:none"><strong>${escapeHtml(task.number)}</strong> — ${escapeHtml(task.title)}</a></div>` : ""}
+              <div style="font-weight:600;font-size:14px;color:#173438">${escapeHtml(title)}</div>
+              ${actor ? `<div style="font-size:12px;color:#53686b;margin-top:2px">by ${escapeHtml(actor.displayName)}</div>` : ""}
+              ${task ? `<div style="font-size:13px;margin-top:4px"><a href="${link}" style="color:#007582;text-decoration:none"><strong>${escapeHtml(task.number)}</strong> — ${escapeHtml(task.title)}</a></div>` : ""}
               ${detail ? `<div style="font-size:12px;color:#475569;margin-top:4px">${escapeHtml(detail)}</div>` : ""}
               <div style="font-size:11px;color:#94a3b8;margin-top:6px">${when} UTC</div>
             </td>
@@ -223,14 +223,14 @@ export async function runHourlyEmailDigest(): Promise<string> {
 
     const count = eligible.length;
     const html = `
-      <div style="font-family:system-ui,-apple-system,sans-serif;max-width:560px;line-height:1.45;color:#0f172a">
-        <h2 style="margin:0 0 4px;font-size:18px">Your hourly AITIM digest</h2>
-        <p style="margin:0 0 16px;color:#64748b;font-size:14px">
+      <div style="font-family:system-ui,-apple-system,sans-serif;max-width:560px;line-height:1.45;color:#173438;border-top:4px solid #007582;padding-top:20px">
+        <h2 style="margin:0 0 4px;font-size:18px">Your AACC Operations Hub digest</h2>
+        <p style="margin:0 0 16px;color:#53686b;font-size:14px">
           ${count} update${count === 1 ? "" : "s"} since the last digest.
         </p>
         <table style="width:100%;border-collapse:collapse">${itemsHtml}</table>
         <p style="margin:20px 0 0">
-          <a href="${base}/notifications" style="display:inline-block;background:#2563eb;color:#fff;text-decoration:none;padding:8px 14px;border-radius:8px;font-size:14px">
+          <a href="${base}/notifications" style="display:inline-block;background:#007582;color:#fff;text-decoration:none;padding:8px 14px;border-radius:8px;font-size:14px">
             Open notifications
           </a>
         </p>
@@ -243,7 +243,7 @@ export async function runHourlyEmailDigest(): Promise<string> {
     try {
       await sendMail({
         to: recipient.email,
-        subject: `[AITIM] Hourly digest · ${count} update${count === 1 ? "" : "s"}`,
+        subject: `[AACC Operations Hub] Hourly digest · ${count} update${count === 1 ? "" : "s"}`,
         html,
       });
       const ids = eligible.map((n) => n.id);

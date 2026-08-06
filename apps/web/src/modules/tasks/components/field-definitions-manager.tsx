@@ -47,12 +47,11 @@ type OptionDraft = {
 const OPTION_TYPES = new Set(["dropdown", "multi_select", "color"]);
 
 const PRESET_COLORS = [
+  "#007582",
+  "#BE5513",
   "#ef4444",
-  "#f97316",
   "#eab308",
   "#22c55e",
-  "#14b8a6",
-  "#3b82f6",
   "#8b5cf6",
   "#ec4899",
   "#64748b",
@@ -133,7 +132,7 @@ function FieldEditDialog({
     if (field.type === "color") {
       setOptions((cur) => [
         ...cur,
-        { key: newKey(), label: "", color: "#3b82f6" },
+        { key: newKey(), label: "", color: "#007582" },
       ]);
     } else {
       setOptions((cur) => [...cur, { key: newKey(), label: "" }]);
@@ -263,7 +262,7 @@ function FieldEditDialog({
                       <input
                         type="color"
                         value={
-                          o.color && /^#[0-9A-Fa-f]{6}$/.test(o.color) ? o.color : "#3b82f6"
+                          o.color && /^#[0-9A-Fa-f]{6}$/.test(o.color) ? o.color : "#007582"
                         }
                         onChange={(e) => updateOption(o.key, { color: e.target.value })}
                         className="size-9 cursor-pointer rounded border bg-transparent p-0.5"
@@ -273,7 +272,7 @@ function FieldEditDialog({
                         value={o.color ?? ""}
                         onChange={(e) => updateOption(o.key, { color: e.target.value })}
                         className="w-28 font-mono text-xs"
-                        placeholder="#3b82f6"
+                        placeholder="#007582"
                         disabled={pending}
                       />
                       <Input

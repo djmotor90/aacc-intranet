@@ -267,16 +267,26 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       ? [
           Credentials({
             id: "dev",
-            name: "Dev Login",
-            credentials: { email: { label: "Email", type: "email" } },
+            name: "Local Login",
+            credentials: {
+              email: { label: "Email", type: "email" },
+              password: { label: "Password", type: "password" },
+            },
             async authorize(credentials) {
               const { db, users } = await import("@aitim/db");
               const { eq } = await import("drizzle-orm");
-              const [user] = await db
-                .select()
-                .from(users)
-                .where(eq(users.email, String(credentials?.email ?? "dev@aitim.local")));
+              const { verifyPassword } = await import("@aitim/shared");
+              const email = String(credentials?.email ?? "")
+                .trim()
+                .toLowerCase();
+              if (!email) return null;
+              const password = String(credentials?.password ?? "");
+              const [user] = await db.select().from(users).where(eq(users.email, email)).limit(1);
               if (!user || !user.isActive) return null;
+              // Prefer password when set; allow open email-only only for seed users without a hash.
+              if (user.passwordHash) {
+                if (!password || !verifyPassword(password, user.passwordHash)) return null;
+              }
               return { id: user.id, email: user.email, name: user.displayName };
             },
           }),

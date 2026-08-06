@@ -60,7 +60,7 @@ function parseColorOptions(optionsRaw: string): { id: string; label: string; col
   for (const line of lines) {
     const m = line.match(/^(#[0-9A-Fa-f]{3,8})\s*(.*)$/);
     if (!m || !HEX_COLOR.test(m[1]!)) {
-      throw new Error(`Invalid color option "${line}". Use e.g. #3b82f6 or #3b82f6 Blue`);
+      throw new Error(`Invalid color option "${line}". Use e.g. #007582 or #007582 AACC Teal`);
     }
     const color = normalizeHex(m[1]!);
     // Empty string = no label (swatch only). Do not fall back to the hex.

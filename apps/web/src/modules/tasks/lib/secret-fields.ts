@@ -40,11 +40,11 @@ export type SecretFieldMeta = Omit<SecretFieldInput, "value">;
 
 /** Seeded into a list's `secretCategories` the first time Secrets is enabled. */
 export const DEFAULT_SECRET_CATEGORIES = [
-  { name: "Logins", color: "#3b82f6" },
+  { name: "Logins", color: "#007582" },
   { name: "Passwords", color: "#ef4444" },
   { name: "Banking", color: "#22c55e" },
   { name: "Insurance", color: "#8b5cf6" },
-  { name: "Email", color: "#f97316" },
+  { name: "Email", color: "#BE5513" },
   { name: "Other", color: "#64748b" },
 ] as const;
 

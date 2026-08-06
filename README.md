@@ -1,13 +1,18 @@
-# AITIM Group Intranet
+# AACC Operations Hub
 
 > **Proprietary software** — Copyright © 2024–2026 **Kim Gurinov** (Gurver).  
 > All rights reserved. See [`LICENSE`](./LICENSE), [`COPYRIGHT`](./COPYRIGHT), and [`NOTICE`](./NOTICE).  
 > Author: Kim Gurinov · `kurinov@gurver.org` · `kim@gurver.com` · [gurver.com](https://gurver.com)  
 > Code fingerprint: `GURVER-KG-AITIM-2026-7F3C9E2A` · stamp: `kg@gurver::aitim-intranet`
 
-Modular intranet platform with Microsoft Entra ID SSO. First module: task management
-for the safety department (Spaces → Lists → Tasks, custom fields, kanban/table
-views, public customer request forms).
+An internal operations platform for Anne Arundel Community College: one shared
+workspace for workflows, requests, projects, knowledge, documents, and team
+coordination. Microsoft Entra ID SSO and modular architecture support secure,
+department-aware growth across AACC.
+
+Current modules include Tasks (Spaces → Folders → Lists → Tasks, custom fields,
+table/board/form views, public request intake) and Docs (collaborative knowledge
+pages, task links, protection, verification, and shared editing).
 
 ### Ownership tooling
 

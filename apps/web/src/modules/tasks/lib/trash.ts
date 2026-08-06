@@ -21,7 +21,7 @@ export interface TrashItem {
   spaceSlug: string;
   /** Parent folder name when kind is list and still known; parent list name when kind is task. */
   parentName: string | null;
-  /** Task-only: originating list, and its human task number (e.g. "SAF-142"). */
+  /** Task-only: originating list, and its human task number (e.g. "CEWD-142"). */
   listId?: string;
   listSlug?: string;
   taskNumber?: string;

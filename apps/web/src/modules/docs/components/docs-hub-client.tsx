@@ -122,7 +122,7 @@ const TEMPLATE_CARDS = [
     kind: "wiki" as const,
     title: "Wiki",
     description: "Organize information in one place",
-    accent: "bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300",
+    accent: "bg-brand-orange/10 text-brand-orange dark:bg-brand-orange/20",
   },
 ];
 
@@ -716,12 +716,12 @@ export function DocsHubClient({
             if (e.defaultPrevented) e.preventDefault();
           }}
         >
-          <FileText className="size-4 shrink-0 text-sky-600 dark:text-sky-400" />
+          <FileText className="size-4 shrink-0 text-primary" />
           <span className="min-w-0 flex-1 truncate font-medium">
             {page.title || "Untitled"}
           </span>
           {page.kind === "wiki" && (
-            <span className="shrink-0 rounded bg-blue-500/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-blue-700 dark:text-blue-300">
+            <span className="shrink-0 rounded bg-brand-orange/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-brand-orange dark:bg-brand-orange/20">
               Wiki
             </span>
           )}

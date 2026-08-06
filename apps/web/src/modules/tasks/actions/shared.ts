@@ -109,7 +109,7 @@ export type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 /** Default workflow statuses applied to every newly created list. */
 const DEFAULT_STATUSES = [
   { name: "New", color: "#64748b", category: "open" as const, position: "a0" },
-  { name: "In Progress", color: "#3b82f6", category: "active" as const, position: "a1" },
+  { name: "In Progress", color: "#007582", category: "active" as const, position: "a1" },
   { name: "Done", color: "#22c55e", category: "done" as const, position: "a2" },
 ];
 

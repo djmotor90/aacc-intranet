@@ -49,7 +49,7 @@ export const NOTIFICATION_EVENT_META: {
   {
     type: "form_submission",
     label: "Form submissions",
-    description: "New customer requests from public forms",
+    description: "New workflow submissions from public forms",
   },
 ];
 

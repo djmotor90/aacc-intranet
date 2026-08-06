@@ -144,7 +144,7 @@ export function PublicFormClient({
           className="mt-6 text-center text-[11px]"
           style={{ color: theme.mutedColor }}
         >
-          Powered by AITIM Intranet
+          Powered by AACC Operations Hub
         </p>
       )}
     </div>

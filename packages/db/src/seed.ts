@@ -6,8 +6,8 @@
  * License: Proprietary. All rights reserved. See LICENSE / COPYRIGHT.
  */
 /**
- * Dev seed: tasks module + demo Safety space with a "Customer Requests" list,
- * statuses, custom fields, a dev user, and a couple of tasks.
+ * Dev seed: tasks module + CEWD Operations space with a "Workflow Discovery" list,
+ * statuses, workflow fields, a dev user, and a discovery task.
  * Idempotent: safe to run repeatedly.
  */
 import { eq } from "drizzle-orm";
@@ -49,19 +49,19 @@ async function main() {
       .returning();
   }
 
-  // Safety space
-  const existingSpace = await db.select().from(spaces).where(eq(spaces.slug, "safety"));
+  // CEWD Operations space
+  const existingSpace = await db.select().from(spaces).where(eq(spaces.slug, "cewd-operations"));
   let space = existingSpace[0];
   if (!space) {
     [space] = await db
       .insert(spaces)
       .values({
         moduleId: tasksModule.id,
-        name: "Safety",
-        slug: "safety",
-        taskPrefix: "SAF",
-        icon: "shield",
-        color: "#e11d48",
+        name: "CEWD Operations",
+        slug: "cewd-operations",
+        taskPrefix: "CEWD",
+        icon: "🎓",
+        color: "#007582",
         createdBy: admin.id,
       })
       .returning();
@@ -74,13 +74,21 @@ async function main() {
     });
   }
 
-  // Customer Requests list
+  // Workflow Discovery list
   const existingList = await db.select().from(lists).where(eq(lists.spaceId, space.id));
   let list = existingList[0];
   if (!list) {
     [list] = await db
       .insert(lists)
-      .values({ spaceId: space.id, name: "Customer Requests", slug: "customer-requests" })
+      .values({
+        spaceId: space.id,
+        name: "Workflow Discovery",
+        slug: "workflow-discovery",
+        description:
+          "Capture candidate CEWD workflows, validate owners and requirements, and select the strongest pilot for delivery.",
+        icon: "🧭",
+        color: "#BE5513",
+      })
       .returning();
 
     const statusRows = await db
@@ -88,7 +96,7 @@ async function main() {
       .values([
         { listId: list.id, name: "New", color: "#64748b", category: "open", position: "a0" },
         { listId: list.id, name: "In Review", color: "#f59e0b", category: "active", position: "a1" },
-        { listId: list.id, name: "In Progress", color: "#3b82f6", category: "active", position: "a2" },
+        { listId: list.id, name: "In Progress", color: "#007582", category: "active", position: "a2" },
         { listId: list.id, name: "Completed", color: "#22c55e", category: "done", position: "a3" },
         { listId: list.id, name: "Rejected", color: "#ef4444", category: "cancelled", position: "a4" },
       ])
@@ -96,43 +104,44 @@ async function main() {
 
     await db.update(lists).set({ defaultStatusId: statusRows[0].id }).where(eq(lists.id, list.id));
 
-    const [requestType] = await db
+    const [workflowType] = await db
       .insert(customFieldDefinitions)
       .values([
         {
           listId: list.id,
-          key: "request_type",
-          label: "Request type",
+          key: "workflow_type",
+          label: "Workflow type",
           type: "dropdown",
           isRequired: true,
           position: "a0",
           options: [
-            { id: "incident", label: "Incident report", color: "#ef4444" },
-            { id: "inspection", label: "Inspection request", color: "#3b82f6" },
-            { id: "training", label: "Training request", color: "#22c55e" },
-            { id: "other", label: "Other", color: "#94a3b8" },
+            { id: "workflow_discovery", label: "Workflow discovery", color: "#007582" },
+            { id: "employer_training", label: "Employer training", color: "#BE5513" },
+            { id: "course_launch", label: "Course or program launch", color: "#15515A" },
+            { id: "approval", label: "Approval process", color: "#7C3AED" },
+            { id: "compliance", label: "Compliance deliverable", color: "#217A5B" },
           ],
         },
         {
           listId: list.id,
-          key: "customer_name",
-          label: "Customer name",
+          key: "workflow_owner",
+          label: "Workflow owner",
           type: "text",
           isRequired: true,
           position: "a1",
         },
         {
           listId: list.id,
-          key: "customer_email",
-          label: "Customer email",
+          key: "owner_email",
+          label: "Owner email",
           type: "email",
           isRequired: false,
           position: "a2",
         },
         {
           listId: list.id,
-          key: "inspector",
-          label: "Inspector",
+          key: "process_lead",
+          label: "Process lead",
           type: "user",
           isRequired: false,
           position: "a3",
@@ -144,13 +153,27 @@ async function main() {
       .insert(tasks)
       .values({
         listId: list.id,
-        number: "SAF-1",
-        title: "Demo: annual fire safety inspection request",
+        number: "CEWD-1",
+        title: "Select and validate the CEWD pilot workflow",
+        description: {
+          type: "doc",
+          content: [
+            {
+              type: "paragraph",
+              content: [
+                {
+                  type: "text",
+                  text: "Run structured discovery with CEWD stakeholders to validate workflow candidates, governance needs, pilot boundaries, and success measures before configuration begins.",
+                },
+              ],
+            },
+          ],
+        },
         statusId: statusRows[0].id,
         priority: "high",
         createdBy: admin.id,
         customFields: {
-          [requestType.id]: "inspection",
+          [workflowType.id]: "workflow_discovery",
         },
       })
       .returning();

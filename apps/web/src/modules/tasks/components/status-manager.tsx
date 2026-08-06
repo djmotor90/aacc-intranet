@@ -41,7 +41,7 @@ interface StatusItem {
 
 const CATEGORY_META: { category: StatusCategory; label: string; color: string }[] = [
   { category: "open", label: "Not Started", color: "text-slate-500" },
-  { category: "active", label: "Active", color: "text-blue-500" },
+  { category: "active", label: "Active", color: "text-primary" },
   { category: "done", label: "Done", color: "text-green-500" },
   { category: "cancelled", label: "Closed", color: "text-rose-500" },
 ];

@@ -33,11 +33,11 @@ export function colorForUserId(userId: string): string {
     "#ca8a04", // yellow
     "#16a34a", // green
     "#0891b2", // cyan
-    "#2563eb", // blue
+    "#BE5513", // AACC orange
     "#7c3aed", // violet
     "#db2777", // pink
     "#0d9488", // teal
-    "#4f46e5", // indigo
+    "#15515A", // AACC deep teal
   ];
   let h = 0;
   for (let i = 0; i < userId.length; i++) h = (h * 31 + userId.charCodeAt(i)) >>> 0;

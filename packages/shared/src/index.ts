@@ -8,3 +8,4 @@
 export * from "./custom-fields";
 export * from "./ownership";
 export * from "./crypto";
+export * from "./password";

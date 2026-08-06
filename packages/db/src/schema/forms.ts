@@ -29,7 +29,7 @@ export const publicForms = pgTable(
   "public_forms",
   {
     id: uuid("id").primaryKey().defaultRandom(),
-    /** Unguessable slug, e.g. "safety-request-x7k2m9" */
+    /** Unguessable slug, e.g. "employer-training-request-x7k2m9" */
     slug: text("slug").notNull().unique(),
     listId: uuid("list_id")
       .notNull()

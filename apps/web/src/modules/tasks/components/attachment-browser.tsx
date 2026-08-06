@@ -184,7 +184,7 @@ function FileTypeVisual({
     /\.(docx?|rtf|odt|txt|md)$/i.test(lower)
   ) {
     Icon = FileText;
-    tone = "bg-blue-100 text-blue-600 dark:bg-blue-950 dark:text-blue-300";
+    tone = "bg-brand-aqua/70 text-brand-teal-deep dark:bg-primary/20 dark:text-primary";
   } else if (mimeType.startsWith("video/") || /\.(mp4|mov|webm|mkv|avi)$/i.test(lower)) {
     Icon = FileVideo;
     tone = "bg-purple-100 text-purple-600 dark:bg-purple-950 dark:text-purple-300";
@@ -205,7 +205,7 @@ function FileTypeVisual({
     /\.(js|ts|tsx|jsx|py|go|rs|java|css|html|json|yml|yaml|sh)$/i.test(lower)
   ) {
     Icon = FileCode;
-    tone = "bg-indigo-100 text-indigo-600 dark:bg-indigo-950 dark:text-indigo-300";
+    tone = "bg-brand-orange/10 text-brand-orange dark:bg-brand-orange/20";
   }
 
   return (

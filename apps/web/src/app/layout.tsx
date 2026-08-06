@@ -27,9 +27,9 @@ const siteUrl =
   process.env.APP_BASE_URL?.replace(/\/$/, "") ||
   "http://localhost:3000";
 
-const siteTitle = "AITIM Intranet";
+const siteTitle = "AACC Operations Hub";
 const siteDescription =
-  "AITIM Group intranet — tasks, workspaces, and internal tools for the team.";
+  "A shared workspace for AACC workflows, knowledge, and collaboration.";
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),

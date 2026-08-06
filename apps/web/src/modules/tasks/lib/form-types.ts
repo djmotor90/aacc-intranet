@@ -345,11 +345,11 @@ export interface FormTheme {
 }
 
 export const DEFAULT_FORM_THEME: FormTheme = {
-  primaryColor: "#4f46e5",
-  backgroundColor: "#f8fafc",
+  primaryColor: "#007582",
+  backgroundColor: "#f7fafa",
   cardColor: "#ffffff",
-  textColor: "#0f172a",
-  mutedColor: "#64748b",
+  textColor: "#173438",
+  mutedColor: "#53686b",
   width: "md",
   radius: "2xl",
   logoPosition: "center",

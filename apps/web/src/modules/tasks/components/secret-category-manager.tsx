@@ -25,13 +25,12 @@ import { createSecretCategory } from "../actions";
 import type { SecretCategoryRow } from "../queries";
 
 const CATEGORY_COLOR_PALETTE = [
+  "#007582",
+  "#BE5513",
   "#ef4444",
-  "#f97316",
   "#eab308",
   "#22c55e",
   "#14b8a6",
-  "#0ea5e9",
-  "#3b82f6",
   "#8b5cf6",
   "#ec4899",
   "#64748b",

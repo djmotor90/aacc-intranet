@@ -71,7 +71,7 @@ export const spaces = pgTable(
       .references(() => modules.id),
     name: text("name").notNull(),
     slug: text("slug").notNull(),
-    /** Prefix for task numbers, e.g. "SAF" -> SAF-142 */
+    /** Prefix for task numbers, e.g. "CEWD" -> CEWD-142 */
     taskPrefix: text("task_prefix").notNull(),
     icon: text("icon"),
     color: text("color"),
@@ -293,7 +293,7 @@ export const tasks = pgTable(
      * Null = top-level task (shown in list/board views).
      */
     parentTaskId: uuid("parent_task_id"),
-    /** Human-readable per-space number, e.g. "SAF-142" */
+    /** Human-readable per-space number, e.g. "CEWD-142" */
     number: text("number").notNull(),
     title: text("title").notNull(),
     /** Tiptap document JSON */

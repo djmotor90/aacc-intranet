@@ -897,7 +897,7 @@ export function RichTextEditor({
   }, []);
 
   const insertTaskEmbed = useCallback(() => {
-    const raw = window.prompt("Task number (e.g. SAF-142)");
+    const raw = window.prompt("Task number (e.g. CEWD-142)");
     if (!raw?.trim()) return;
     const ed = editorRef.current;
     if (!ed) return;
@@ -1018,11 +1018,11 @@ export function RichTextEditor({
             render: (user) => {
               const caret = document.createElement("span");
               caret.classList.add("collab-caret");
-              caret.style.borderColor = String(user.color ?? "#2563eb");
+              caret.style.borderColor = String(user.color ?? "#007582");
 
               const label = document.createElement("span");
               label.classList.add("collab-caret-label");
-              label.style.backgroundColor = String(user.color ?? "#2563eb");
+              label.style.backgroundColor = String(user.color ?? "#007582");
               label.textContent = String(user.name ?? "User");
               caret.appendChild(label);
               return caret;
@@ -1030,7 +1030,7 @@ export function RichTextEditor({
             selectionRender: (user) => ({
               nodeName: "span",
               class: "collab-selection",
-              style: `background-color: ${String(user.color ?? "#2563eb")}33`,
+              style: `background-color: ${String(user.color ?? "#007582")}33`,
               "data-user": String(user.name ?? ""),
             }),
           }),

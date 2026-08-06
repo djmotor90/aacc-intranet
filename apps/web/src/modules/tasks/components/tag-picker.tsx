@@ -19,12 +19,12 @@ import { createAndAddTag, toggleTaskTag } from "../actions";
 /** Client-side palette for the create-tag color picker (must not live in "use server" actions). */
 export const TAG_COLOR_PALETTE = [
   "#ef4444",
-  "#f97316",
+  "#BE5513",
   "#eab308",
   "#22c55e",
   "#14b8a6",
-  "#0ea5e9",
-  "#3b82f6",
+  "#007582",
+  "#15515A",
   "#8b5cf6",
   "#ec4899",
   "#64748b",

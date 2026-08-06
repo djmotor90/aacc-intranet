@@ -25,12 +25,12 @@ import {
 /** Private palette for auto-coloring new tags (not exported — "use server" forbids non-async exports). */
 const TAG_COLORS = [
   "#ef4444",
-  "#f97316",
+  "#BE5513",
   "#eab308",
   "#22c55e",
   "#14b8a6",
-  "#0ea5e9",
-  "#3b82f6",
+  "#007582",
+  "#15515A",
   "#8b5cf6",
   "#ec4899",
   "#64748b",

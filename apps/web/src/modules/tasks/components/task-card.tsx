@@ -20,7 +20,7 @@ import { TagChips } from "./tag-picker";
 export const PRIORITY_STYLES: Record<string, string> = {
   urgent: "bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300",
   high: "bg-orange-100 text-orange-700 dark:bg-orange-950 dark:text-orange-300",
-  normal: "bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300",
+  normal: "bg-brand-aqua/70 text-brand-teal-deep dark:bg-primary/20 dark:text-primary",
   low: "bg-slate-100 text-slate-600 dark:bg-slate-900 dark:text-slate-300",
 };
 
@@ -28,7 +28,7 @@ export const PRIORITY_STYLES: Record<string, string> = {
 export const PRIORITY_CARD_STYLES: Record<string, string> = {
   urgent: "bg-red-500 text-white dark:bg-red-600",
   high: "bg-orange-500 text-white dark:bg-orange-600",
-  normal: "bg-blue-500 text-white dark:bg-blue-600",
+  normal: "bg-primary text-primary-foreground",
   low: "bg-slate-400 text-white dark:bg-slate-500",
 };
 

@@ -8,7 +8,7 @@
 import { ImageResponse } from "next/og";
 
 export const runtime = "edge";
-export const alt = "AITIM Intranet";
+export const alt = "AACC Operations Hub";
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 
@@ -23,7 +23,7 @@ export default function OpenGraphImage() {
           display: "flex",
           flexDirection: "column",
           justifyContent: "space-between",
-          background: "linear-gradient(145deg, #0f172a 0%, #1e3a8a 55%, #2563eb 100%)",
+          background: "linear-gradient(145deg, #15515a 0%, #007582 68%, #2c7480 100%)",
           color: "#fff",
           padding: 72,
           fontFamily: "ui-sans-serif, system-ui, sans-serif",
@@ -40,9 +40,10 @@ export default function OpenGraphImage() {
             style={{
               width: 72,
               height: 72,
+              position: "relative",
               borderRadius: 16,
               background: "#fff",
-              color: "#1d4ed8",
+              color: "#007582",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
@@ -51,16 +52,36 @@ export default function OpenGraphImage() {
             }}
           >
             A
+            <div
+              style={{
+                position: "absolute",
+                right: 0,
+                bottom: 0,
+                left: 0,
+                height: 8,
+                background: "#be5513",
+              }}
+            />
           </div>
-          <div style={{ fontSize: 28, fontWeight: 600, opacity: 0.9 }}>AITIM Group</div>
+          <div style={{ fontSize: 28, fontWeight: 600, opacity: 0.9 }}>
+            Anne Arundel Community College
+          </div>
         </div>
 
-        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            gap: 16,
+            borderLeft: "10px solid #be5513",
+            paddingLeft: 28,
+          }}
+        >
           <div style={{ fontSize: 72, fontWeight: 800, letterSpacing: -1.5, lineHeight: 1.05 }}>
-            AITIM Intranet
+            AACC Operations Hub
           </div>
           <div style={{ fontSize: 32, fontWeight: 500, opacity: 0.88, maxWidth: 900 }}>
-            Tasks, workspaces, and internal tools for the team
+            Workflows, knowledge, and collaboration in one shared workspace
           </div>
         </div>
       </div>
