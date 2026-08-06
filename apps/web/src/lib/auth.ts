@@ -14,6 +14,12 @@ const GRAPH_SCOPES = "openid profile email offline_access User.Read Presence.Rea
 
 const devAuthEnabled = process.env.DEV_AUTH === "true" && process.env.NODE_ENV !== "production";
 
+/** Entra SSO only when issuer is configured (local AACC uses DEV_AUTH without Entra). */
+const entraEnabled = Boolean(
+  process.env.AUTH_MICROSOFT_ENTRA_ID_ISSUER?.trim() ||
+    process.env.AUTH_MICROSOFT_ENTRA_ID_ID?.trim(),
+);
+
 // Fail loudly at RUNTIME if AUTH_URL is missing in production. Without it,
 // Auth.js falls back to deriving the OAuth redirect_uri from request headers,
 // which behind some reverse-proxy misconfigurations yields the internal
@@ -249,10 +255,14 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     },
   },
   providers: [
-    MicrosoftEntraID({
-      issuer: process.env.AUTH_MICROSOFT_ENTRA_ID_ISSUER,
-      authorization: { params: { scope: GRAPH_SCOPES } },
-    }),
+    ...(entraEnabled
+      ? [
+          MicrosoftEntraID({
+            issuer: process.env.AUTH_MICROSOFT_ENTRA_ID_ISSUER,
+            authorization: { params: { scope: GRAPH_SCOPES } },
+          }),
+        ]
+      : []),
     ...(devAuthEnabled
       ? [
           Credentials({

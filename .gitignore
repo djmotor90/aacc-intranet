@@ -9,5 +9,8 @@ dist/
 .turbo/
 coverage/
 
+# Local pnpm content-addressable store (never commit; use global store)
+.pnpm-store/
+
 # Local agent skill packs (not app code; do not ship to git/Coolify)
 .claude/skills/
