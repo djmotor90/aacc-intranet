@@ -1,0 +1,73 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "AITIM client config",
+  "type": "object",
+  "required": ["clientId", "displayName", "slug", "primaryDomain", "database", "admin"],
+  "properties": {
+    "clientId": { "type": "string", "description": "Folder / machine id, e.g. acme-corp" },
+    "displayName": { "type": "string" },
+    "slug": { "type": "string", "pattern": "^[a-z0-9-]+$" },
+    "primaryDomain": { "type": "string" },
+    "contact": {
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "email": { "type": "string" }
+      }
+    },
+    "database": {
+      "type": "object",
+      "required": ["name"],
+      "properties": {
+        "name": { "type": "string", "description": "Postgres database name" }
+      }
+    },
+    "admin": {
+      "type": "object",
+      "required": ["email", "displayName"],
+      "properties": {
+        "email": { "type": "string" },
+        "displayName": { "type": "string" }
+      }
+    },
+    "modules": {
+      "type": "object",
+      "properties": {
+        "tasks": { "type": "boolean" },
+        "docs": { "type": "boolean" }
+      }
+    },
+    "auth": {
+      "type": "object",
+      "properties": {
+        "entraTenantId": { "type": "string" },
+        "webAppClientId": { "type": "string" },
+        "daemonClientId": { "type": "string" }
+      }
+    },
+    "storage": {
+      "type": "object",
+      "properties": {
+        "bucketAttachments": { "type": "string" },
+        "bucketPhotos": { "type": "string" },
+        "region": { "type": "string" },
+        "endpoint": { "type": "string" }
+      }
+    },
+    "mail": {
+      "type": "object",
+      "properties": {
+        "transport": { "type": "string", "enum": ["smtp", "graph"] },
+        "senderUpn": { "type": "string" }
+      }
+    },
+    "collab": {
+      "type": "object",
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "publicWsUrl": { "type": "string" }
+      }
+    },
+    "notes": { "type": "string" }
+  }
+}

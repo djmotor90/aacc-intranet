@@ -1,0 +1,738 @@
+/**
+ * Proprietary — Copyright (c) 2024–2026 Kim Gurinov (Gurver).
+ * Author: Kim Gurinov <kurinov@gurver.org> <kim@gurver.com>
+ * Website: https://gurver.com
+ * Fingerprint: GURVER-KG-AITIM-2026-7F3C9E2A
+ * License: Proprietary. All rights reserved. See LICENSE / COPYRIGHT.
+ */
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+/* ── TipTap / ClickUp-style rich text ─────────────────────────── */
+.ProseMirror {
+  outline: none;
+  word-break: break-word;
+}
+.ProseMirror > * + * {
+  margin-top: 0.15em;
+}
+.ProseMirror p.is-editor-empty:first-child::before,
+.ProseMirror .is-empty::before {
+  color: var(--muted-foreground);
+  opacity: 0.65;
+  float: left;
+  height: 0;
+  pointer-events: none;
+  content: attr(data-placeholder);
+}
+/* Task lists (checkboxes) */
+.ProseMirror ul[data-type="taskList"] {
+  list-style: none;
+  padding-left: 0.15rem;
+  margin: 0.5rem 0;
+}
+.ProseMirror ul[data-type="taskList"] li {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.55rem;
+  margin: 0.2rem 0;
+}
+.ProseMirror ul[data-type="taskList"] li > label {
+  margin-top: 0.28rem;
+  flex-shrink: 0;
+  user-select: none;
+}
+.ProseMirror ul[data-type="taskList"] li > label input[type="checkbox"] {
+  width: 1rem;
+  height: 1rem;
+  cursor: pointer;
+  accent-color: var(--primary);
+  border-radius: 0.25rem;
+}
+.ProseMirror ul[data-type="taskList"] li > div {
+  flex: 1;
+  min-width: 0;
+}
+.ProseMirror ul[data-type="taskList"] li[data-checked="true"] > div {
+  text-decoration: line-through;
+  opacity: 0.55;
+}
+/* Nested / bullet / numbered lists — force visible markers (prose-invert can hide them) */
+.ProseMirror ul:not([data-type="taskList"]) {
+  list-style-type: disc;
+  list-style-position: outside;
+  padding-left: 1.5rem;
+  margin: 0.4rem 0;
+}
+.ProseMirror ol {
+  list-style-type: decimal;
+  list-style-position: outside;
+  padding-left: 1.5rem;
+  margin: 0.4rem 0;
+}
+.ProseMirror ul:not([data-type="taskList"]) > li,
+.ProseMirror ol > li {
+  display: list-item;
+  margin: 0.15rem 0;
+  padding-left: 0.15rem;
+}
+.ProseMirror ul:not([data-type="taskList"]) > li::marker,
+.ProseMirror ol > li::marker {
+  color: var(--foreground);
+  font-weight: 600;
+  opacity: 0.75;
+}
+.ProseMirror li > p {
+  margin: 0;
+}
+.ProseMirror li p {
+  margin: 0;
+}
+/* Code blocks */
+.ProseMirror pre {
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.ProseMirror pre code {
+  background: transparent;
+  padding: 0;
+  font-size: inherit;
+  color: inherit;
+  border-radius: 0;
+}
+/* Selection */
+.ProseMirror ::selection {
+  background: color-mix(in oklch, var(--primary) 22%, transparent);
+}
+/* Mentions inside editor */
+.ProseMirror .mention {
+  white-space: nowrap;
+}
+/* Pasted / embedded images (block + resizable) — also image-mime fileAttachment nodes */
+.ProseMirror img.aitim-editor-image,
+.aitim-editor img.aitim-editor-image,
+.aitim-editor img,
+.ProseMirror img[data-type="file-attachment"] {
+  display: block;
+  /* width/height set via inline styles when resized — don't force height:auto */
+  max-width: 100%;
+  height: auto;
+  margin: 0.5rem 0;
+  border-radius: 0.5rem;
+  border: 1px solid var(--border);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.04);
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-drag: none;
+  vertical-align: top;
+}
+/* Resize container — MUST shrink-wrap the image so selection outline matches size */
+.ProseMirror .aitim-image-resize,
+.ProseMirror [data-resize-container][data-node="image"] {
+  display: block;
+  width: fit-content;
+  max-width: 100%;
+  margin: 0.75rem 0;
+  line-height: 0;
+  position: relative;
+  box-sizing: content-box;
+  pointer-events: auto !important;
+}
+.ProseMirror .aitim-image-resize__wrap,
+.ProseMirror [data-resize-wrapper] {
+  position: relative;
+  display: block;
+  width: fit-content;
+  max-width: 100%;
+  line-height: 0;
+  box-sizing: border-box;
+}
+/* Corner resize handles — visible when image node is selected */
+.ProseMirror .aitim-image-resize__handle,
+.ProseMirror [data-resize-handle] {
+  position: absolute !important;
+  z-index: 20;
+  box-sizing: border-box;
+  background: var(--primary);
+  border: 2px solid var(--background);
+  border-radius: 999px;
+  width: 12px !important;
+  height: 12px !important;
+  opacity: 0;
+  transition: opacity 0.12s ease;
+  pointer-events: auto !important;
+  box-shadow: 0 0 0 1px color-mix(in oklch, var(--primary) 40%, transparent);
+}
+/* Resize handles only when the image is selected (not on mere hover) */
+.ProseMirror .aitim-image-resize.ProseMirror-selectednode .aitim-image-resize__handle,
+.ProseMirror [data-resize-container].ProseMirror-selectednode [data-resize-handle],
+.ProseMirror .aitim-image-resize--active .aitim-image-resize__handle,
+.ProseMirror [data-resize-state="true"] [data-resize-handle] {
+  opacity: 1;
+}
+.ProseMirror [data-resize-handle="top-left"],
+.ProseMirror .aitim-image-resize__handle[data-resize-handle="top-left"] {
+  top: -6px !important;
+  left: -6px !important;
+  cursor: nwse-resize;
+}
+.ProseMirror [data-resize-handle="top-right"],
+.ProseMirror .aitim-image-resize__handle[data-resize-handle="top-right"] {
+  top: -6px !important;
+  right: -6px !important;
+  cursor: nesw-resize;
+}
+.ProseMirror [data-resize-handle="bottom-left"],
+.ProseMirror .aitim-image-resize__handle[data-resize-handle="bottom-left"] {
+  bottom: -6px !important;
+  left: -6px !important;
+  cursor: nesw-resize;
+}
+.ProseMirror [data-resize-handle="bottom-right"],
+.ProseMirror .aitim-image-resize__handle[data-resize-handle="bottom-right"] {
+  bottom: -6px !important;
+  right: -6px !important;
+  cursor: nwse-resize;
+}
+/*
+ * Selection chrome — soft primary ring (never harsh black browser defaults).
+ * ProseMirror's default selectednode outline can look black; override fully.
+ */
+.ProseMirror .ProseMirror-selectednode {
+  outline: none !important;
+  box-shadow: 0 0 0 2px color-mix(in oklch, var(--primary) 45%, transparent);
+  border-radius: 0.45rem;
+  background: color-mix(in oklch, var(--primary) 6%, transparent);
+}
+.ProseMirror .aitim-image-resize.ProseMirror-selectednode,
+.ProseMirror [data-resize-container][data-node="image"].ProseMirror-selectednode,
+.ProseMirror .aitim-image-resize--active,
+.ProseMirror [data-resize-state="true"] {
+  outline: none !important;
+  box-shadow: 0 0 0 2px color-mix(in oklch, var(--primary) 50%, transparent);
+  border-radius: 0.5rem;
+  background: transparent;
+}
+.ProseMirror .aitim-image-resize.ProseMirror-selectednode img,
+.ProseMirror [data-resize-container].ProseMirror-selectednode img {
+  outline: none !important;
+  box-shadow: none;
+}
+/* ClickUp-style file chips */
+.ProseMirror .aitim-file-attachment,
+.aitim-editor .aitim-file-attachment {
+  display: block;
+  margin: 0.5rem 0;
+  max-width: 28rem;
+  border-radius: 0.625rem;
+  border: 1px solid var(--border);
+  background: var(--muted);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.04);
+  overflow: hidden;
+}
+.ProseMirror .aitim-file-attachment.ProseMirror-selectednode,
+.aitim-editor .aitim-file-attachment.ProseMirror-selectednode {
+  outline: none !important;
+  box-shadow: 0 0 0 2px color-mix(in oklch, var(--primary) 45%, transparent);
+}
+.aitim-file-attachment__link {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.55rem 0.75rem;
+  text-decoration: none !important;
+  color: var(--foreground) !important;
+  min-width: 0;
+}
+.aitim-file-attachment__link:hover {
+  background: color-mix(in oklch, var(--accent) 80%, transparent);
+}
+.aitim-file-attachment__icon {
+  flex-shrink: 0;
+  font-size: 0.95rem;
+  line-height: 1;
+}
+.aitim-file-attachment__name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.8125rem;
+  font-weight: 500;
+}
+.aitim-file-attachment__size {
+  flex-shrink: 0;
+  font-size: 0.7rem;
+  color: var(--muted-foreground);
+  font-variant-numeric: tabular-nums;
+}
+/* Tables — resizable columns + draggable block */
+.ProseMirror .tableWrapper,
+.aitim-editor .tableWrapper {
+  margin: 0.85rem 0;
+  overflow-x: auto;
+  max-width: 100%;
+  position: relative;
+  border-radius: 0.5rem;
+}
+.ProseMirror .tableWrapper.ProseMirror-selectednode,
+.ProseMirror .ProseMirror-selectednode.tableWrapper {
+  outline: none !important;
+  box-shadow: 0 0 0 2px color-mix(in oklch, var(--primary) 45%, transparent);
+}
+.ProseMirror table,
+.aitim-editor table {
+  border-collapse: collapse;
+  table-layout: fixed;
+  width: 100%;
+  margin: 0;
+  overflow: hidden;
+  border-radius: 0.5rem;
+  border: 1px solid var(--border);
+}
+.ProseMirror td,
+.ProseMirror th,
+.aitim-editor td,
+.aitim-editor th {
+  min-width: 4.5rem;
+  border: 1px solid var(--border);
+  padding: 0.45rem 0.65rem;
+  vertical-align: top;
+  box-sizing: border-box;
+  position: relative;
+  cursor: text;
+}
+.ProseMirror th,
+.aitim-editor th {
+  background: var(--muted);
+  font-weight: 600;
+  text-align: left;
+}
+.ProseMirror td > *,
+.ProseMirror th > * {
+  margin: 0;
+}
+.ProseMirror .selectedCell::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: color-mix(in oklch, var(--primary) 12%, transparent);
+  pointer-events: none;
+  z-index: 1;
+}
+/* Column resize grip (TipTap table) */
+.ProseMirror .column-resize-handle {
+  position: absolute;
+  right: -2px;
+  top: 0;
+  bottom: 0;
+  width: 5px;
+  background: color-mix(in oklch, var(--primary) 65%, transparent);
+  pointer-events: none;
+  z-index: 20;
+}
+.ProseMirror.resize-cursor {
+  cursor: col-resize !important;
+}
+/* Gap cursor between blocks (place caret above/below image/table) */
+.ProseMirror-gapcursor::after {
+  border-top-color: var(--primary) !important;
+}
+
+/* ── Slash extras: banners, badges, toggles, columns, buttons ─── */
+.ProseMirror .aitim-banner {
+  margin: 0.65rem 0;
+  padding: 0.65rem 0.85rem;
+  border-radius: 0.5rem;
+  border: 1px solid var(--border);
+  background: var(--muted);
+}
+.ProseMirror .aitim-banner--info {
+  border-color: color-mix(in oklch, #3e63dd 35%, var(--border));
+  background: color-mix(in oklch, #3e63dd 10%, transparent);
+}
+.ProseMirror .aitim-banner--warning {
+  border-color: color-mix(in oklch, #f76b15 35%, var(--border));
+  background: color-mix(in oklch, #f76b15 10%, transparent);
+}
+.ProseMirror .aitim-banner--success {
+  border-color: color-mix(in oklch, #30a46c 35%, var(--border));
+  background: color-mix(in oklch, #30a46c 10%, transparent);
+}
+.ProseMirror .aitim-pull-quote {
+  margin: 1rem 0;
+  padding: 0.75rem 1rem;
+  border-left: 4px solid var(--primary);
+  font-size: 1.05em;
+  font-style: italic;
+  color: var(--foreground);
+  background: color-mix(in oklch, var(--muted) 70%, transparent);
+  border-radius: 0 0.5rem 0.5rem 0;
+}
+.ProseMirror .aitim-toggle {
+  margin: 0.5rem 0;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  padding: 0.35rem 0.65rem;
+  background: var(--card);
+}
+.ProseMirror .aitim-toggle__summary {
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 0.875rem;
+  list-style: none;
+}
+.ProseMirror .aitim-toggle__summary::-webkit-details-marker {
+  display: none;
+}
+.ProseMirror .aitim-toggle__body {
+  margin-top: 0.35rem;
+  padding-left: 0.25rem;
+}
+.ProseMirror .aitim-columns {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+  margin: 0.75rem 0;
+}
+.ProseMirror .aitim-column {
+  min-width: 0;
+  border: 1px dashed color-mix(in oklch, var(--border) 80%, transparent);
+  border-radius: 0.45rem;
+  padding: 0.4rem 0.5rem;
+}
+.ProseMirror .aitim-action-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0.5rem 0;
+  padding: 0.45rem 0.9rem;
+  border-radius: 0.5rem;
+  background: var(--primary);
+  color: var(--primary-foreground) !important;
+  font-size: 0.875rem;
+  font-weight: 600;
+  text-decoration: none !important;
+  border: none;
+}
+.ProseMirror .aitim-action-button:hover {
+  opacity: 0.92;
+}
+/* Badges — high specificity so prose styles don't wash them out */
+.ProseMirror span.aitim-badge,
+.aitim-editor span.aitim-badge,
+span.aitim-badge {
+  display: inline !important;
+  padding: 0.1em 0.45em !important;
+  border-radius: 999px !important;
+  font-size: 0.85em !important;
+  font-weight: 600 !important;
+  line-height: 1.35 !important;
+  white-space: nowrap;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+}
+.ProseMirror span.aitim-badge--red,
+span.aitim-badge--red { background: #ffc9c9 !important; color: #c92a2a !important; }
+.ProseMirror span.aitim-badge--orange,
+span.aitim-badge--orange { background: #ffd8a8 !important; color: #d9480f !important; }
+.ProseMirror span.aitim-badge--yellow,
+span.aitim-badge--yellow { background: #fff3bf !important; color: #e67700 !important; }
+.ProseMirror span.aitim-badge--blue,
+span.aitim-badge--blue { background: #d0ebff !important; color: #1864ab !important; }
+.ProseMirror span.aitim-badge--purple,
+span.aitim-badge--purple { background: #e5dbff !important; color: #5f3dc4 !important; }
+.ProseMirror span.aitim-badge--pink,
+span.aitim-badge--pink { background: #ffdeeb !important; color: #a61e4d !important; }
+.ProseMirror span.aitim-badge--green,
+span.aitim-badge--green { background: #d3f9d8 !important; color: #2b8a3e !important; }
+.ProseMirror span.aitim-badge--grey,
+span.aitim-badge--grey { background: #e9ecef !important; color: #495057 !important; }
+.ProseMirror span.aitim-badge--strong-red,
+span.aitim-badge--strong-red { background: #e03131 !important; color: #fff !important; }
+.ProseMirror span.aitim-badge--strong-orange,
+span.aitim-badge--strong-orange { background: #f76707 !important; color: #fff !important; }
+.ProseMirror span.aitim-badge--strong-yellow,
+span.aitim-badge--strong-yellow { background: #f59f00 !important; color: #fff !important; }
+.ProseMirror span.aitim-badge--strong-blue,
+span.aitim-badge--strong-blue { background: #1c7ed6 !important; color: #fff !important; }
+.ProseMirror span.aitim-badge--strong-purple,
+span.aitim-badge--strong-purple { background: #7048e8 !important; color: #fff !important; }
+.ProseMirror span.aitim-badge--strong-pink,
+span.aitim-badge--strong-pink { background: #e64980 !important; color: #fff !important; }
+.ProseMirror span.aitim-badge--strong-green,
+span.aitim-badge--strong-green { background: #2f9e44 !important; color: #fff !important; }
+.ProseMirror span.aitim-badge--strong-grey,
+span.aitim-badge--strong-grey { background: #868e96 !important; color: #fff !important; }
+/* Soft badges are pastel-on-white; dim them against dark surfaces so they don't glare. */
+.dark .ProseMirror span.aitim-badge--red,
+.dark span.aitim-badge--red,
+.dark .ProseMirror span.aitim-badge--orange,
+.dark span.aitim-badge--orange,
+.dark .ProseMirror span.aitim-badge--yellow,
+.dark span.aitim-badge--yellow,
+.dark .ProseMirror span.aitim-badge--blue,
+.dark span.aitim-badge--blue,
+.dark .ProseMirror span.aitim-badge--purple,
+.dark span.aitim-badge--purple,
+.dark .ProseMirror span.aitim-badge--pink,
+.dark span.aitim-badge--pink,
+.dark .ProseMirror span.aitim-badge--green,
+.dark span.aitim-badge--green,
+.dark .ProseMirror span.aitim-badge--grey,
+.dark span.aitim-badge--grey {
+  filter: brightness(0.72) saturate(1.15);
+}
+.ProseMirror h4 {
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+/* ── ClickUp-style 6-dot block grip (first-press drag) ─────────── */
+.aitim-block-grip {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.35rem;
+  height: 1.4rem;
+  border-radius: 0.35rem;
+  border: none;
+  outline: none;
+  box-shadow: none;
+  color: var(--muted-foreground);
+  background: transparent;
+  cursor: grab;
+  user-select: none;
+  touch-action: none;
+  transition: background-color 0.1s ease, color 0.1s ease, box-shadow 0.1s ease;
+}
+.aitim-block-grip:hover {
+  background: var(--muted);
+  color: var(--foreground);
+  cursor: grab;
+}
+.aitim-block-grip--dragging,
+.aitim-block-grip:active {
+  cursor: grabbing !important;
+  background: color-mix(in oklch, var(--primary) 16%, var(--muted));
+  color: var(--primary);
+  box-shadow: 0 0 0 1px color-mix(in oklch, var(--primary) 30%, transparent);
+}
+/* Blue drop line between blocks while moving */
+.aitim-block-drop-line {
+  height: 2px;
+  border-radius: 1px;
+  background: var(--primary);
+  box-shadow: 0 0 0 1px color-mix(in oklch, var(--primary) 35%, transparent);
+  pointer-events: none;
+}
+
+/* While dragging: closed-hand cursor + soft source highlight (no black borders) */
+html.aitim-block-dragging,
+html.aitim-block-dragging body,
+html.aitim-block-dragging * {
+  cursor: grabbing !important;
+}
+html.aitim-block-dragging .ProseMirror .ProseMirror-selectednode,
+html.aitim-block-dragging .ProseMirror .aitim-image-resize.ProseMirror-selectednode,
+html.aitim-block-dragging .ProseMirror [data-resize-container].ProseMirror-selectednode,
+html.aitim-block-dragging .ProseMirror .aitim-file-attachment.ProseMirror-selectednode,
+html.aitim-block-dragging .ProseMirror .tableWrapper.ProseMirror-selectednode {
+  outline: none !important;
+  box-shadow: none !important;
+  background: color-mix(in oklch, var(--primary) 12%, transparent) !important;
+  opacity: 0.5;
+}
+/*
+ * TipTap suggestion popups (slash / @) are mounted to document.body via
+ * SuggestionProps.mount. Ensure they sit above cards, sidebars, etc.
+ */
+[data-tippy-root],
+.tippy-box {
+  z-index: 100 !important;
+}
+/* Legacy tippy shell (if any) — keep transparent so custom popovers own the look */
+.tippy-box {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  color: var(--popover-foreground) !important;
+}
+.tippy-content {
+  padding: 0 !important;
+  color: inherit !important;
+  background: transparent !important;
+}
+.tippy-arrow {
+  display: none !important;
+}
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono);
+  --font-heading: var(--font-sans);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-success-foreground: var(--success-foreground);
+  --color-success: var(--success);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+}
+
+:root {
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.145 0 0);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.145 0 0);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.145 0 0);
+  --primary: oklch(0.546 0.245 262.881);
+  --primary-foreground: oklch(0.985 0 0);
+  --secondary: oklch(0.97 0 0);
+  --secondary-foreground: oklch(0.205 0 0);
+  --muted: oklch(0.97 0 0);
+  --muted-foreground: oklch(0.556 0 0);
+  --accent: oklch(0.97 0 0);
+  --accent-foreground: oklch(0.205 0 0);
+  --destructive: oklch(0.577 0.245 27.325);
+  --success: oklch(0.596 0.145 163.225);
+  --success-foreground: oklch(0.985 0 0);
+  --border: oklch(0.922 0 0);
+  --input: oklch(0.922 0 0);
+  --ring: oklch(0.546 0.245 262.881);
+  --chart-1: oklch(0.623 0.214 259.815);
+  --chart-2: oklch(0.696 0.17 162.48);
+  --chart-3: oklch(0.769 0.188 70.08);
+  --chart-4: oklch(0.606 0.25 292.717);
+  --chart-5: oklch(0.645 0.246 16.439);
+  --radius: 0.625rem;
+  --sidebar: oklch(0.985 0 0);
+  --sidebar-foreground: oklch(0.145 0 0);
+  --sidebar-primary: oklch(0.546 0.245 262.881);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.97 0 0);
+  --sidebar-accent-foreground: oklch(0.205 0 0);
+  --sidebar-border: oklch(0.922 0 0);
+  --sidebar-ring: oklch(0.546 0.245 262.881);
+}
+
+.dark {
+  --background: oklch(0.145 0 0);
+  --foreground: oklch(0.985 0 0);
+  --card: oklch(0.205 0 0);
+  --card-foreground: oklch(0.985 0 0);
+  --popover: oklch(0.205 0 0);
+  --popover-foreground: oklch(0.985 0 0);
+  --primary: oklch(0.623 0.214 259.815);
+  --primary-foreground: oklch(0.985 0 0);
+  --secondary: oklch(0.269 0 0);
+  --secondary-foreground: oklch(0.985 0 0);
+  --muted: oklch(0.269 0 0);
+  --muted-foreground: oklch(0.708 0 0);
+  --accent: oklch(0.269 0 0);
+  --accent-foreground: oklch(0.985 0 0);
+  --destructive: oklch(0.704 0.191 22.216);
+  --success: oklch(0.696 0.17 162.48);
+  --success-foreground: oklch(0.985 0 0);
+  --border: oklch(1 0 0 / 10%);
+  --input: oklch(1 0 0 / 15%);
+  --ring: oklch(0.623 0.214 259.815);
+  --chart-1: oklch(0.623 0.214 259.815);
+  --chart-2: oklch(0.696 0.17 162.48);
+  --chart-3: oklch(0.769 0.188 70.08);
+  --chart-4: oklch(0.606 0.25 292.717);
+  --chart-5: oklch(0.645 0.246 16.439);
+  --sidebar: oklch(0.205 0 0);
+  --sidebar-foreground: oklch(0.985 0 0);
+  --sidebar-primary: oklch(0.623 0.214 259.815);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.269 0 0);
+  --sidebar-accent-foreground: oklch(0.985 0 0);
+  --sidebar-border: oklch(1 0 0 / 10%);
+  --sidebar-ring: oklch(0.623 0.214 259.815);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+  html,
+  body {
+    /* The app shell manages its own nested scroll areas (h-svh + overflow-y-auto);
+       the document itself must never scroll, or trackpad overscroll bounce lifts
+       the whole page and exposes blank space beneath it. */
+    height: 100%;
+    overflow: hidden;
+    overscroll-behavior: none;
+  }
+  html {
+    @apply font-sans;
+  }
+}
+
+/* Live multiplayer carets (TipTap CollaborationCaret) */
+.collab-caret {
+  border-left: 2px solid;
+  margin-left: -1px;
+  margin-right: -1px;
+  pointer-events: none;
+  position: relative;
+  word-break: normal;
+}
+.collab-caret-label {
+  border-radius: 4px 4px 4px 0;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 600;
+  left: -1px;
+  line-height: 1;
+  padding: 2px 5px;
+  position: absolute;
+  top: -1.4em;
+  user-select: none;
+  white-space: nowrap;
+}
+.collab-selection {
+  border-radius: 2px;
+}

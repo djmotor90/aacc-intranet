@@ -1,0 +1,60 @@
+{
+  "name": "aitim-intranet",
+  "private": true,
+  "license": "UNLICENSED",
+  "author": {
+    "name": "Kim Gurinov",
+    "email": "kim@gurver.com",
+    "url": "https://gurver.com"
+  },
+  "contributors": [
+    {
+      "name": "Kim Gurinov",
+      "email": "kurinov@gurver.org",
+      "url": "https://gurver.com"
+    }
+  ],
+  "homepage": "https://gurver.com",
+  "description": "Proprietary AITIM Intranet by Kim Gurinov (Gurver). Fingerprint: GURVER-KG-AITIM-2026-7F3C9E2A",
+  "scripts": {
+    "dev": "pnpm --filter web dev",
+    "worker:dev": "pnpm --filter web worker:dev",
+    "collab:dev": "pnpm --filter web collab:dev",
+    "build": "pnpm --filter web build",
+    "db:generate": "pnpm --filter @aitim/db generate",
+    "db:migrate": "pnpm --filter @aitim/db migrate",
+    "db:seed": "pnpm --filter @aitim/db seed",
+    "db:seed:baseline": "pnpm --filter @aitim/db seed:baseline",
+    "client:env": "node scripts/render-client-env.mjs",
+    "client:bootstrap": "node scripts/bootstrap-client.mjs",
+    "db:dump-schema": "node scripts/dump-schema-backup.mjs",
+    "lint": "pnpm -r lint",
+    "test": "pnpm -r test",
+    "ownership:verify": "node scripts/verify-ownership.mjs",
+    "ownership:stamp": "node scripts/stamp-ownership.mjs",
+    "ownership:check": "node scripts/stamp-ownership.mjs --check",
+    "ownership:hooks": "node scripts/setup-git-hooks.mjs",
+    "module:check": "node scripts/check-module-boundaries.mjs",
+    "prepare": "node scripts/setup-git-hooks.mjs || true",
+
+    "dev:infra": "docker compose -f docker/docker-compose.dev.yml up",
+    "dev:infra:up": "docker compose -f docker/docker-compose.dev.yml up -d --wait",
+    "dev:infra:down": "docker compose -f docker/docker-compose.dev.yml down",
+    "dev:app": "concurrently -k -n web,worker,collab -c blue,magenta,green \"pnpm dev\" \"pnpm worker:dev\" \"pnpm collab:dev\"",
+    "dev:all": "pnpm dev:infra:up && pnpm dev:app"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "packageManager": "pnpm@10.18.0",
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild",
+      "sharp",
+      "unrs-resolver"
+    ]
+  },
+  "devDependencies": {
+    "concurrently": "^10.0.3"
+  }
+}

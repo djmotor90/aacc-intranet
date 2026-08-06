@@ -1,0 +1,53 @@
+================================================================================
+  PROPRIETARY CODE OWNERSHIP — AITIM INTRANET / GURVER
+================================================================================
+
+  Copyright (c) 2024–2026 Kim Gurinov. All rights reserved.
+
+  Author:     Kim Gurinov
+  Email:      kurinov@gurver.org
+  Email:      kim@gurver.com
+  Website:    https://gurver.com
+
+  Product:    AITIM Intranet (aitim-intranet monorepo)
+  Owner:      Kim Gurinov / Gurver
+  License:    Proprietary — see LICENSE
+
+--------------------------------------------------------------------------------
+  CODE FINGERPRINT (searchable ownership marker)
+--------------------------------------------------------------------------------
+
+  Fingerprint ID:   GURVER-KG-AITIM-2026-7F3C9E2A
+  Short stamp:      kg@gurver::aitim-intranet
+  Bundle hash:      sha256:990e76edf57bc7dfda0893af698b0825d2f335e127aa6e001113ba4ed39c2ff4
+
+  These identifiers are embedded in source, package metadata, and runtime
+  comments so that any substantial copy of this codebase can be traced back
+  to the original author.
+
+  Grep for:  GURVER-KG-AITIM  |  kg@gurver::aitim-intranet  |  Kim Gurinov
+
+--------------------------------------------------------------------------------
+  FILE HEADER (auto-applied to new source files)
+--------------------------------------------------------------------------------
+
+  /**
+   * Proprietary — Copyright (c) 2024–2026 Kim Gurinov (Gurver).
+   * Author: Kim Gurinov <kurinov@gurver.org> <kim@gurver.com>
+   * Website: https://gurver.com
+   * Fingerprint: GURVER-KG-AITIM-2026-7F3C9E2A
+   * License: Proprietary. All rights reserved. See LICENSE / COPYRIGHT.
+   */
+
+  Automation:
+    pnpm ownership:stamp     — stamp all unstamped source files
+    pnpm ownership:check     — fail if any eligible file lacks the header
+    pnpm ownership:verify    — core markers + header scan (used in CI)
+    pnpm ownership:hooks     — enable git pre-commit auto-stamp
+    Git pre-commit (.githooks) stamps staged files automatically after
+    `pnpm install` (prepare script) or `pnpm ownership:hooks`.
+
+================================================================================
+  This notice does not replace legal counsel. Keep git history private/backed
+  up; consider registering copyright where available for stronger enforcement.
+================================================================================

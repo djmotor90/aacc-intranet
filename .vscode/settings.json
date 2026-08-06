@@ -1,0 +1,11 @@
+{
+  // Migrations are PostgreSQL (Drizzle), not SQL Server — stop the mssql
+  // extension from flagging valid PG syntax as errors.
+  "files.associations": {
+    "**/packages/db/migrations/**/*.sql": "postgres"
+  },
+  "[postgres]": {
+    "editor.defaultFormatter": null
+  },
+  "mssql.query.displayBitAsNumber": true
+}

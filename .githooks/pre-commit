@@ -1,0 +1,17 @@
+#!/usr/bin/env sh
+# Proprietary — Copyright (c) 2024–2026 Kim Gurinov (Gurver).
+# Fingerprint: GURVER-KG-AITIM-2026-7F3C9E2A
+#
+# Auto-stamp staged source files with the ownership header before commit,
+# then audit module boundaries if any module file is staged.
+set -e
+ROOT="$(git rev-parse --show-toplevel)"
+cd "$ROOT"
+node scripts/stamp-ownership.mjs --staged
+
+# Module boundary check — only run if a file under apps/web/src/modules/ is
+# staged. Soft rule: catches cross-module imports before they ship.
+STAGED_MODULES="$(git diff --cached --name-only -- 'apps/web/src/modules/' | grep -E '\.(ts|tsx)$' || true)"
+if [ -n "$STAGED_MODULES" ]; then
+  node scripts/check-module-boundaries.mjs
+fi

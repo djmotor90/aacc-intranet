@@ -1,0 +1,279 @@
+"use client";
+
+/**
+ * Proprietary — Copyright (c) 2024–2026 Kim Gurinov (Gurver).
+ * Author: Kim Gurinov <kurinov@gurver.org> <kim@gurver.com>
+ * Website: https://gurver.com
+ * Fingerprint: GURVER-KG-AITIM-2026-7F3C9E2A
+ * License: Proprietary. All rights reserved. See LICENSE / COPYRIGHT.
+ */
+import { ChevronLeft, ChevronRight } from "lucide-react";
+import Link from "next/link";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type PointerEvent as ReactPointerEvent,
+  type ReactNode,
+} from "react";
+import { cn } from "@/lib/utils";
+import type { NavItem } from "@/modules/types";
+import { PresenceHeartbeat } from "./presence-heartbeat";
+import { SidebarNav, type TaskNavTreeItem } from "./sidebar-nav";
+import { UserProfileProvider } from "./user-profile-context";
+
+const STORAGE_KEY = "aitim:sidebar";
+const DEFAULT_WIDTH = 224; // ~w-56
+const COLLAPSED_WIDTH = 56;
+/** Dragging below this snaps to icon-only rail. */
+const COLLAPSE_SNAP = 88;
+/** Smallest expanded width before snap. */
+const MIN_EXPANDED = 160;
+/** Cap width so the work area always has room (ClickUp-like). */
+const MAX_FRACTION = 0.3;
+const MAX_PX_CAP = 420;
+
+type Stored = { width: number; collapsed: boolean };
+
+function loadStored(): Stored {
+  if (typeof window === "undefined") {
+    return { width: DEFAULT_WIDTH, collapsed: false };
+  }
+  try {
+    const raw = window.localStorage.getItem(STORAGE_KEY);
+    if (!raw) return { width: DEFAULT_WIDTH, collapsed: false };
+    const parsed = JSON.parse(raw) as Partial<Stored>;
+    const width =
+      typeof parsed.width === "number" && Number.isFinite(parsed.width)
+        ? parsed.width
+        : DEFAULT_WIDTH;
+    return {
+      width: Math.max(MIN_EXPANDED, Math.min(MAX_PX_CAP, width)),
+      collapsed: parsed.collapsed === true,
+    };
+  } catch {
+    return { width: DEFAULT_WIDTH, collapsed: false };
+  }
+}
+
+function maxWidthPx(): number {
+  if (typeof window === "undefined") return MAX_PX_CAP;
+  return Math.min(MAX_PX_CAP, Math.floor(window.innerWidth * MAX_FRACTION));
+}
+
+export function AppShell({
+  items,
+  taskNavTree,
+  isAdmin,
+  header,
+  children,
+}: {
+  items: NavItem[];
+  taskNavTree: TaskNavTreeItem[];
+  isAdmin: boolean;
+  header: ReactNode;
+  children: ReactNode;
+}) {
+  const [width, setWidth] = useState(DEFAULT_WIDTH);
+  const [collapsed, setCollapsed] = useState(false);
+  const [hydrated, setHydrated] = useState(false);
+  const [dragging, setDragging] = useState(false);
+  const dragRef = useRef<{ startX: number; startWidth: number } | null>(null);
+
+  useEffect(() => {
+    // Defer out of the effect body: hydrating from localStorage is an external
+    // sync, and setState directly in the effect body triggers cascading renders.
+    queueMicrotask(() => {
+      const s = loadStored();
+      setWidth(Math.min(s.width, maxWidthPx()));
+      setCollapsed(s.collapsed);
+      setHydrated(true);
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!hydrated) return;
+    try {
+      window.localStorage.setItem(
+        STORAGE_KEY,
+        JSON.stringify({ width, collapsed } satisfies Stored),
+      );
+    } catch {
+      // ignore
+    }
+  }, [width, collapsed, hydrated]);
+
+  useEffect(() => {
+    function onResize() {
+      setWidth((w) => Math.min(w, maxWidthPx()));
+    }
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
+
+  const expand = useCallback(() => {
+    setCollapsed(false);
+    setWidth((w) => Math.max(MIN_EXPANDED, Math.min(w || DEFAULT_WIDTH, maxWidthPx())));
+  }, []);
+
+  const collapse = useCallback(() => {
+    setCollapsed(true);
+  }, []);
+
+  function onResizePointerDown(e: ReactPointerEvent<HTMLDivElement>) {
+    // Only resize when expanded — collapsed edge is not a drag target above the button.
+    if (collapsed) return;
+    e.preventDefault();
+    dragRef.current = { startX: e.clientX, startWidth: width };
+    setDragging(true);
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+  }
+
+  function onResizePointerMove(e: ReactPointerEvent<HTMLDivElement>) {
+    if (!dragRef.current) return;
+    const delta = e.clientX - dragRef.current.startX;
+    const next = dragRef.current.startWidth + delta;
+    const max = maxWidthPx();
+    if (next < COLLAPSE_SNAP) {
+      setWidth(Math.max(COLLAPSED_WIDTH, next));
+      return;
+    }
+    setWidth(Math.min(max, Math.max(MIN_EXPANDED, next)));
+  }
+
+  function onResizePointerUp(e: ReactPointerEvent<HTMLDivElement>) {
+    if (!dragRef.current) return;
+    const delta = e.clientX - dragRef.current.startX;
+    const next = dragRef.current.startWidth + delta;
+    dragRef.current = null;
+    setDragging(false);
+    try {
+      (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
+    } catch {
+      // ignore
+    }
+    if (next < COLLAPSE_SNAP) {
+      setCollapsed(true);
+      setWidth(DEFAULT_WIDTH);
+      return;
+    }
+    setWidth(Math.min(maxWidthPx(), Math.max(MIN_EXPANDED, next)));
+  }
+
+  const railWidth = collapsed ? COLLAPSED_WIDTH : width;
+
+  return (
+    <UserProfileProvider>
+    <PresenceHeartbeat />
+    <div className="flex h-svh overflow-hidden">
+      <aside
+        className={cn(
+          "relative flex h-full shrink-0 flex-col border-r bg-sidebar",
+          !dragging && "transition-[width] duration-150 ease-out",
+        )}
+        style={{ width: railWidth }}
+        data-collapsed={collapsed || undefined}
+      >
+        {/* Brand */}
+        <div
+          className={cn(
+            "flex h-14 shrink-0 items-center border-b border-sidebar-border",
+            collapsed ? "justify-center px-1" : "px-3",
+          )}
+        >
+          <Link
+            href="/"
+            className={cn(
+              "font-semibold tracking-tight",
+              collapsed ? "text-base" : "px-1 text-lg",
+            )}
+            title="AITIM Intranet"
+          >
+            {collapsed ? (
+              <span className="flex size-8 items-center justify-center rounded-md bg-primary text-sm font-bold text-primary-foreground">
+                A
+              </span>
+            ) : (
+              <>
+                AITIM <span className="text-muted-foreground">Intranet</span>
+              </>
+            )}
+          </Link>
+        </div>
+
+        {/* Nav scroll area */}
+        <div
+          className={cn(
+            "min-h-0 flex-1 overflow-y-auto overflow-x-hidden",
+            collapsed ? "px-1.5 py-2" : "p-3",
+          )}
+        >
+          <SidebarNav
+            items={items}
+            taskNavTree={taskNavTree}
+            isAdmin={isAdmin}
+            collapsed={collapsed}
+          />
+        </div>
+
+        {/* Resize strip along the edge (does not cover the bottom toggle) */}
+        {!collapsed && (
+          <div
+            role="separator"
+            aria-orientation="vertical"
+            aria-label="Resize sidebar"
+            onPointerDown={onResizePointerDown}
+            onPointerMove={onResizePointerMove}
+            onPointerUp={onResizePointerUp}
+            onPointerCancel={onResizePointerUp}
+            className={cn(
+              "absolute bottom-12 top-0 right-0 z-20 w-1.5 translate-x-1/2 cursor-col-resize touch-none",
+              "hover:bg-primary/25 active:bg-primary/35",
+              dragging && "bg-primary/35",
+            )}
+          />
+        )}
+
+        {/* Bottom edge toggle — real button, click only (no drag) */}
+        <div className="pointer-events-none absolute bottom-3 right-0 z-30 flex translate-x-1/2 justify-center">
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              if (collapsed) expand();
+              else collapse();
+            }}
+            onPointerDown={(e) => {
+              // Never start a resize from the toggle.
+              e.stopPropagation();
+            }}
+            className={cn(
+              "pointer-events-auto flex h-8 w-5 items-center justify-center rounded-full",
+              "border border-border bg-background text-muted-foreground shadow-sm",
+              "transition-colors hover:border-primary/50 hover:bg-muted hover:text-foreground",
+              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+            )}
+            title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+            aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+            aria-expanded={!collapsed}
+          >
+            {collapsed ? (
+              <ChevronRight className="size-3.5" />
+            ) : (
+              <ChevronLeft className="size-3.5" />
+            )}
+          </button>
+        </div>
+      </aside>
+
+      <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+        <header className="flex h-14 shrink-0 items-center justify-end border-b bg-background px-4 sm:px-6">
+          {header}
+        </header>
+        <main className="min-w-0 flex-1 overflow-x-auto overflow-y-auto p-6">{children}</main>
+      </div>
+    </div>
+    </UserProfileProvider>
+  );
+}

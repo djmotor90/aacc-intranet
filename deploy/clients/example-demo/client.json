@@ -1,0 +1,41 @@
+{
+  "clientId": "example-demo",
+  "displayName": "Demo Client",
+  "slug": "demo",
+  "primaryDomain": "intranet.demo.local",
+  "contact": {
+    "name": "Kim Gurinov",
+    "email": "kim@gurver.com"
+  },
+  "database": {
+    "name": "aitim_demo"
+  },
+  "admin": {
+    "email": "admin@demo.local",
+    "displayName": "Demo Admin"
+  },
+  "modules": {
+    "tasks": true,
+    "docs": true
+  },
+  "auth": {
+    "entraTenantId": "00000000-0000-0000-0000-000000000000",
+    "webAppClientId": "",
+    "daemonClientId": ""
+  },
+  "storage": {
+    "bucketAttachments": "demo-attachments",
+    "bucketPhotos": "demo-photos",
+    "region": "us-west-1",
+    "endpoint": "http://localhost:9000"
+  },
+  "mail": {
+    "transport": "smtp",
+    "senderUpn": "noreply@demo.local"
+  },
+  "collab": {
+    "enabled": true,
+    "publicWsUrl": "ws://localhost:1234"
+  },
+  "notes": "Example only — no real secrets. Safe to commit."
+}

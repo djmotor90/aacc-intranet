@@ -1,0 +1,40 @@
+{
+  "name": "@aitim/db",
+  "version": "0.1.0",
+  "private": true,
+  "license": "UNLICENSED",
+  "author": {
+    "name": "Kim Gurinov",
+    "email": "kim@gurver.com",
+    "url": "https://gurver.com"
+  },
+  "description": "Proprietary — Kim Gurinov (Gurver). Fingerprint: GURVER-KG-AITIM-2026-7F3C9E2A",
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./schema": "./src/schema/index.ts"
+  },
+  "scripts": {
+    "generate": "node --env-file=../../.env ./node_modules/drizzle-kit/bin.cjs generate",
+    "migrate": "node --env-file=../../.env ./node_modules/drizzle-kit/bin.cjs migrate",
+    "seed": "tsx --env-file=../../.env src/seed.ts",
+    "seed:sample": "tsx --env-file=../../.env src/seed-sample.ts",
+    "seed:baseline": "tsx --env-file=../../.env src/seed-baseline.ts",
+    "build:migrator": "esbuild src/migrate.ts --bundle --platform=node --format=cjs --outfile=dist/migrate.cjs",
+    "studio": "node --env-file=../../.env ./node_modules/drizzle-kit/bin.cjs studio"
+  },
+  "dependencies": {
+    "drizzle-orm": "^0.44.2",
+    "pg": "^8.16.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24",
+    "@types/pg": "^8.15.4",
+    "drizzle-kit": "^0.31.4",
+    "esbuild": "^0.25.0",
+    "tsx": "^4.20.3",
+    "typescript": "^5"
+  }
+}

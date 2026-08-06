@@ -1,0 +1,81 @@
+/**
+ * Proprietary — Copyright (c) 2024–2026 Kim Gurinov (Gurver).
+ * Author: Kim Gurinov <kurinov@gurver.org> <kim@gurver.com>
+ * Website: https://gurver.com
+ * Fingerprint: GURVER-KG-AITIM-2026-7F3C9E2A
+ * License: Proprietary. All rights reserved. See LICENSE / COPYRIGHT.
+ */
+import { Suspense } from "react";
+import { db, users } from "@aitim/db";
+import { eq } from "drizzle-orm";
+import { AppShell } from "@/components/shell/app-shell";
+import { NotificationBell } from "@/components/shell/notification-bell";
+import { UserSettingsMenu } from "@/components/shell/user-settings-menu";
+import { WhatsNewButton } from "@/components/shell/whats-new-button";
+import { signOut } from "@/lib/auth";
+import { requireUser, userOwnsAnySpace } from "@/lib/rbac";
+import { navItemsFor, workspaceModulesToNavItems } from "@/modules/registry";
+import { listEnabledWorkspaceModules } from "@/modules/shell/actions/modules";
+import { getTaskNavTreeForUser } from "@/modules/tasks/queries";
+
+export default async function AppLayout({ children }: { children: React.ReactNode }) {
+  const user = await requireUser();
+  const isAdmin = user.platformRole === "admin";
+  const [workspaceModules, taskNavTree, photoRow, ownsSpace, hasTrashPermission] =
+    await Promise.all([
+      listEnabledWorkspaceModules(),
+      getTaskNavTreeForUser(user),
+      db
+        .select({ photoKey: users.photoKey })
+        .from(users)
+        .where(eq(users.id, user.id))
+        .then((rows) => rows[0] ?? null),
+      isAdmin ? Promise.resolve(true) : userOwnsAnySpace(user.id, user.platformRole),
+      isAdmin
+        ? Promise.resolve(true)
+        : import("@/lib/permissions").then(({ userHasPermission }) =>
+            userHasPermission(user, "manage_trash"),
+          ),
+    ]);
+  const items = [
+    { label: "Home", href: "/", icon: "home" as const },
+    ...workspaceModulesToNavItems(workspaceModules),
+    ...navItemsFor(user),
+  ];
+  const canManageTrash = isAdmin || ownsSpace || hasTrashPermission;
+
+  async function signOutAction() {
+    "use server";
+    await signOut({ redirectTo: "/login" });
+  }
+
+  return (
+    <AppShell
+      items={items}
+      taskNavTree={taskNavTree}
+      isAdmin={isAdmin}
+      header={
+        <div className="flex items-center gap-1">
+          <WhatsNewButton isAdmin={isAdmin} />
+          <NotificationBell />
+          <Suspense fallback={null}>
+            <UserSettingsMenu
+              user={{
+                id: user.id,
+                name: user.name ?? null,
+                email: user.email ?? null,
+                platformRole: user.platformRole,
+                photoKey: photoRow?.photoKey ?? null,
+              }}
+              isAdmin={isAdmin}
+              canManageTrash={canManageTrash}
+              signOutAction={signOutAction}
+            />
+          </Suspense>
+        </div>
+      }
+    >
+      {children}
+    </AppShell>
+  );
+}

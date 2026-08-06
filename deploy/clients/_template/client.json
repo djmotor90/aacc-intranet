@@ -1,0 +1,42 @@
+{
+  "$schema": "./client.schema.json",
+  "clientId": "acme-corp",
+  "displayName": "Acme Corporation",
+  "slug": "acme",
+  "primaryDomain": "intranet.acme.com",
+  "contact": {
+    "name": "",
+    "email": ""
+  },
+  "database": {
+    "name": "acme_intranet"
+  },
+  "admin": {
+    "email": "admin@acme.com",
+    "displayName": "Acme Admin"
+  },
+  "modules": {
+    "tasks": true,
+    "docs": true
+  },
+  "auth": {
+    "entraTenantId": "",
+    "webAppClientId": "",
+    "daemonClientId": ""
+  },
+  "storage": {
+    "bucketAttachments": "acme-attachments",
+    "bucketPhotos": "acme-photos",
+    "region": "us-west-1",
+    "endpoint": ""
+  },
+  "mail": {
+    "transport": "graph",
+    "senderUpn": "noreply@acme.com"
+  },
+  "collab": {
+    "enabled": true,
+    "publicWsUrl": "wss://intranet.acme.com/collab"
+  },
+  "notes": "Fill secrets in .env — never commit secrets."
+}
