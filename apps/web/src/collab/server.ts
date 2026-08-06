@@ -11,7 +11,7 @@
 import { Server } from "@hocuspocus/server";
 import { TiptapTransformer } from "@hocuspocus/transformer";
 import StarterKit from "@tiptap/starter-kit";
-import { eq } from "drizzle-orm";
+import { and, eq, isNull, sql } from "drizzle-orm";
 import * as Y from "yjs";
 import { verifyCollabToken } from "./token";
 
@@ -117,14 +117,46 @@ const server = new Server({
     const text = plainTextFromDoc(jsonDoc);
     const body = { text, doc: jsonDoc };
 
-    await db
+    // The first store initializes the CRDT snapshot from the page's existing
+    // JSON. It is infrastructure bookkeeping, not a user edit, so it must not
+    // advance updatedAt and make a simultaneous local fallback report a false
+    // "someone else saved" conflict. The conditional update keeps this atomic.
+    const [initialized] = await db
       .update(docPages)
       .set({
         ydocState: state,
         body,
+        updatedById: user?.id ?? null,
+      })
+      .where(and(eq(docPages.id, documentName), isNull(docPages.ydocState)))
+      .returning({ id: docPages.id });
+
+    if (initialized) return;
+
+    const [contentUpdated] = await db
+      .update(docPages)
+      .set({
+        ydocState: state,
+        body,
+        bodyVersion: sql`${docPages.bodyVersion} + 1`,
         updatedAt: new Date(),
         updatedById: user?.id ?? null,
       })
+      .where(
+        and(
+          eq(docPages.id, documentName),
+          sql`${docPages.body} IS DISTINCT FROM ${JSON.stringify(body)}::jsonb`,
+        ),
+      )
+      .returning({ id: docPages.id });
+
+    if (contentUpdated) return;
+
+    // Equivalent JSON can still produce a newer binary snapshot. Persist that
+    // bookkeeping without advancing the body revision or visible edit time.
+    await db
+      .update(docPages)
+      .set({ ydocState: state })
       .where(eq(docPages.id, documentName));
   },
 });

@@ -62,6 +62,7 @@ export type DocFolderListItem = {
 
 export type DocPageDetail = DocPageListItem & {
   body: unknown;
+  bodyVersion: number;
   coverObjectKey: string | null;
   position: string;
   createdById: string | null;
@@ -423,6 +424,7 @@ export async function getPageForUser(
       updatedAt: docPages.updatedAt,
       createdAt: docPages.createdAt,
       body: docPages.body,
+      bodyVersion: docPages.bodyVersion,
       coverObjectKey: docPages.coverObjectKey,
       position: docPages.position,
       createdById: docPages.createdById,
@@ -470,6 +472,7 @@ export async function getPageForUser(
       linkCount: row.linkCount,
     }),
     body: row.body,
+    bodyVersion: row.bodyVersion,
     coverObjectKey: row.coverObjectKey,
     position: row.position,
     createdById: row.createdById,

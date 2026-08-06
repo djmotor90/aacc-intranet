@@ -115,6 +115,8 @@ export const docPages = pgTable(
     coverObjectKey: text("cover_object_key"),
     /** TipTap hybrid: { text, doc } — always kept in sync for non-collab readers. */
     body: jsonb("body").notNull().default(sql`'{"text":"","doc":null}'::jsonb`),
+    /** Optimistic-concurrency token for body edits only; metadata does not increment it. */
+    bodyVersion: integer("body_version").notNull().default(0),
     /**
      * Yjs binary state for live multiplayer (Hocuspocus). When present, collab
      * clients load from this instead of replaying body.doc.

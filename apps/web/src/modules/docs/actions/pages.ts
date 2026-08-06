@@ -15,6 +15,7 @@ import { requireUser } from "@/lib/rbac";
 import {
   assertSpaceAccess,
   assertTargetAccessible,
+  canCreatePage,
   canManagePage,
   requireCreateDocs,
   requireEditDocs,
@@ -412,12 +413,283 @@ export async function updatePageMeta(input: z.infer<typeof updateMetaSchema>) {
   return { id: updated.id, slug: updated.slug, title: updated.title };
 }
 
+type DocTransferTarget = {
+  docId: string;
+  title: string;
+  homeSpaceId: string;
+  spaceName: string;
+};
+
+async function pageSubtree(root: typeof docPages.$inferSelect) {
+  const rows = await db
+    .select()
+    .from(docPages)
+    .where(and(eq(docPages.docId, root.docId), isNull(docPages.deletedAt)));
+  const children = new Map<string, typeof rows>();
+  for (const row of rows) {
+    if (!row.parentPageId) continue;
+    const siblings = children.get(row.parentPageId) ?? [];
+    siblings.push(row);
+    children.set(row.parentPageId, siblings);
+  }
+  for (const siblings of children.values()) {
+    siblings.sort((a, b) => a.position.localeCompare(b.position));
+  }
+
+  const ordered: typeof rows = [];
+  const visit = (row: typeof rows[number]) => {
+    ordered.push(row);
+    for (const child of children.get(row.id) ?? []) visit(child);
+  };
+  visit(root);
+  return ordered;
+}
+
+async function copyPageTree({
+  userId,
+  source,
+  destination,
+  parentPageId,
+  rootTitle,
+}: {
+  userId: string;
+  source: typeof docPages.$inferSelect;
+  destination: { docId: string; homeSpaceId: string; folderId: string | null };
+  parentPageId: string | null;
+  rootTitle: string;
+}) {
+  const sourceRows = await pageSubtree(source);
+  const idMap = new Map(sourceRows.map((row) => [row.id, crypto.randomUUID()]));
+  const rootId = idMap.get(source.id)!;
+  const rootSlug = await uniquePageSlug(
+    destination.docId,
+    parentPageId,
+    slugify(rootTitle),
+  );
+  const rootPosition = await nextSiblingPosition(destination.docId, parentPageId);
+
+  const pageValues: (typeof docPages.$inferInsert)[] = sourceRows.map((row) => {
+    const isRoot = row.id === source.id;
+    return {
+      id: idMap.get(row.id)!,
+      docId: destination.docId,
+      homeSpaceId: destination.homeSpaceId,
+      folderId: destination.folderId,
+      parentPageId: isRoot
+        ? parentPageId
+        : row.parentPageId
+          ? (idMap.get(row.parentPageId) ?? null)
+          : null,
+      title: isRoot ? rootTitle : row.title,
+      slug: isRoot ? rootSlug : row.slug,
+      icon: row.icon,
+      coverObjectKey: row.coverObjectKey,
+      body: row.body,
+      bodyVersion: 0,
+      ydocState: null,
+      kind: row.kind,
+      position: isRoot ? rootPosition : row.position,
+      isProtected: false,
+      ownerId: userId,
+      verifiedAt: null,
+      verifiedById: null,
+      createdById: userId,
+      updatedById: userId,
+    };
+  });
+
+  const sourceIds = sourceRows.map((row) => row.id);
+  const links = await db
+    .select({
+      pageId: docLinks.pageId,
+      targetType: docLinks.targetType,
+      targetId: docLinks.targetId,
+    })
+    .from(docLinks)
+    .where(inArray(docLinks.pageId, sourceIds));
+  const linkValues = links.map((link) => ({
+    pageId: idMap.get(link.pageId)!,
+    targetType: link.targetType,
+    targetId: link.targetId,
+    createdById: userId,
+  }));
+
+  await db.transaction(async (tx) => {
+    await tx.insert(docPages).values(pageValues);
+    if (linkValues.length > 0) await tx.insert(docLinks).values(linkValues);
+  });
+
+  return { id: rootId, slug: rootSlug, path: pagePath(rootId, rootSlug) };
+}
+
+export async function duplicateDocPage(pageId: string) {
+  const user = await requireUser();
+  const [source] = await db.select().from(docPages).where(eq(docPages.id, pageId)).limit(1);
+  if (!source || source.deletedAt) throw new Error("Page not found");
+  await requireEditDocs(user, source.homeSpaceId, source.isProtected);
+
+  const result = await copyPageTree({
+    userId: user.id,
+    source,
+    destination: {
+      docId: source.docId,
+      homeSpaceId: source.homeSpaceId,
+      folderId: source.folderId,
+    },
+    parentPageId: source.parentPageId,
+    rootTitle: `${source.title} copy`,
+  });
+
+  revalidatePath("/docs");
+  revalidatePath(result.path);
+  return result;
+}
+
+export async function listDocTransferTargets(pageId: string): Promise<DocTransferTarget[]> {
+  const user = await requireUser();
+  const [source] = await db.select().from(docPages).where(eq(docPages.id, pageId)).limit(1);
+  if (!source || source.deletedAt) throw new Error("Page not found");
+  await requireEditDocs(user, source.homeSpaceId, source.isProtected);
+
+  const rows = await db
+    .select({
+      docId: docPages.docId,
+      title: docPages.title,
+      homeSpaceId: docPages.homeSpaceId,
+      spaceName: spaces.name,
+      position: docPages.position,
+    })
+    .from(docPages)
+    .innerJoin(spaces, eq(docPages.homeSpaceId, spaces.id))
+    .where(
+      and(
+        ne(docPages.docId, source.docId),
+        isNull(docPages.parentPageId),
+        isNull(docPages.deletedAt),
+      ),
+    )
+    .orderBy(asc(docPages.docId), asc(docPages.position))
+    .limit(500);
+
+  const targets: DocTransferTarget[] = [];
+  const seen = new Set<string>();
+  for (const row of rows) {
+    if (seen.has(row.docId)) continue;
+    seen.add(row.docId);
+    if (!(await canCreatePage(user, row.homeSpaceId))) continue;
+    targets.push({
+      docId: row.docId,
+      title: row.title,
+      homeSpaceId: row.homeSpaceId,
+      spaceName: row.spaceName,
+    });
+    if (targets.length >= 100) break;
+  }
+  return targets;
+}
+
+const transferPageSchema = z.object({
+  pageId: z.string().uuid(),
+  destinationDocId: z.string().uuid(),
+  mode: z.enum(["copy", "move"]),
+});
+
+export async function transferDocPage(input: z.infer<typeof transferPageSchema>) {
+  const user = await requireUser();
+  const data = transferPageSchema.parse(input);
+  const [source] = await db.select().from(docPages).where(eq(docPages.id, data.pageId)).limit(1);
+  if (!source || source.deletedAt) throw new Error("Page not found");
+  await requireEditDocs(user, source.homeSpaceId, source.isProtected);
+  if (source.docId === data.destinationDocId) {
+    throw new Error("Choose a different Doc");
+  }
+
+  const [destination] = await db
+    .select()
+    .from(docPages)
+    .where(
+      and(
+        eq(docPages.docId, data.destinationDocId),
+        isNull(docPages.deletedAt),
+      ),
+    )
+    .orderBy(asc(docPages.position))
+    .limit(1);
+  if (!destination) throw new Error("Destination Doc not found");
+  await requireCreateDocs(user, destination.homeSpaceId);
+
+  if (data.mode === "copy") {
+    const result = await copyPageTree({
+      userId: user.id,
+      source,
+      destination: {
+        docId: destination.docId,
+        homeSpaceId: destination.homeSpaceId,
+        folderId: destination.folderId,
+      },
+      parentPageId: null,
+      rootTitle: source.title,
+    });
+    revalidatePath("/docs");
+    revalidatePath(result.path);
+    return result;
+  }
+
+  const subtree = await pageSubtree(source);
+  const subtreeIds = subtree.map((row) => row.id);
+  const rootSlug = await uniquePageSlug(
+    destination.docId,
+    null,
+    slugify(source.title),
+    source.id,
+  );
+  const rootPosition = await nextSiblingPosition(destination.docId, null);
+  const now = new Date();
+
+  const descendantIds = subtreeIds.filter((id) => id !== source.id);
+  await db.transaction(async (tx) => {
+    await tx
+      .update(docPages)
+      .set({
+        docId: destination.docId,
+        homeSpaceId: destination.homeSpaceId,
+        folderId: destination.folderId,
+        parentPageId: null,
+        slug: rootSlug,
+        position: rootPosition,
+        updatedById: user.id,
+        updatedAt: now,
+      })
+      .where(eq(docPages.id, source.id));
+
+    if (descendantIds.length > 0) {
+      await tx
+        .update(docPages)
+        .set({
+          docId: destination.docId,
+          homeSpaceId: destination.homeSpaceId,
+          folderId: destination.folderId,
+          updatedById: user.id,
+          updatedAt: now,
+        })
+        .where(inArray(docPages.id, descendantIds));
+    }
+  });
+
+  const result = { id: source.id, slug: rootSlug, path: pagePath(source.id, rootSlug) };
+  revalidatePath("/docs");
+  revalidatePath(result.path);
+  return result;
+}
+
 const updateBodySchema = z.object({
   pageId: z.string().uuid(),
   body: z.object({
     text: z.string(),
     doc: z.unknown().nullable(),
   }),
+  /** Client's last saved body revision; unaffected by metadata updates. */
+  expectedBodyVersion: z.number().int().nonnegative().optional(),
   /** Client's last known updatedAt — conflict detection */
   expectedUpdatedAt: z.string().optional(),
 });
@@ -429,7 +701,20 @@ export async function updatePageBody(input: z.infer<typeof updateBodySchema>) {
   if (!page || page.deletedAt) throw new Error("Page not found");
   await requireEditDocs(user, page.homeSpaceId, page.isProtected);
 
-  if (data.expectedUpdatedAt) {
+  if (
+    data.expectedBodyVersion !== undefined &&
+    page.bodyVersion !== data.expectedBodyVersion
+  ) {
+    return {
+      ok: false as const,
+      conflict: true as const,
+      bodyVersion: page.bodyVersion,
+      updatedAt: page.updatedAt.toISOString(),
+    };
+  }
+
+  // Compatibility for older clients that have not sent a body revision yet.
+  if (data.expectedBodyVersion === undefined && data.expectedUpdatedAt) {
     const expected = new Date(data.expectedUpdatedAt).getTime();
     const actual = page.updatedAt.getTime();
     // Allow 1s skew
@@ -437,6 +722,7 @@ export async function updatePageBody(input: z.infer<typeof updateBodySchema>) {
       return {
         ok: false as const,
         conflict: true as const,
+        bodyVersion: page.bodyVersion,
         updatedAt: page.updatedAt.toISOString(),
       };
     }
@@ -449,21 +735,34 @@ export async function updatePageBody(input: z.infer<typeof updateBodySchema>) {
     .update(docPages)
     .set({
       body: data.body,
+      bodyVersion: sql`${docPages.bodyVersion} + 1`,
       updatedById: user.id,
       updatedAt: new Date(),
     })
-    .where(and(eq(docPages.id, page.id), eq(docPages.updatedAt, page.updatedAt)))
-    .returning({ updatedAt: docPages.updatedAt });
+    .where(
+      and(
+        eq(docPages.id, page.id),
+        eq(docPages.bodyVersion, page.bodyVersion),
+      ),
+    )
+    .returning({
+      bodyVersion: docPages.bodyVersion,
+      updatedAt: docPages.updatedAt,
+    });
 
   if (!updated) {
     const [fresh] = await db
-      .select({ updatedAt: docPages.updatedAt })
+      .select({
+        bodyVersion: docPages.bodyVersion,
+        updatedAt: docPages.updatedAt,
+      })
       .from(docPages)
       .where(eq(docPages.id, page.id))
       .limit(1);
     return {
       ok: false as const,
       conflict: true as const,
+      bodyVersion: fresh?.bodyVersion ?? page.bodyVersion,
       updatedAt: (fresh?.updatedAt ?? page.updatedAt).toISOString(),
     };
   }
@@ -472,6 +771,7 @@ export async function updatePageBody(input: z.infer<typeof updateBodySchema>) {
   return {
     ok: true as const,
     conflict: false as const,
+    bodyVersion: updated.bodyVersion,
     updatedAt: updated.updatedAt.toISOString(),
   };
 }

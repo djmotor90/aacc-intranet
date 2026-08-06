@@ -33,10 +33,17 @@ import {
 import {
   ChevronDown,
   ChevronRight,
+  Copy,
+  CopyPlus,
+  ExternalLink,
   FileText,
+  FolderInput,
   GripVertical,
+  MoreHorizontal,
   PanelLeftClose,
+  Pencil,
   Plus,
+  Trash2,
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -50,8 +57,40 @@ import {
   type MutableRefObject,
 } from "react";
 import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { cn } from "@/lib/utils";
-import { moveDocPage } from "@/modules/docs/actions/pages";
+import {
+  duplicateDocPage,
+  listDocTransferTargets,
+  moveDocPage,
+  trashPage,
+  transferDocPage,
+  updatePageMeta,
+} from "@/modules/docs/actions/pages";
 import { pagePath } from "@/modules/docs/lib/constants";
 import type { DocOutlineNode } from "@/modules/docs/queries";
 import { CreatePageDialog } from "./create-page-dialog";
@@ -77,6 +116,10 @@ type FlatMeta = {
   parentId: string | null;
   nextSiblingId: string | null;
 };
+
+type DocTransferTarget = Awaited<
+  ReturnType<typeof listDocTransferTargets>
+>[number];
 
 function collectDescendantIds(node: DocOutlineNode): Set<string> {
   const ids = new Set<string>([node.id]);
@@ -336,6 +379,13 @@ function TreePageRow({
   rowEls,
   collapsed,
   toggleCollapsed,
+  canManage,
+  onAddSubpage,
+  onRename,
+  onCopyLink,
+  onDuplicate,
+  onTransfer,
+  onDelete,
 }: {
   node: DocOutlineNode;
   depth: number;
@@ -348,6 +398,13 @@ function TreePageRow({
   rowEls: MutableRefObject<Map<string, HTMLElement>>;
   collapsed: Set<string>;
   toggleCollapsed: (id: string) => void;
+  canManage: boolean;
+  onAddSubpage: (node: DocOutlineNode) => void;
+  onRename: (node: DocOutlineNode) => void;
+  onCopyLink: (node: DocOutlineNode) => void;
+  onDuplicate: (node: DocOutlineNode) => void;
+  onTransfer: (node: DocOutlineNode) => void;
+  onDelete: (node: DocOutlineNode) => void;
 }) {
   const hasChildren = node.children.length > 0;
   const open = !collapsed.has(node.id);
@@ -500,6 +557,85 @@ function TreePageRow({
             </span>
           )}
         </Link>
+
+        <div
+          className="mr-0.5 flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100"
+          onPointerDown={(event) => event.stopPropagation()}
+          onClick={(event) => event.stopPropagation()}
+        >
+          {canDrag && (
+            <button
+              type="button"
+              className="flex size-6 items-center justify-center rounded-md text-muted-foreground hover:bg-background hover:text-foreground"
+              onClick={() => onAddSubpage(node)}
+              title={`Add subpage under ${node.title || "Untitled"}`}
+              aria-label={`Add subpage under ${node.title || "Untitled"}`}
+            >
+              <Plus className="size-3.5" />
+            </button>
+          )}
+
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                type="button"
+                className="flex size-6 items-center justify-center rounded-md text-muted-foreground hover:bg-background hover:text-foreground data-[state=open]:bg-background data-[state=open]:text-foreground"
+                title={`Options for ${node.title || "Untitled"}`}
+                aria-label={`Options for ${node.title || "Untitled"}`}
+              >
+                <MoreHorizontal className="size-3.5" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent side="right" align="start" className="w-52">
+              <DropdownMenuItem asChild>
+                <Link href={href}>
+                  <ExternalLink />
+                  Open page
+                </Link>
+              </DropdownMenuItem>
+              {canDrag && (
+                <DropdownMenuItem onSelect={() => onAddSubpage(node)}>
+                  <Plus />
+                  New subpage
+                </DropdownMenuItem>
+              )}
+              <DropdownMenuItem onSelect={() => onCopyLink(node)}>
+                <Copy />
+                Copy link
+              </DropdownMenuItem>
+              {canDrag && (
+                <DropdownMenuItem onSelect={() => onRename(node)}>
+                  <Pencil />
+                  Rename page
+                </DropdownMenuItem>
+              )}
+              {canDrag && (
+                <DropdownMenuItem onSelect={() => onDuplicate(node)}>
+                  <CopyPlus />
+                  Duplicate page
+                </DropdownMenuItem>
+              )}
+              {canDrag && (
+                <DropdownMenuItem onSelect={() => onTransfer(node)}>
+                  <FolderInput />
+                  Copy or move to another Doc
+                </DropdownMenuItem>
+              )}
+              {canManage && (
+                <>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    variant="destructive"
+                    onSelect={() => onDelete(node)}
+                  >
+                    <Trash2 />
+                    Move to trash
+                  </DropdownMenuItem>
+                </>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
       </div>
 
       {hasChildren && open && (
@@ -518,6 +654,13 @@ function TreePageRow({
               rowEls={rowEls}
               collapsed={collapsed}
               toggleCollapsed={toggleCollapsed}
+              canManage={canManage}
+              onAddSubpage={onAddSubpage}
+              onRename={onRename}
+              onCopyLink={onCopyLink}
+              onDuplicate={onDuplicate}
+              onTransfer={onTransfer}
+              onDelete={onDelete}
             />
           ))}
         </div>
@@ -597,6 +740,7 @@ export function DocPageOutline({
   homeSpaceId,
   docId,
   canEdit,
+  canManage,
   spaces,
   rootTitle,
   embedded = false,
@@ -607,6 +751,7 @@ export function DocPageOutline({
   homeSpaceId: string;
   docId: string;
   canEdit: boolean;
+  canManage: boolean;
   spaces: { id: string; name: string }[];
   rootTitle?: string;
   embedded?: boolean;
@@ -617,6 +762,13 @@ export function DocPageOutline({
   const [addOpen, setAddOpen] = useState(false);
   const [addParentId, setAddParentId] = useState<string | null>(null);
   const [addDocId, setAddDocId] = useState<string | null>(null);
+  const [renameTarget, setRenameTarget] = useState<DocOutlineNode | null>(null);
+  const [renameValue, setRenameValue] = useState("");
+  const [deleteTarget, setDeleteTarget] = useState<DocOutlineNode | null>(null);
+  const [transferTarget, setTransferTarget] = useState<DocOutlineNode | null>(null);
+  const [transferTargets, setTransferTargets] = useState<DocTransferTarget[]>([]);
+  const [destinationDocId, setDestinationDocId] = useState("");
+  const [transferMode, setTransferMode] = useState<"copy" | "move">("copy");
   const [dragTitle, setDragTitle] = useState<string | null>(null);
   const [dragSourceDepth, setDragSourceDepth] = useState(0);
   const [dragging, setDragging] = useState(false);
@@ -624,7 +776,7 @@ export function DocPageOutline({
   const [overId, setOverId] = useState<string | null>(null);
   const [intent, setIntent] = useState<DropIntent | null>(null);
   const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set());
-  const [, startTransition] = useTransition();
+  const [pending, startTransition] = useTransition();
   const rowEls = useRef<Map<string, HTMLElement>>(new Map());
   const listEl = useRef<HTMLDivElement | null>(null);
   const pointer = useRef({ x: 0, y: 0 });
@@ -807,6 +959,121 @@ export function DocPageOutline({
     intentRef.current = null;
   }
 
+  function openAddSubpage(node: DocOutlineNode) {
+    setAddParentId(node.id);
+    setAddDocId(null);
+    setAddOpen(true);
+    setCollapsed((previous) => {
+      if (!previous.has(node.id)) return previous;
+      const next = new Set(previous);
+      next.delete(node.id);
+      return next;
+    });
+  }
+
+  function openRename(node: DocOutlineNode) {
+    setRenameTarget(node);
+    setRenameValue(node.title || "Untitled");
+  }
+
+  function copyPageLink(node: DocOutlineNode) {
+    void navigator.clipboard
+      .writeText(window.location.origin + pagePath(node.id, node.slug))
+      .then(() => toast.success("Page link copied"))
+      .catch(() => toast.error("Could not copy the page link"));
+  }
+
+  function duplicatePage(node: DocOutlineNode) {
+    startTransition(async () => {
+      try {
+        const duplicate = await duplicateDocPage(node.id);
+        toast.success("Page duplicated");
+        router.push(duplicate.path);
+        router.refresh();
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : "Could not duplicate page");
+      }
+    });
+  }
+
+  function openTransfer(node: DocOutlineNode) {
+    setTransferTarget(node);
+    setTransferTargets([]);
+    setDestinationDocId("");
+    setTransferMode("copy");
+    startTransition(async () => {
+      try {
+        const targets = await listDocTransferTargets(node.id);
+        setTransferTargets(targets);
+        setDestinationDocId(targets[0]?.docId ?? "");
+      } catch (error) {
+        setTransferTarget(null);
+        toast.error(error instanceof Error ? error.message : "Could not load Docs");
+      }
+    });
+  }
+
+  function submitTransfer(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!transferTarget || !destinationDocId) return;
+    const source = transferTarget;
+    startTransition(async () => {
+      try {
+        const transferred = await transferDocPage({
+          pageId: source.id,
+          destinationDocId,
+          mode: transferMode,
+        });
+        setTransferTarget(null);
+        toast.success(
+          transferMode === "copy"
+            ? "Page copied to the selected Doc"
+            : "Page moved to the selected Doc",
+        );
+        router.push(transferred.path);
+        router.refresh();
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : "Could not transfer page");
+      }
+    });
+  }
+
+  function submitRename(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const title = renameValue.trim();
+    if (!renameTarget || !title) return;
+    const target = renameTarget;
+    startTransition(async () => {
+      try {
+        const updated = await updatePageMeta({ pageId: target.id, title });
+        setRenameTarget(null);
+        toast.success("Page renamed");
+        if (target.id === activePageId) {
+          router.replace(pagePath(updated.id, updated.slug));
+        }
+        router.refresh();
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : "Could not rename page");
+      }
+    });
+  }
+
+  function confirmDelete() {
+    if (!deleteTarget) return;
+    const target = deleteTarget;
+    startTransition(async () => {
+      try {
+        await trashPage(target.id);
+        setDeleteTarget(null);
+        toast.success("Page moved to trash");
+        if (target.id === activePageId) router.push("/docs");
+        else router.refresh();
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : "Could not delete page");
+      }
+    });
+  }
+
   const ghostMode: "into" | "peer" | "promote" | "idle" = !intent
     ? "idle"
     : intent.zone === "into"
@@ -915,6 +1182,13 @@ export function DocPageOutline({
                   rowEls={rowEls}
                   collapsed={collapsed}
                   toggleCollapsed={toggleCollapsed}
+                  canManage={canManage}
+                  onAddSubpage={openAddSubpage}
+                  onRename={openRename}
+                  onCopyLink={copyPageLink}
+                  onDuplicate={duplicatePage}
+                  onTransfer={openTransfer}
+                  onDelete={setDeleteTarget}
                 />
               ))}
 
@@ -959,6 +1233,149 @@ export function DocPageOutline({
         onOpenChange={setAddOpen}
         dialogTitle="Add page"
       />
+
+      <Dialog
+        open={renameTarget !== null}
+        onOpenChange={(open) => {
+          if (!open && !pending) setRenameTarget(null);
+        }}
+      >
+        <DialogContent>
+          <form onSubmit={submitRename}>
+            <DialogHeader>
+              <DialogTitle>Rename page</DialogTitle>
+              <DialogDescription>
+                Update the page name shown in this Doc and its URL.
+              </DialogDescription>
+            </DialogHeader>
+            <Input
+              className="mt-4"
+              value={renameValue}
+              onChange={(event) => setRenameValue(event.target.value)}
+              autoFocus
+              maxLength={200}
+              required
+            />
+            <DialogFooter className="mt-4">
+              <DialogClose asChild>
+                <Button type="button" variant="outline" disabled={pending}>
+                  Cancel
+                </Button>
+              </DialogClose>
+              <Button type="submit" disabled={pending || !renameValue.trim()}>
+                {pending ? "Renaming…" : "Rename"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={deleteTarget !== null}
+        onOpenChange={(open) => {
+          if (!open && !pending) setDeleteTarget(null);
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Move page to trash?</DialogTitle>
+            <DialogDescription>
+              “{deleteTarget?.title || "Untitled"}” and its nested subpages will no
+              longer appear in this Doc.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter showCloseButton>
+            <Button
+              type="button"
+              variant="destructive"
+              disabled={pending}
+              onClick={confirmDelete}
+            >
+              {pending ? "Moving…" : "Move to trash"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={transferTarget !== null}
+        onOpenChange={(open) => {
+          if (!open && !pending) setTransferTarget(null);
+        }}
+      >
+        <DialogContent>
+          <form onSubmit={submitTransfer}>
+            <DialogHeader>
+              <DialogTitle>Copy or move page</DialogTitle>
+              <DialogDescription>
+                Choose another Doc for “{transferTarget?.title || "Untitled"}”.
+                Nested subpages and relationships are included when copying.
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="mt-4 grid gap-4">
+              <div className="grid gap-1.5">
+                <label className="text-sm font-medium">Action</label>
+                <Select
+                  value={transferMode}
+                  onValueChange={(value) => setTransferMode(value as "copy" | "move")}
+                  disabled={pending}
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="copy">Copy page tree</SelectItem>
+                    <SelectItem value="move">Move page tree</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="grid gap-1.5">
+                <label className="text-sm font-medium">Destination Doc</label>
+                <Select
+                  value={destinationDocId}
+                  onValueChange={setDestinationDocId}
+                  disabled={pending || transferTargets.length === 0}
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue
+                      placeholder={pending ? "Loading Docs…" : "Select a Doc"}
+                    />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {transferTargets.map((target) => (
+                      <SelectItem key={target.docId} value={target.docId}>
+                        {target.title} · {target.spaceName}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {!pending && transferTargets.length === 0 && (
+                  <p className="text-xs text-muted-foreground">
+                    No other editable Docs are available.
+                  </p>
+                )}
+              </div>
+            </div>
+
+            <DialogFooter className="mt-5">
+              <DialogClose asChild>
+                <Button type="button" variant="outline" disabled={pending}>
+                  Cancel
+                </Button>
+              </DialogClose>
+              <Button type="submit" disabled={pending || !destinationDocId}>
+                {pending
+                  ? "Working…"
+                  : transferMode === "copy"
+                    ? "Copy page"
+                    : "Move page"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </DndContext>
   );
 

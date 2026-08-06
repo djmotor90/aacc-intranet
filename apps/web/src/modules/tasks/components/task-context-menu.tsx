@@ -15,8 +15,12 @@ import {
   ExternalLink,
   FolderInput,
   FolderOutput,
+  Hash,
+  Link2,
+  ListChecks,
   MoreHorizontal,
   Pencil,
+  SquareArrowOutUpRight,
   Trash2,
 } from "lucide-react";
 import Link from "next/link";
@@ -92,6 +96,12 @@ type MenuApi = {
   SubTrigger: typeof ContextMenuSubTrigger | typeof DropdownMenuSubTrigger;
   SubContent: typeof ContextMenuSubContent | typeof DropdownMenuSubContent;
 };
+
+const MENU_ITEM_CLASS =
+  "min-h-9 gap-2 rounded-lg px-2.5 py-2 text-[13px] font-medium focus:bg-brand-aqua/70 focus:text-brand-teal-deep dark:focus:bg-brand-aqua/20 dark:focus:text-foreground";
+const MENU_ICON_CLASS = "size-4 text-brand-teal dark:text-brand-teal";
+const MENU_SECTION_CLASS =
+  "px-2.5 pb-1 pt-2 text-[10px] font-bold uppercase tracking-[0.16em] text-muted-foreground/75";
 
 function useTaskMenuLogic({
   task,
@@ -193,67 +203,90 @@ function TaskMenuBody({
 
   return (
     <>
-      <Label className="truncate font-normal text-muted-foreground">
-        {task.number}
-        {task.title ? ` · ${task.title}` : ""}
-      </Label>
-      <Separator />
+      <div className="relative overflow-hidden rounded-[0.7rem] border border-brand-teal/15 bg-gradient-to-br from-brand-aqua/70 via-background to-brand-orange/5 px-3 py-3 dark:from-brand-aqua/15 dark:via-background dark:to-brand-orange/10">
+        <div className="absolute inset-y-0 left-0 w-1 bg-brand-teal" />
+        <div className="flex min-w-0 items-start gap-2.5">
+          <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-brand-teal text-white shadow-sm shadow-brand-teal/20">
+            <ListChecks className="size-4" />
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="font-mono text-[10px] font-bold uppercase tracking-[0.14em] text-brand-teal-deep dark:text-brand-teal">
+              {task.number}
+            </p>
+            <p className="mt-0.5 line-clamp-2 text-sm font-semibold leading-snug text-foreground">
+              {task.title || "Untitled task"}
+            </p>
+          </div>
+        </div>
+      </div>
 
-      <div className="mx-1 mb-1 flex divide-x divide-border overflow-hidden rounded-md border border-border">
+      <div className="mt-1.5 grid grid-cols-3 gap-1 rounded-xl bg-muted/45 p-1">
         <Item
-          className="flex-1 justify-center whitespace-nowrap rounded-none"
+          className="flex h-14 flex-col justify-center gap-1 rounded-lg px-1 py-1.5 text-[10px] font-semibold text-muted-foreground focus:bg-background focus:text-brand-teal-deep dark:focus:text-brand-teal"
           onSelect={() => void copyText("Link", taskUrl(task.number))}
         >
+          <Link2 className="size-4 text-brand-teal" />
           Copy link
         </Item>
         <Item
-          className="flex-1 justify-center whitespace-nowrap rounded-none"
+          className="flex h-14 flex-col justify-center gap-1 rounded-lg px-1 py-1.5 text-[10px] font-semibold text-muted-foreground focus:bg-background focus:text-brand-teal-deep dark:focus:text-brand-teal"
           onSelect={() => void copyText("ID", task.number)}
         >
+          <Hash className="size-4 text-brand-teal" />
           Copy ID
         </Item>
         <Item
-          className="flex-1 justify-center whitespace-nowrap rounded-none"
+          className="flex h-14 flex-col justify-center gap-1 rounded-lg px-1 py-1.5 text-[10px] font-semibold text-muted-foreground focus:bg-background focus:text-brand-teal-deep dark:focus:text-brand-teal"
           onSelect={() => {
             window.open(taskUrl(task.number), "_blank", "noopener,noreferrer");
           }}
         >
+          <SquareArrowOutUpRight className="size-4 text-brand-orange" />
           New tab
         </Item>
       </div>
 
-      <Separator />
+      <Label className={MENU_SECTION_CLASS}>Task</Label>
 
-      <Item disabled={busy || following === null} onSelect={() => toggleFollow()}>
+      <Item
+        className={cn(
+          MENU_ITEM_CLASS,
+          following && "bg-brand-aqua/60 text-brand-teal-deep dark:bg-brand-aqua/15 dark:text-brand-teal",
+        )}
+        disabled={busy || following === null}
+        onSelect={() => toggleFollow()}
+      >
         {following ? (
           <>
-            <BellOff className="size-4" />
+            <BellOff className={MENU_ICON_CLASS} />
             Unfollow task
           </>
         ) : (
           <>
-            <Bell className="size-4" />
+            <Bell className={MENU_ICON_CLASS} />
             Follow task
           </>
         )}
       </Item>
 
-      <Item asChild>
+      <Item className={MENU_ITEM_CLASS} asChild>
         <Link href={`/tasks/task/${task.number}`}>
-          <ExternalLink className="size-4" />
+          <ExternalLink className={MENU_ICON_CLASS} />
           Open
         </Link>
       </Item>
-      <Item onSelect={() => void copyText("Title", task.title)}>
-        <Pencil className="size-4" />
+      <Item className={MENU_ITEM_CLASS} onSelect={() => void copyText("Title", task.title)}>
+        <Pencil className={MENU_ICON_CLASS} />
         Copy title
       </Item>
 
       {canEdit && (
         <>
-          <Separator />
+          <Separator className="my-1.5 bg-brand-teal/10" />
+          <Label className={MENU_SECTION_CLASS}>Organize</Label>
 
           <Item
+            className={MENU_ITEM_CLASS}
             disabled={busy}
             onSelect={() =>
               run(() => duplicateTask(task.id).then(() => undefined), {
@@ -261,24 +294,25 @@ function TaskMenuBody({
               })
             }
           >
-            <Copy className="size-4" />
+            <Copy className={MENU_ICON_CLASS} />
             Duplicate
           </Item>
 
           {otherLists.length > 0 && (
             <>
               <Sub>
-                <SubTrigger disabled={busy}>
-                  <FolderInput className="size-4" />
+                <SubTrigger className={MENU_ITEM_CLASS} disabled={busy}>
+                  <FolderInput className={MENU_ICON_CLASS} />
                   Move to
                 </SubTrigger>
-                <SubContent className="max-h-72 w-56 overflow-y-auto">
+                <SubContent className="max-h-72 w-64 overflow-y-auto rounded-xl border border-brand-teal/10 p-1.5 shadow-xl">
                   {listsBySpace.map((group) => (
                     <div key={group.spaceName}>
-                      <Label>{group.spaceName}</Label>
+                      <Label className={MENU_SECTION_CLASS}>{group.spaceName}</Label>
                       {group.lists.map((l) => (
                         <Item
                           key={l.id}
+                          className={MENU_ITEM_CLASS}
                           disabled={busy}
                           onSelect={() =>
                             run(() => moveTaskToList(task.id, l.id), {
@@ -295,17 +329,18 @@ function TaskMenuBody({
               </Sub>
 
               <Sub>
-                <SubTrigger disabled={busy}>
-                  <FolderOutput className="size-4" />
+                <SubTrigger className={MENU_ITEM_CLASS} disabled={busy}>
+                  <FolderOutput className={MENU_ICON_CLASS} />
                   Copy to
                 </SubTrigger>
-                <SubContent className="max-h-72 w-56 overflow-y-auto">
+                <SubContent className="max-h-72 w-64 overflow-y-auto rounded-xl border border-brand-teal/10 p-1.5 shadow-xl">
                   {listsBySpace.map((group) => (
                     <div key={group.spaceName}>
-                      <Label>{group.spaceName}</Label>
+                      <Label className={MENU_SECTION_CLASS}>{group.spaceName}</Label>
                       {group.lists.map((l) => (
                         <Item
                           key={l.id}
+                          className={MENU_ITEM_CLASS}
                           disabled={busy}
                           onSelect={() =>
                             run(() => copyTaskToList(task.id, l.id).then(() => undefined), {
@@ -323,9 +358,14 @@ function TaskMenuBody({
             </>
           )}
 
-          <Separator />
+          <Separator className="my-1.5 bg-brand-teal/10" />
+          <Label className={MENU_SECTION_CLASS}>Lifecycle</Label>
 
           <Item
+            className={cn(
+              MENU_ITEM_CLASS,
+              "focus:bg-brand-orange/10 focus:text-brand-orange",
+            )}
             disabled={busy}
             onSelect={() => {
               if (
@@ -338,10 +378,11 @@ function TaskMenuBody({
               run(() => archiveTaskById(task.id), { success: "Task archived", leavesPage: true });
             }}
           >
-            <Archive className="size-4" />
+            <Archive className="size-4 text-brand-orange" />
             Archive
           </Item>
           <Item
+            className={cn(MENU_ITEM_CLASS, "text-destructive")}
             variant="destructive"
             disabled={busy}
             onSelect={() => {
@@ -356,15 +397,15 @@ function TaskMenuBody({
             }}
           >
             <Trash2 className="size-4" />
-            Delete
+            Move to trash
           </Item>
         </>
       )}
 
       {!canEdit && (
         <>
-          <Separator />
-          <Item disabled className="text-muted-foreground">
+          <Separator className="my-1.5" />
+          <Item disabled className={cn(MENU_ITEM_CLASS, "text-muted-foreground")}>
             <MoreHorizontal className="size-4" />
             View only
           </Item>
@@ -410,7 +451,7 @@ export function TaskContextMenu({
       <ContextMenuTrigger asChild={asChild} className={className}>
         {children}
       </ContextMenuTrigger>
-      <ContextMenuContent className="w-56">
+      <ContextMenuContent className="w-[19rem] rounded-2xl border border-brand-teal/15 bg-popover/98 p-1.5 shadow-2xl shadow-brand-teal-deep/10 backdrop-blur-xl">
         <TaskMenuBody
           task={task}
           canEdit={canEdit}
@@ -467,9 +508,9 @@ export function TaskActionsMenu({
           type="button"
           className={cn(
             // Plain ⋯ — no border / chip chrome (ClickUp-style)
-            "inline-flex size-7 items-center justify-center rounded-md",
-            "text-muted-foreground hover:text-foreground",
-            "hover:bg-muted/60",
+            "inline-flex size-7 items-center justify-center rounded-lg",
+            "text-muted-foreground hover:text-brand-teal-deep dark:hover:text-brand-teal",
+            "hover:bg-brand-aqua/70 dark:hover:bg-brand-aqua/15",
             "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
             buttonClassName,
           )}
@@ -487,7 +528,13 @@ export function TaskActionsMenu({
           <MoreHorizontal className="size-4" />
         </button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align={align} className={cn("w-56", className)}>
+      <DropdownMenuContent
+        align={align}
+        className={cn(
+          "w-[19rem] rounded-2xl border border-brand-teal/15 bg-popover/98 p-1.5 shadow-2xl shadow-brand-teal-deep/10 backdrop-blur-xl",
+          className,
+        )}
+      >
         <TaskMenuBody
           task={task}
           canEdit={canEdit}

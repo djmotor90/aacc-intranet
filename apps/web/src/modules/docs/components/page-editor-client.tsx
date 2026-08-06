@@ -67,9 +67,11 @@ import {
 } from "@/modules/docs/lib/page-styles";
 import type { DocOutlineNode, DocPageDetail } from "@/modules/docs/queries";
 import { cn } from "@/lib/utils";
-import { useDocCollab } from "@/modules/docs/hooks/use-doc-collab";
+import {
+  COLLAB_CONNECT_WINDOW_MS,
+  useDocCollab,
+} from "@/modules/docs/hooks/use-doc-collab";
 import { CollabPresence } from "./collab-presence";
-import { CreatePageDialog } from "./create-page-dialog";
 import { DocPageOutline } from "./doc-page-outline";
 import { PageStylesPanel } from "./page-styles-panel";
 
@@ -156,14 +158,14 @@ export function PageEditorClient({
     "idle",
   );
   const [updatedAt, setUpdatedAt] = useState(page.updatedAt);
+  const [bodyVersion, setBodyVersion] = useState(page.bodyVersion);
   const [isProtected, setIsProtected] = useState(page.isProtected);
   const [isStale, setIsStale] = useState(page.isStale);
   const [kind, setKind] = useState(page.kind);
-  const [addPageOpen, setAddPageOpen] = useState(false);
   const [pagesSheetOpen, setPagesSheetOpen] = useState(false);
   /** Desktop left pages rail — collapsible for more writing space. */
-  const [pagesRailOpen, setPagesRailOpen] = useState(true);
-  const [stylesOpen, setStylesOpen] = useState(true);
+  const [pagesRailOpen, setPagesRailOpen] = useState(false);
+  const [stylesOpen, setStylesOpen] = useState(false);
   const [isDesktop, setIsDesktop] = useState(false);
   const [relationsOpen, setRelationsOpen] = useState(false);
   const [styles, setStyles] = useState<DocPageStyles>(DEFAULT_DOC_PAGE_STYLES);
@@ -198,7 +200,7 @@ export function PageEditorClient({
     collabWindowOpen.current = true;
     const t = window.setTimeout(() => {
       collabWindowOpen.current = false;
-    }, 1000);
+    }, COLLAB_CONNECT_WINDOW_MS);
     return () => window.clearTimeout(t);
   }, [page.id]);
   useEffect(() => {
@@ -272,7 +274,7 @@ export function PageEditorClient({
             text: body?.text ?? "",
             doc: body?.doc ?? null,
           },
-          expectedUpdatedAt: updatedAt,
+          expectedBodyVersion: bodyVersion,
         });
         if (!res.ok && res.conflict) {
           setSaveState("error");
@@ -281,6 +283,7 @@ export function PageEditorClient({
         }
         if (res.ok) {
           setUpdatedAt(res.updatedAt);
+          setBodyVersion(res.bodyVersion);
           setSaveState("saved");
         }
       } catch (e) {
@@ -288,7 +291,7 @@ export function PageEditorClient({
         toast.error(e instanceof Error ? e.message : "Save failed");
       }
     },
-    [page.id, updatedAt, useCollabEditor],
+    [bodyVersion, page.id, useCollabEditor],
   );
 
   function onEditorChange(payload: { text: string; doc: unknown; empty: boolean }) {
@@ -360,6 +363,7 @@ export function PageEditorClient({
             homeSpaceId={outline.homeSpaceId}
             docId={outline.docId ?? outline.rootId}
             canEdit={canEdit}
+            canManage={page.canManage}
             spaces={spaces}
             rootTitle={outline.rootTitle}
             onCollapse={togglePagesRail}
@@ -465,6 +469,7 @@ export function PageEditorClient({
                     homeSpaceId={outline.homeSpaceId}
                     docId={outline.docId ?? outline.rootId}
                     canEdit={canEdit}
+                    canManage={page.canManage}
                     spaces={spaces}
                     rootTitle={outline.rootTitle}
                     embedded
@@ -832,16 +837,6 @@ export function PageEditorClient({
         )}
       </div>
       </div>
-
-      <CreatePageDialog
-        open={addPageOpen}
-        onOpenChange={setAddPageOpen}
-        spaces={spaces}
-        defaultSpaceId={page.homeSpaceId}
-        parentPageId={page.id}
-        docId={outline?.docId ?? outline?.rootId}
-        dialogTitle="Add page"
-      />
 
       <Sheet open={relationsOpen} onOpenChange={setRelationsOpen}>
         <SheetContent side="right" className="w-[min(100%,22rem)] sm:max-w-sm">

@@ -39,8 +39,11 @@ export type DocCollabState = {
   peers: CollabAwarenessUser[];
 };
 
-/** Give up on the collab server quickly so the editor never sits blocked. */
-const CONNECT_TIMEOUT_MS = 2500;
+/**
+ * Give multiplayer one short, shared window to win editor ownership. After
+ * this expires the provider is destroyed before local autosave can begin.
+ */
+export const COLLAB_CONNECT_WINDOW_MS = 1000;
 
 /**
  * Connect to the Hocuspocus collab room for a doc page.
@@ -115,7 +118,7 @@ export function useDocCollab(pageId: string | null, enabled: boolean): DocCollab
       failOpen(
         "Live collab timed out — editing locally. Run `pnpm collab:dev` for multiplayer.",
       );
-    }, CONNECT_TIMEOUT_MS);
+    }, COLLAB_CONNECT_WINDOW_MS);
 
     async function connect() {
       setStatus("loading");
