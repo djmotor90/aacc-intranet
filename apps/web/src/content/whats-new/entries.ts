@@ -19,6 +19,28 @@ export const whatsNewFeed: WhatsNewFeed = {
   schemaVersion: 1,
   entries: [
     {
+      id: "2026-08-06-assignee-label-left",
+      date: "2026-08-06",
+      publishedAt: "2026-08-06T16:00:00.000Z",
+      kind: "improved",
+      module: "tasks",
+      title: "People and tags are easier to scan",
+      body: "The Assignees and Tags labels now sit to the left of their pickers in task creation and task details, making task fields more compact and consistent.",
+      href: "/tasks",
+      tags: ["tasks", "assignees", "tags", "layout"],
+    },
+    {
+      id: "2026-08-06-custom-field-label-layouts",
+      date: "2026-08-06",
+      publishedAt: "2026-08-06T15:30:00.000Z",
+      kind: "new",
+      module: "tasks",
+      title: "Custom fields explain themselves",
+      body: "Custom fields can now include optional help text and place their label above, below, beside, inside, or out of sight. The chosen presentation follows the field into task creation and task details.",
+      href: "/tasks",
+      tags: ["custom-fields", "task-layout", "accessibility"],
+    },
+    {
       id: "2026-08-06-super-admin-hidden-permissions",
       date: "2026-08-06",
       publishedAt: "2026-08-06T15:00:00.000Z",

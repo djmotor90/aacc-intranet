@@ -421,25 +421,37 @@ export default async function TaskDetailPage(props: { params: Promise<{ number: 
                     </div>
                   );
                   if (fieldId === "assignees") return (
-                    <div key="assignees" className="flex flex-col gap-1.5">
-                      <FieldLabel fieldId="assignees">Assignees</FieldLabel>
-                      <AssigneeSelect
-                        taskId={task.id}
-                        users={activeUsers}
-                        selectedUsers={assigneeRows}
-                        disabled={!canEdit}
-                      />
+                    <div
+                      key="assignees"
+                      className="grid grid-cols-[7rem_minmax(0,1fr)] items-center gap-3"
+                    >
+                      <FieldLabel fieldId="assignees" muted>Assignees</FieldLabel>
+                      <div className="min-w-0">
+                        <AssigneeSelect
+                          taskId={task.id}
+                          users={activeUsers}
+                          selectedUsers={assigneeRows}
+                          disabled={!canEdit}
+                        />
+                      </div>
                     </div>
                   );
                   if (fieldId === "tags") return (
-                    <div key="tags" className="flex flex-col gap-1.5 sm:col-span-2">
-                      <FieldLabel fieldId="tags">Tags</FieldLabel>
-                      <TagPicker
-                        taskId={task.id}
-                        spaceTags={spaceTags}
-                        selectedTags={taskTags}
-                        disabled={!canEdit}
-                      />
+                    <div
+                      key="tags"
+                      className="grid grid-cols-[7rem_minmax(0,1fr)] items-start gap-3 sm:col-span-2"
+                    >
+                      <div className="pt-2">
+                        <FieldLabel fieldId="tags" muted>Tags</FieldLabel>
+                      </div>
+                      <div className="min-w-0">
+                        <TagPicker
+                          taskId={task.id}
+                          spaceTags={spaceTags}
+                          selectedTags={taskTags}
+                          disabled={!canEdit}
+                        />
+                      </div>
                     </div>
                   );
                   if (fieldId === "description") return (

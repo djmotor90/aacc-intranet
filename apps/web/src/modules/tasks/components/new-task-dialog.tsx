@@ -271,20 +271,22 @@ export function NewTaskDialog({
             </div>
           </div>
 
-          <div className="flex flex-col gap-1.5">
-            <Label>
+          <div className="grid grid-cols-[7rem_minmax(0,1fr)] items-center gap-3">
+            <Label className="text-muted-foreground">
               {CORE_FIELD_LABELS.assignees} {req("assignees") && <ReqMark />}
             </Label>
-            <FormAssigneePicker
-              users={users}
-              required={req("assignees")}
-              resetKey={formKey}
-            />
+            <div className="min-w-0">
+              <FormAssigneePicker
+                users={users}
+                required={req("assignees")}
+                resetKey={formKey}
+              />
+            </div>
           </div>
 
           {showTags && (
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="tags">
+            <div className="grid grid-cols-[7rem_minmax(0,1fr)] items-start gap-3">
+              <Label htmlFor="tags" className="pt-2 text-muted-foreground">
                 {CORE_FIELD_LABELS.tags} {req("tags") && <ReqMark />}
               </Label>
               <select

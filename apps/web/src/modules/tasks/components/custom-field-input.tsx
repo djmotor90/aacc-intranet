@@ -18,10 +18,14 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { cn } from "@/lib/utils";
+import { normalizeCustomFieldLabelPosition } from "../lib/custom-field-presentation";
 
 export interface FieldDefLike {
   id: string;
   label: string;
+  description?: string | null;
+  labelPosition?: string | null;
   type: string;
   options: unknown;
   isRequired: boolean;
@@ -39,11 +43,13 @@ function PeopleFieldSelect({
   users,
   defaultValue,
   required,
+  placeholder = "Select people…",
 }: {
   name: string;
   users: UserOption[];
   defaultValue: string[];
   required?: boolean;
+  placeholder?: string;
 }) {
   const [selected, setSelected] = useState<string[]>(defaultValue);
 
@@ -87,7 +93,7 @@ function PeopleFieldSelect({
                 </span>
               ))
             ) : (
-              <span className="text-muted-foreground">Select people…</span>
+              <span className="text-muted-foreground">{placeholder}</span>
             )}
           </button>
         </DropdownMenuTrigger>
@@ -119,10 +125,12 @@ function MultiSelectField({
   name,
   options,
   defaultValue,
+  placeholder = "—",
 }: {
   name: string;
   options: { id: string; label: string; color?: string }[];
   defaultValue: string[];
+  placeholder?: string;
 }) {
   const [selected, setSelected] = useState<string[]>(defaultValue);
 
@@ -161,7 +169,7 @@ function MultiSelectField({
                 </span>
               ))
             ) : (
-              <span className="text-muted-foreground">—</span>
+              <span className="text-muted-foreground">{placeholder}</span>
             )}
           </button>
         </DropdownMenuTrigger>
@@ -195,12 +203,14 @@ function ColorFieldSelect({
   required,
   options,
   defaultValue,
+  placeholder = "Pick a color…",
 }: {
   id: string;
   name: string;
   required?: boolean;
   options: { id: string; label: string; color?: string }[];
   defaultValue: string;
+  placeholder?: string;
 }) {
   const [value, setValue] = useState(defaultValue);
   const current = options.find((o) => o.id === value);
@@ -234,7 +244,7 @@ function ColorFieldSelect({
                 )}
               </>
             ) : (
-              <span className="text-muted-foreground">Pick a color…</span>
+              <span className="text-muted-foreground">{placeholder}</span>
             )}
           </button>
         </DropdownMenuTrigger>
@@ -285,18 +295,31 @@ export function CustomFieldInput({
   const name = `cf_${def.id}`;
   const options = (def.options ?? []) as { id: string; label: string; color?: string }[];
   const dv = defaultValue as string | number | boolean | string[] | undefined;
+  const labelPosition = normalizeCustomFieldLabelPosition(def.labelPosition);
+  const insidePrompt =
+    labelPosition === "inside" ? `${def.label}${def.isRequired ? " *" : ""}` : undefined;
+  const description = def.description?.trim() || null;
 
-  return (
-    <div className="flex flex-col gap-1.5">
-      <Label htmlFor={name}>
-        {def.label}
-        {def.isRequired && <span className="text-destructive"> *</span>}
-      </Label>
-      {def.type === "textarea" ? (
-        <Textarea id={name} name={name} required={def.isRequired} defaultValue={(dv as string) ?? ""} />
-      ) : def.type === "checkbox" ? (
+  const control =
+    def.type === "textarea" ? (
+      <Textarea
+        id={name}
+        name={name}
+        required={def.isRequired}
+        defaultValue={(dv as string) ?? ""}
+        placeholder={insidePrompt}
+      />
+    ) : def.type === "checkbox" ? (
+      <div className="flex min-h-9 items-center gap-2">
         <Checkbox id={name} name={name} defaultChecked={dv === true} />
-      ) : def.type === "dropdown" ? (
+        {labelPosition === "inside" && (
+          <Label htmlFor={name} className="font-normal">
+            {def.label}
+            {def.isRequired && <span className="text-destructive"> *</span>}
+          </Label>
+        )}
+      </div>
+    ) : def.type === "dropdown" ? (
         <select
           id={name}
           name={name}
@@ -304,24 +327,30 @@ export function CustomFieldInput({
           defaultValue={(dv as string) ?? ""}
           className="h-9 rounded-md border bg-transparent px-3 text-sm"
         >
-          <option value="">—</option>
+          <option value="">{insidePrompt ?? "—"}</option>
           {options.map((o) => (
             <option key={o.id} value={o.id}>
               {o.label}
             </option>
           ))}
         </select>
-      ) : def.type === "color" ? (
+    ) : def.type === "color" ? (
         <ColorFieldSelect
           id={name}
           name={name}
           required={def.isRequired}
           options={options}
           defaultValue={(dv as string) ?? ""}
+          placeholder={insidePrompt}
         />
-      ) : def.type === "multi_select" ? (
-        <MultiSelectField name={name} options={options} defaultValue={(dv as string[]) ?? []} />
-      ) : def.type === "user" ? (
+    ) : def.type === "multi_select" ? (
+        <MultiSelectField
+          name={name}
+          options={options}
+          defaultValue={(dv as string[]) ?? []}
+          placeholder={insidePrompt}
+        />
+    ) : def.type === "user" ? (
         <PeopleFieldSelect
           name={name}
           users={users}
@@ -333,10 +362,11 @@ export function CustomFieldInput({
                 ? [dv]
                 : []
           }
+          placeholder={insidePrompt}
         />
-      ) : def.type === "file" ? (
+    ) : def.type === "file" ? (
         <FileFieldDisplay value={defaultValue} />
-      ) : (
+    ) : (
         <Input
           id={name}
           name={name}
@@ -354,8 +384,66 @@ export function CustomFieldInput({
                     : "text"
           }
           step={def.type === "number" ? "any" : undefined}
+          placeholder={insidePrompt}
         />
+    );
+
+  const label = (
+    <Label
+      htmlFor={name}
+      className={cn(
+        (labelPosition === "hidden" || labelPosition === "inside") && "sr-only",
       )}
+    >
+      {def.label}
+      {def.isRequired && <span className="text-destructive"> *</span>}
+    </Label>
+  );
+  const help = description ? (
+    <p className="text-xs leading-relaxed text-muted-foreground">{description}</p>
+  ) : null;
+
+  if (labelPosition === "left" || labelPosition === "right") {
+    const labelBlock = (
+      <div className="flex min-w-28 max-w-48 flex-col gap-1 pt-2">
+        {label}
+        {help}
+      </div>
+    );
+    return (
+      <div className="grid items-start gap-3 sm:grid-cols-[minmax(7rem,0.7fr)_minmax(0,1.3fr)]">
+        {labelPosition === "left" && labelBlock}
+        <div className={cn(labelPosition === "right" && "sm:order-first")}>{control}</div>
+        {labelPosition === "right" && labelBlock}
+      </div>
+    );
+  }
+
+  if (labelPosition === "bottom") {
+    return (
+      <div className="flex flex-col gap-1.5">
+        {control}
+        {label}
+        {help}
+      </div>
+    );
+  }
+
+  if (labelPosition === "hidden" || labelPosition === "inside") {
+    return (
+      <div className="flex flex-col gap-1.5">
+        {label}
+        {control}
+        {help}
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-1.5">
+      {label}
+      {help}
+      {control}
     </div>
   );
 }

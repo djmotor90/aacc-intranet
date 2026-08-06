@@ -23,13 +23,21 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { archiveFieldDefinition, updateFieldDefinition } from "../actions";
+import {
+  CUSTOM_FIELD_LABEL_POSITIONS,
+  normalizeCustomFieldLabelPosition,
+  type CustomFieldLabelPosition,
+} from "../lib/custom-field-presentation";
 import { FieldDefinitionForm } from "./field-definition-form";
 
 export type FieldDefRow = {
   id: string;
   label: string;
+  description: string | null;
+  labelPosition: string;
   type: string;
   options: unknown;
   isRequired: boolean;
@@ -101,6 +109,10 @@ function FieldEditDialog({
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [label, setLabel] = useState(field.label);
+  const [description, setDescription] = useState(field.description ?? "");
+  const [labelPosition, setLabelPosition] = useState<CustomFieldLabelPosition>(() =>
+    normalizeCustomFieldLabelPosition(field.labelPosition),
+  );
   const [isRequired, setIsRequired] = useState(field.isRequired);
   const [options, setOptions] = useState<OptionDraft[]>(() => optionsFromField(field));
   const [error, setError] = useState<string | null>(null);
@@ -114,6 +126,8 @@ function FieldEditDialog({
     setPrevTarget({ open, field });
     if (open) {
       setLabel(field.label);
+      setDescription(field.description ?? "");
+      setLabelPosition(normalizeCustomFieldLabelPosition(field.labelPosition));
       setIsRequired(field.isRequired);
       setOptions(optionsFromField(field));
       setError(null);
@@ -176,6 +190,8 @@ function FieldEditDialog({
           await updateFieldDefinition({
             fieldId: field.id,
             label: trimmed,
+            description,
+            labelPosition,
             isRequired,
             options: cleaned,
           });
@@ -194,6 +210,8 @@ function FieldEditDialog({
         await updateFieldDefinition({
           fieldId: field.id,
           label: trimmed,
+          description,
+          labelPosition,
           isRequired,
         });
         toast.success("Field updated");
@@ -229,6 +247,39 @@ function FieldEditDialog({
               onChange={(e) => setLabel(e.target.value)}
               disabled={pending}
             />
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="edit-field-description">Description (optional)</Label>
+            <Textarea
+              id="edit-field-description"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="Explain what this field is for or what value is expected."
+              maxLength={500}
+              rows={3}
+              disabled={pending}
+            />
+            <p className="text-xs text-muted-foreground">
+              Displayed as help text with the field. {description.length}/500
+            </p>
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="edit-field-label-position">Label location</Label>
+            <select
+              id="edit-field-label-position"
+              value={labelPosition}
+              onChange={(e) => setLabelPosition(e.target.value as CustomFieldLabelPosition)}
+              className="h-9 rounded-md border bg-transparent px-3 text-sm"
+              disabled={pending}
+            >
+              {CUSTOM_FIELD_LABEL_POSITIONS.map((position) => (
+                <option key={position.value} value={position.value}>
+                  {position.label} — {position.description}
+                </option>
+              ))}
+            </select>
           </div>
 
           <label className="flex items-center gap-2 text-sm">
@@ -401,6 +452,9 @@ export function FieldDefinitionsManager({
       <ul className="flex flex-col gap-2">
         {active.map((f) => {
           const opts = (f.options ?? []) as { id: string; label: string; color?: string }[];
+          const placement = normalizeCustomFieldLabelPosition(f.labelPosition);
+          const placementLabel =
+            CUSTOM_FIELD_LABEL_POSITIONS.find((item) => item.value === placement)?.label ?? "Top";
           return (
             <li
               key={f.id}
@@ -410,8 +464,14 @@ export function FieldDefinitionsManager({
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="font-medium">{f.label}</span>
                   <Badge variant="outline">{TYPE_LABELS[f.type] ?? f.type}</Badge>
+                  <Badge variant="outline">Label: {placementLabel}</Badge>
                   {f.isRequired && <Badge variant="secondary">required</Badge>}
                 </div>
+                {f.description && (
+                  <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                    {f.description}
+                  </p>
+                )}
                 {OPTION_TYPES.has(f.type) && opts.length > 0 && (
                   <div className="mt-1.5 flex flex-wrap gap-1">
                     {opts.slice(0, 12).map((o) => (

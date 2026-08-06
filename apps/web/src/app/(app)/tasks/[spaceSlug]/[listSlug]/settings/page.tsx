@@ -190,6 +190,7 @@ export default async function ListSettingsPage(props: {
                   fieldDefs={fieldDefs.map((f) => ({
                     id: f.id,
                     label: f.label,
+                    description: f.description,
                     type: f.type,
                     isRequired: f.isRequired,
                     isArchived: f.isArchived,
@@ -203,8 +204,9 @@ export default async function ListSettingsPage(props: {
                 <CardTitle>Custom fields</CardTitle>
                 <CardDescription>
                   Fields attached to every task in this list. Use <strong>Edit</strong> to rename a
-                  field or add, change, or remove dropdown / color options. Archiving hides the
-                  field from forms but keeps historical values readable.
+                  field, add help text, choose its label location, or manage dropdown / color
+                  options. Archiving hides the field from forms but keeps historical values
+                  readable.
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -213,6 +215,8 @@ export default async function ListSettingsPage(props: {
                   fieldDefs={fieldDefs.map((f) => ({
                     id: f.id,
                     label: f.label,
+                    description: f.description,
+                    labelPosition: f.labelPosition,
                     type: f.type,
                     options: f.options,
                     isRequired: f.isRequired,

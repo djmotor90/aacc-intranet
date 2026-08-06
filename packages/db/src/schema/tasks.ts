@@ -416,6 +416,9 @@ export const customFieldDefinitions = pgTable(
       .references(() => lists.id, { onDelete: "cascade" }),
     key: text("key").notNull(),
     label: text("label").notNull(),
+    description: text("description"),
+    /** Label presentation in task create/detail forms. */
+    labelPosition: text("label_position").notNull().default("top"),
     type: customFieldType("type").notNull(),
     /** dropdown/multi_select/color: [{ id, label, color? }] */
     options: jsonb("options"),

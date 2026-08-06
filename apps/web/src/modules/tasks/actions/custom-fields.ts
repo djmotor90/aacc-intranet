@@ -13,6 +13,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { assertSpaceRole, requireUser } from "@/lib/rbac";
 import { logActivity } from "../lib/activity";
+import { CUSTOM_FIELD_LABEL_POSITION_VALUES } from "../lib/custom-field-presentation";
 import { invalidateListMetaCache } from "../queries";
 import { listPath, requireList, slugify } from "./shared";
 
@@ -31,6 +32,8 @@ const fieldTypeSchema = z.enum([
   "color",
   "file",
 ]);
+
+const fieldLabelPositionSchema = z.enum(CUSTOM_FIELD_LABEL_POSITION_VALUES);
 
 const HEX_COLOR = /^#([0-9A-Fa-f]{3}|[0-9A-Fa-f]{6}|[0-9A-Fa-f]{8})$/;
 
@@ -81,6 +84,13 @@ function parseColorOptions(optionsRaw: string): { id: string; label: string; col
 export async function createFieldDefinition(formData: FormData) {
   const listId = z.string().uuid().parse(formData.get("listId"));
   const label = z.string().min(1).max(100).parse(formData.get("label"));
+  const descriptionRaw = String(formData.get("description") ?? "").trim();
+  const description = descriptionRaw
+    ? z.string().max(500).parse(descriptionRaw)
+    : null;
+  const labelPosition = fieldLabelPositionSchema.parse(
+    formData.get("labelPosition") ?? "top",
+  );
   const type = fieldTypeSchema.parse(formData.get("type"));
   const isRequired = formData.get("isRequired") === "on";
   const optionsRaw = String(formData.get("options") ?? "").trim();
@@ -112,6 +122,8 @@ export async function createFieldDefinition(formData: FormData) {
       listId,
       key: slugify(label),
       label,
+      description,
+      labelPosition,
       type,
       options,
       isRequired,
@@ -174,11 +186,23 @@ const fieldOptionSchema = z.object({
 export async function updateFieldDefinition(params: {
   fieldId: string;
   label: string;
+  description?: string | null;
+  labelPosition?: z.infer<typeof fieldLabelPositionSchema>;
   isRequired?: boolean;
   options?: { id?: string; label: string; color?: string }[] | null;
 }) {
   const fieldId = z.string().uuid().parse(params.fieldId);
   const label = z.string().min(1).max(100).parse(params.label.trim());
+  const description =
+    params.description === undefined
+      ? undefined
+      : params.description?.trim()
+        ? z.string().max(500).parse(params.description.trim())
+        : null;
+  const labelPosition =
+    params.labelPosition === undefined
+      ? undefined
+      : fieldLabelPositionSchema.parse(params.labelPosition);
   const isRequired =
     params.isRequired === undefined ? undefined : z.boolean().parse(params.isRequired);
 
@@ -232,6 +256,8 @@ export async function updateFieldDefinition(params: {
       .update(customFieldDefinitions)
       .set({
         label,
+        ...(description !== undefined ? { description } : {}),
+        ...(labelPosition !== undefined ? { labelPosition } : {}),
         ...(isRequired !== undefined ? { isRequired } : {}),
         ...(nextOptions !== undefined ? { options: nextOptions } : {}),
         updatedAt: new Date(),
@@ -241,7 +267,12 @@ export async function updateFieldDefinition(params: {
       spaceId: space.id,
       actorId: user.id,
       verb: "field.updated",
-      payload: { label, type: field.type, listName: list.name },
+      payload: {
+        label,
+        type: field.type,
+        listName: list.name,
+        labelPosition: labelPosition ?? field.labelPosition,
+      },
     });
   });
 

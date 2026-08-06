@@ -281,6 +281,13 @@
       "when": 1787010000000,
       "tag": "0039_remove_legacy_admin_permission_role",
       "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "7",
+      "when": 1787020000000,
+      "tag": "0040_custom_field_presentation",
+      "breakpoints": true
     }
   ]
 }

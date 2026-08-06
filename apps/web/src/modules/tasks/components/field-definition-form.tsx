@@ -15,6 +15,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { createFieldDefinition } from "../actions";
+import { CUSTOM_FIELD_LABEL_POSITIONS } from "../lib/custom-field-presentation";
 
 const FIELD_TYPES = [
   { value: "text", label: "Text" },
@@ -132,6 +133,37 @@ export function FieldDefinitionForm({ listId }: { listId: string }) {
         <Button type="submit" disabled={type === "color" && colorOptions.length === 0}>
           Add field
         </Button>
+      </div>
+
+      <div className="grid max-w-2xl gap-3 sm:grid-cols-[minmax(0,1fr)_15rem]">
+        <div className="flex flex-col gap-1">
+          <Label htmlFor="f-description">Description (optional)</Label>
+          <Textarea
+            id="f-description"
+            name="description"
+            rows={2}
+            maxLength={500}
+            placeholder="Help people understand what value belongs here."
+          />
+        </div>
+        <div className="flex flex-col gap-1">
+          <Label htmlFor="f-label-position">Label location</Label>
+          <select
+            id="f-label-position"
+            name="labelPosition"
+            defaultValue="top"
+            className="h-9 rounded-md border bg-transparent px-3 text-sm"
+          >
+            {CUSTOM_FIELD_LABEL_POSITIONS.map((position) => (
+              <option key={position.value} value={position.value}>
+                {position.label}
+              </option>
+            ))}
+          </select>
+          <p className="text-xs text-muted-foreground">
+            Controls where the label appears on task forms.
+          </p>
+        </div>
       </div>
 
       {type === "user" && (
