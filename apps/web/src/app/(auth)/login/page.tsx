@@ -26,7 +26,9 @@ export default async function LoginPage() {
   const session = await auth();
   if (session?.user?.id) redirect("/");
 
-  const devAuth = process.env.DEV_AUTH === "true" && process.env.NODE_ENV !== "production";
+  const localAuthEnabled =
+    process.env.AUTH_LOCAL_CREDENTIALS === "true" ||
+    (process.env.DEV_AUTH === "true" && process.env.NODE_ENV !== "production");
   const entraEnabled = Boolean(
     process.env.AUTH_MICROSOFT_ENTRA_ID_ISSUER?.trim() ||
       process.env.AUTH_MICROSOFT_ENTRA_ID_ID?.trim(),
@@ -56,8 +58,8 @@ export default async function LoginPage() {
           <CardDescription>
             {entraEnabled
               ? "Sign in with your work account"
-              : devAuth
-                ? "Local development sign-in"
+              : localAuthEnabled
+                ? "Sign in with your AACC account"
                 : "Sign in"}
           </CardDescription>
         </CardHeader>
@@ -81,7 +83,7 @@ export default async function LoginPage() {
             </form>
           )}
 
-          {devAuth && (
+          {localAuthEnabled && (
             <form
               className={`flex flex-col gap-2 ${entraEnabled ? "border-t pt-4" : ""}`}
               action={async (formData: FormData) => {
@@ -110,6 +112,12 @@ export default async function LoginPage() {
                 Sign in
               </Button>
             </form>
+          )}
+
+          {!entraEnabled && !localAuthEnabled && (
+            <p role="alert" className="rounded-md border border-brand-orange/30 bg-brand-orange/10 p-3 text-center text-sm text-foreground">
+              No sign-in method is configured. Contact your Operations Hub administrator.
+            </p>
           )}
         </CardContent>
       </Card>

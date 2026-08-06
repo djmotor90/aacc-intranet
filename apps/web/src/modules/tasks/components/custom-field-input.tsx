@@ -60,6 +60,16 @@ function PeopleFieldSelect({
       {selected.map((id) => (
         <input key={id} type="hidden" name={name} value={id} />
       ))}
+      {required && selected.length === 0 && (
+        <input
+          tabIndex={-1}
+          className="sr-only"
+          required
+          value=""
+          onChange={() => {}}
+          aria-hidden
+        />
+      )}
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <button

@@ -95,12 +95,10 @@ type MenuApi = {
 
 function useTaskMenuLogic({
   task,
-  canEdit,
   lists,
   redirectOnRemove,
 }: {
   task: TaskMenuTask;
-  canEdit: boolean;
   lists: WritableListOption[];
   /** When set, navigate here after archive/delete succeeds instead of refreshing in place
    *  (the current page — e.g. the task detail view — no longer has anything to show). */
@@ -400,7 +398,7 @@ export function TaskContextMenu({
    *  lives on the task's own detail page, so removing the task doesn't 404 it. */
   redirectOnRemove?: string;
 }) {
-  const logic = useTaskMenuLogic({ task, canEdit, lists, redirectOnRemove });
+  const logic = useTaskMenuLogic({ task, lists, redirectOnRemove });
 
   return (
     <ContextMenu
@@ -453,7 +451,7 @@ export function TaskActionsMenu({
    *  lives on the task's own detail page, so removing the task doesn't 404 it. */
   redirectOnRemove?: string;
 }) {
-  const logic = useTaskMenuLogic({ task, canEdit, lists, redirectOnRemove });
+  const logic = useTaskMenuLogic({ task, lists, redirectOnRemove });
   const [open, setOpen] = useState(false);
 
   return (

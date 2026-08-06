@@ -5,7 +5,7 @@
  * Fingerprint: GURVER-KG-AITIM-2026-7F3C9E2A
  * License: Proprietary. All rights reserved. See LICENSE / COPYRIGHT.
  */
-import { db, users } from "@aitim/db";
+import { db, users, withDbRetry } from "@aitim/db";
 import { count, eq } from "drizzle-orm";
 import { ArrowRight, FileText, ListChecks, Users as UsersIcon } from "lucide-react";
 import Link from "next/link";
@@ -14,10 +14,16 @@ import { requireUser } from "@/lib/rbac";
 
 export default async function HomePage() {
   const user = await requireUser();
-  const [{ value: userCount }] = await db
-    .select({ value: count() })
-    .from(users)
-    .where(eq(users.isActive, true));
+  const userCount = await withDbRetry(() =>
+    db
+      .select({ value: count() })
+      .from(users)
+      .where(eq(users.isActive, true))
+      .then((rows) => rows[0]?.value ?? null),
+  ).catch((error) => {
+    console.warn("[home] active user count unavailable", error);
+    return null;
+  });
 
   return (
     <div className="mx-auto max-w-5xl">
@@ -74,7 +80,9 @@ export default async function HomePage() {
                 <ArrowRight className="size-4 text-muted-foreground/60 transition-transform group-hover:translate-x-0.5 group-hover:text-foreground" />
               </div>
               <CardTitle>Directory</CardTitle>
-              <CardDescription>{userCount} active colleagues</CardDescription>
+              <CardDescription>
+                {userCount === null ? "Find colleagues and expertise" : `${userCount} active colleagues`}
+              </CardDescription>
             </CardHeader>
           </Card>
         </Link>

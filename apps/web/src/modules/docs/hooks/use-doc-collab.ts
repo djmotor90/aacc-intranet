@@ -7,9 +7,9 @@
  */
 "use client";
 
-import { HocuspocusProvider } from "@hocuspocus/provider";
+import type { HocuspocusProvider } from "@hocuspocus/provider";
 import { useEffect, useMemo, useState } from "react";
-import * as Y from "yjs";
+import type { Doc as YDoc } from "yjs";
 
 export type CollabUser = {
   id: string;
@@ -33,7 +33,7 @@ export type CollabAwarenessUser = {
 export type DocCollabState = {
   status: "loading" | "connecting" | "synced" | "error" | "offline";
   error: string | null;
-  ydoc: Y.Doc | null;
+  ydoc: YDoc | null;
   provider: HocuspocusProvider | null;
   self: CollabUser | null;
   peers: CollabAwarenessUser[];
@@ -56,33 +56,42 @@ export function useDocCollab(pageId: string | null, enabled: boolean): DocCollab
     enabled ? "loading" : "offline",
   );
   const [error, setError] = useState<string | null>(null);
-  const [ydoc, setYdoc] = useState<Y.Doc | null>(null);
+  const [ydoc, setYdoc] = useState<YDoc | null>(null);
   const [provider, setProvider] = useState<HocuspocusProvider | null>(null);
   const [self, setSelf] = useState<CollabUser | null>(null);
   const [peers, setPeers] = useState<CollabAwarenessUser[]>([]);
 
   useEffect(() => {
-    if (!enabled || !pageId) {
+    let cancelled = false;
+
+    const resetOffline = (message: string | null = null) => {
+      if (cancelled) return;
       setStatus("offline");
-      setError(null);
+      setError(message);
       setYdoc(null);
       setProvider(null);
       setSelf(null);
       setPeers([]);
-      return;
+    };
+
+    if (!enabled || !pageId) {
+      queueMicrotask(() => resetOffline());
+      return () => {
+        cancelled = true;
+      };
     }
 
     // Explicit opt-out: set NEXT_PUBLIC_COLLAB_URL=off to skip multiplayer entirely.
     const envUrl = process.env.NEXT_PUBLIC_COLLAB_URL;
     if (envUrl === "off" || envUrl === "0" || envUrl === "false") {
-      setStatus("offline");
-      setError(null);
-      return;
+      queueMicrotask(() => resetOffline());
+      return () => {
+        cancelled = true;
+      };
     }
 
-    let cancelled = false;
     let prov: HocuspocusProvider | null = null;
-    let doc: Y.Doc | null = null;
+    let doc: YDoc | null = null;
     let settled = false;
 
     const failOpen = (message: string) => {
@@ -100,9 +109,6 @@ export function useDocCollab(pageId: string | null, enabled: boolean): DocCollab
       } catch {
         // ignore
       }
-      setProvider(null);
-      setYdoc(null);
-      setPeers([]);
     };
 
     const timer = window.setTimeout(() => {
@@ -115,6 +121,12 @@ export function useDocCollab(pageId: string | null, enabled: boolean): DocCollab
       setStatus("loading");
       setError(null);
       try {
+        // Load the CRDT runtime only in the browser and through one async boundary.
+        // Static SSR imports caused Yjs to be evaluated in multiple Next runtimes.
+        const [{ HocuspocusProvider: Provider }, Y] = await Promise.all([
+          import("@hocuspocus/provider"),
+          import("yjs"),
+        ]);
         const res = await fetch("/api/docs/collab-token", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -132,7 +144,7 @@ export function useDocCollab(pageId: string | null, enabled: boolean): DocCollab
         if (cancelled || settled) return;
 
         doc = new Y.Doc();
-        prov = new HocuspocusProvider({
+        prov = new Provider({
           url: data.url,
           name: pageId!,
           document: doc,

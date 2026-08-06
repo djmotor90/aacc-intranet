@@ -191,11 +191,11 @@ export function PageEditorClient({
    * - Prefer collab if the server is already up within ~1s
    * - Otherwise stay local forever this visit (no mid-typing remount)
    */
-  const [useCollabEditor, setUseCollabEditor] = useState(false);
+  const [collabEditorPageId, setCollabEditorPageId] = useState<string | null>(null);
+  const useCollabEditor = collabEditorPageId === page.id;
   const collabWindowOpen = useRef(true);
   useEffect(() => {
     collabWindowOpen.current = true;
-    setUseCollabEditor(false);
     const t = window.setTimeout(() => {
       collabWindowOpen.current = false;
     }, 1000);
@@ -203,10 +203,10 @@ export function PageEditorClient({
   }, [page.id]);
   useEffect(() => {
     if (collabReady && collabWindowOpen.current) {
-      setUseCollabEditor(true);
+      setCollabEditorPageId(page.id);
       collabWindowOpen.current = false;
     }
-  }, [collabReady]);
+  }, [collabReady, page.id]);
 
   useEffect(() => {
     queueMicrotask(() => {
@@ -225,13 +225,15 @@ export function PageEditorClient({
 
   // Remember pages rail preference (desktop).
   useEffect(() => {
-    try {
-      const saved = window.localStorage.getItem("aitim.docs.pagesRailOpen");
-      if (saved === "0") setPagesRailOpen(false);
-      if (saved === "1") setPagesRailOpen(true);
-    } catch {
-      // ignore
-    }
+    queueMicrotask(() => {
+      try {
+        const saved = window.localStorage.getItem("aitim.docs.pagesRailOpen");
+        if (saved === "0") setPagesRailOpen(false);
+        if (saved === "1") setPagesRailOpen(true);
+      } catch {
+        // ignore
+      }
+    });
   }, []);
 
   function togglePagesRail() {

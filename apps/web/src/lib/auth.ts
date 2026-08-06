@@ -12,7 +12,13 @@ import MicrosoftEntraID from "next-auth/providers/microsoft-entra-id";
 
 const GRAPH_SCOPES = "openid profile email offline_access User.Read Presence.Read.All";
 
-const devAuthEnabled = process.env.DEV_AUTH === "true" && process.env.NODE_ENV !== "production";
+/**
+ * Password sign-in is opt-in in production. DEV_AUTH remains a convenient
+ * development-only switch; deployments must explicitly enable local accounts.
+ */
+const localAuthEnabled =
+  process.env.AUTH_LOCAL_CREDENTIALS === "true" ||
+  (process.env.DEV_AUTH === "true" && process.env.NODE_ENV !== "production");
 
 /** Entra SSO only when issuer is configured (local AACC uses DEV_AUTH without Entra). */
 const entraEnabled = Boolean(
@@ -195,6 +201,7 @@ async function refreshAccessToken(token: JWT): Promise<JWT> {
 }
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
+  secret: process.env.AUTH_SECRET,
   session: { strategy: "jwt" },
   pages: { signIn: "/login" },
   events: {
@@ -263,7 +270,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           }),
         ]
       : []),
-    ...(devAuthEnabled
+    ...(localAuthEnabled
       ? [
           Credentials({
             id: "dev",
@@ -353,12 +360,15 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       const now = Date.now();
       if (token.userId && (!token.roleCheckedAt || now - token.roleCheckedAt > 5 * 60_000)) {
         try {
-          const { db, users } = await import("@aitim/db");
+          const userId = token.userId;
+          const { db, users, withDbRetry } = await import("@aitim/db");
           const { eq } = await import("drizzle-orm");
-          const [row] = await db
-            .select({ platformRole: users.platformRole, isActive: users.isActive })
-            .from(users)
-            .where(eq(users.id, token.userId));
+          const [row] = await withDbRetry(() =>
+            db
+              .select({ platformRole: users.platformRole, isActive: users.isActive })
+              .from(users)
+              .where(eq(users.id, userId)),
+          );
           // User deleted or deactivated: invalidate the session.
           if (!row || !row.isActive) return { ...token, userId: undefined };
           token.platformRole = row.platformRole;

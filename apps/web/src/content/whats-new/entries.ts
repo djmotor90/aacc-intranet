@@ -19,6 +19,27 @@ export const whatsNewFeed: WhatsNewFeed = {
   schemaVersion: 1,
   entries: [
     {
+      id: "2026-08-06-local-login-visibility",
+      date: "2026-08-06",
+      publishedAt: "2026-08-06T12:00:00.000Z",
+      kind: "fixed",
+      module: "platform",
+      title: "Local account sign-in is available when enabled",
+      body: "The login page now shows the AACC email and password form in production environments that explicitly allow local accounts. If no sign-in method is configured, the page explains what needs administrator attention instead of appearing empty.",
+      href: "/login",
+      tags: ["login", "reliability"],
+    },
+    {
+      id: "2026-08-05-platform-connection-stability",
+      date: "2026-08-05",
+      publishedAt: "2026-08-06T03:30:00.000Z",
+      kind: "fixed",
+      module: "platform",
+      title: "More reliable connections across the Operations Hub",
+      body: "Docs collaboration, presence updates, and database-backed screens now recover more gracefully from brief connection interruptions. Health checks also report transient database failures more reliably.",
+      tags: ["reliability", "docs", "platform"],
+    },
+    {
       id: "2026-08-05-cewd-operations-workspace",
       date: "2026-08-05",
       publishedAt: "2026-08-05T23:55:00.000Z",

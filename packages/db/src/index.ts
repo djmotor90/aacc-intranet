@@ -14,20 +14,89 @@ export { schema };
 
 const globalForDb = globalThis as unknown as { pool?: Pool };
 
+function boundedInt(raw: string | undefined, fallback: number, min: number, max: number): number {
+  if (!raw?.trim()) return fallback;
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) ? Math.min(max, Math.max(min, Math.trunc(parsed))) : fallback;
+}
+
+const TRANSIENT_DATABASE_CODES = new Set([
+  "08000",
+  "08001",
+  "08003",
+  "08006",
+  "53300",
+  "57P01",
+  "57P02",
+  "57P03",
+  "ECONNRESET",
+  "ECONNREFUSED",
+  "ETIMEDOUT",
+  "EPIPE",
+]);
+
+/** Whether a pg/Drizzle failure is safe to retry for an idempotent operation. */
+export function isTransientDatabaseError(error: unknown): boolean {
+  let current: unknown = error;
+  for (let depth = 0; current && depth < 4; depth++) {
+    if (!(current instanceof Error)) break;
+    const code = (current as Error & { code?: string }).code;
+    if (code && TRANSIENT_DATABASE_CODES.has(code)) return true;
+    const message = current.message.toLowerCase();
+    if (
+      message.includes("timeout") ||
+      message.includes("connection terminated") ||
+      message.includes("connection reset") ||
+      message.includes("failed query")
+    ) {
+      return true;
+    }
+    current = (current as Error & { cause?: unknown }).cause;
+  }
+  return false;
+}
+
+/** Retry a short idempotent database operation after transient pool/network failures. */
+export async function withDbRetry<T>(
+  operation: () => Promise<T>,
+  options: { attempts?: number; baseDelayMs?: number } = {},
+): Promise<T> {
+  const attempts = boundedInt(String(options.attempts ?? ""), 2, 1, 4);
+  const baseDelayMs = boundedInt(String(options.baseDelayMs ?? ""), 150, 25, 2_000);
+  let lastError: unknown;
+  for (let attempt = 1; attempt <= attempts; attempt++) {
+    try {
+      return await operation();
+    } catch (error) {
+      lastError = error;
+      if (attempt === attempts || !isTransientDatabaseError(error)) throw error;
+      await new Promise((resolve) => setTimeout(resolve, baseDelayMs * attempt));
+    }
+  }
+  throw lastError;
+}
+
 export function getPool(): Pool {
   if (!globalForDb.pool) {
     // App pool only — pg-boss uses PGBOSS_POOL_MAX (keep them separate so the
     // worker + queue don't starve page renders with "timeout exceeded when trying to connect").
     const pool = new Pool({
       connectionString: process.env.DATABASE_URL,
-      max: Number(process.env.DATABASE_POOL_MAX ?? 20),
+      max: boundedInt(process.env.DATABASE_POOL_MAX, 10, 2, 50),
+      min: boundedInt(process.env.DATABASE_POOL_MIN, 1, 0, 10),
       // Remote DBs / firewalls drop idle sockets. Keep connections warm, recycle
       // idle clients before the firewall does, and cap reuse so half-open TCP
       // sockets don't poison the next query as a cryptic Drizzle "Failed query".
       keepAlive: true,
       keepAliveInitialDelayMillis: 5_000,
-      idleTimeoutMillis: 10_000,
-      connectionTimeoutMillis: 20_000,
+      idleTimeoutMillis: boundedInt(process.env.DATABASE_IDLE_TIMEOUT_MS, 60_000, 5_000, 300_000),
+      connectionTimeoutMillis: boundedInt(
+        process.env.DATABASE_CONNECT_TIMEOUT_MS,
+        15_000,
+        2_000,
+        60_000,
+      ),
+      query_timeout: boundedInt(process.env.DATABASE_QUERY_TIMEOUT_MS, 30_000, 5_000, 120_000),
       maxUses: 750,
       allowExitOnIdle: false,
     });

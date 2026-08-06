@@ -8,7 +8,7 @@
 "use server";
 
 import { db, docFolders, docPages } from "@aitim/db";
-import { and, asc, desc, eq, inArray, isNull } from "drizzle-orm";
+import { and, asc, desc, eq, isNull } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireUser } from "@/lib/rbac";
@@ -47,7 +47,7 @@ export async function createDocFolder(input: z.infer<typeof createFolderSchema>)
   const data = createFolderSchema.parse(input);
   await requireCreateDocs(user, data.homeSpaceId);
 
-  let parentFolderId: string | null = data.parentFolderId ?? null;
+  const parentFolderId: string | null = data.parentFolderId ?? null;
   if (parentFolderId) {
     const [parent] = await db
       .select()

@@ -599,8 +599,8 @@ export async function submitPublicForm(params: {
   let descriptionText: string | null = null;
   let priority: "urgent" | "high" | "normal" | "low" | null = null;
   let dueDate: string | null = null;
-  let submitterEmail: string | null = null;
-  let submitterName: string | null = null;
+  const submitterEmail: string | null = null;
+  const submitterName: string | null = null;
   const customFields: Record<string, unknown> = {};
 
   const allFiles = params.files ?? [];

@@ -21,7 +21,7 @@ import {
 import { useRouter } from "next/navigation";
 import { useMemo, useState, useTransition, type ReactNode } from "react";
 import { ProfileAvatar } from "@/components/shell/profile-avatar";
-import { initials, UserAvatar } from "@/components/shell/user-avatar";
+import { initials } from "@/components/shell/user-avatar";
 import { Button } from "@/components/ui/button";
 import { Card, CardAction, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";

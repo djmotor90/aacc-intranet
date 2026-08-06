@@ -61,6 +61,10 @@ import {
   PRIORITY_LABELS,
 } from "./task-card";
 import { TaskActionsMenu, TaskContextMenu } from "./task-context-menu";
+import {
+  TaskTableColumnMenu,
+  type TaskTableColumnMenuState,
+} from "./task-table-column-menu";
 import { TagChips, TagPicker, type TagOption } from "./tag-picker";
 import type { WritableListOption } from "../queries";
 
@@ -216,140 +220,6 @@ const SORTABLE_BASE = new Set([
 ]);
 /** Native columns that can group rows (matches filter bar). */
 const GROUPABLE_BASE = new Set(["status", "priority"]);
-
-interface CtxMenu {
-  x: number;
-  y: number;
-  /** Column id: base id ("status") or `field-{uuid}` */
-  colId: string;
-}
-
-function ColumnContextMenu({
-  menu,
-  canSort,
-  canGroup,
-  canEditOptions,
-  canCalc,
-  canHide,
-  isSorted,
-  sortDir,
-  hasCalc,
-  isHidden,
-  onSort,
-  onGroup,
-  onEditOptions,
-  onMoveStart,
-  onMoveEnd,
-  onToggleCalc,
-  onHide,
-  onClose,
-}: {
-  menu: CtxMenu;
-  canSort: boolean;
-  canGroup: boolean;
-  canEditOptions: boolean;
-  canCalc: boolean;
-  canHide: boolean;
-  isSorted: boolean;
-  sortDir: "asc" | "desc";
-  hasCalc: boolean;
-  isHidden: boolean;
-  onSort: (dir: "asc" | "desc") => void;
-  onGroup: () => void;
-  onEditOptions: () => void;
-  onMoveStart: () => void;
-  onMoveEnd: () => void;
-  onToggleCalc: () => void;
-  onHide: () => void;
-  onClose: () => void;
-}) {
-  const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    function handler(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) onClose();
-    }
-    // small delay so the right-click that opened it doesn't immediately close it
-    const id = setTimeout(() => document.addEventListener("mousedown", handler), 50);
-    return () => {
-      clearTimeout(id);
-      document.removeEventListener("mousedown", handler);
-    };
-  }, [onClose]);
-
-  // Adjust position to stay within viewport
-  const [pos, setPos] = useState({ top: menu.y, left: menu.x });
-  useEffect(() => {
-    if (!ref.current) return;
-    const rect = ref.current.getBoundingClientRect();
-    setPos({
-      top: Math.min(menu.y, window.innerHeight - rect.height - 8),
-      left: Math.min(menu.x, window.innerWidth - rect.width - 8),
-    });
-  }, [menu.x, menu.y]);
-
-  function item(label: string, onClick: () => void, active = false) {
-    return (
-      <button
-        key={label}
-        type="button"
-        onClick={onClick}
-        className={cn(
-          "flex w-full items-center gap-2 rounded px-3 py-1.5 text-left text-sm transition-colors hover:bg-accent",
-          active && "font-medium text-primary",
-        )}
-      >
-        {label}
-      </button>
-    );
-  }
-
-  function separator(key: string) {
-    return <div key={key} className="my-1 border-t" />;
-  }
-
-  const sections: ReactNode[] = [];
-  if (canSort) {
-    sections.push(
-      item("Sort ascending", () => {
-        onSort("asc");
-        onClose();
-      }, isSorted && sortDir === "asc"),
-      item("Sort descending", () => {
-        onSort("desc");
-        onClose();
-      }, isSorted && sortDir === "desc"),
-    );
-  }
-  if (canGroup) {
-    if (sections.length) sections.push(separator("s-group"));
-    sections.push(item("Group by this field", onGroup));
-  }
-  if (canEditOptions) {
-    if (sections.length) sections.push(separator("s-opts"));
-    sections.push(item("Edit options", onEditOptions));
-  }
-  if (sections.length) sections.push(separator("s-move"));
-  sections.push(item("Move to start", onMoveStart), item("Move to end", onMoveEnd));
-  if (canCalc) {
-    sections.push(separator("s-calc"));
-    sections.push(item(hasCalc ? "Hide calculation" : "Calculate", onToggleCalc));
-  }
-  if (canHide) {
-    sections.push(separator("s-hide"));
-    sections.push(item(isHidden ? "Show column" : "Hide column", onHide));
-  }
-
-  return (
-    <div
-      ref={ref}
-      style={{ position: "fixed", top: pos.top, left: pos.left, zIndex: 9999 }}
-      className="min-w-[200px] rounded-lg border bg-popover py-1 shadow-lg"
-    >
-      {sections}
-    </div>
-  );
-}
 
 // ─── virtualized row (memoized, display-first) ────────────────────────────────
 // Airtable / native-list model:
@@ -1331,7 +1201,7 @@ export function TaskTable({
   function onColDragEnd() { dragColId.current = null; setDragOverColId(null); }
 
   // ── context menu (native + custom columns) ────────────────────────────────
-  const [ctxMenu, setCtxMenu] = useState<CtxMenu | null>(null);
+  const [ctxMenu, setCtxMenu] = useState<TaskTableColumnMenuState | null>(null);
 
   function openCtxMenu(e: React.MouseEvent, colId: string) {
     e.preventDefault();
@@ -1560,6 +1430,8 @@ export function TaskTable({
     [rowsByOffset, expandedTaskIds, visibleDescendantEntries],
   );
 
+  // TanStack Virtual intentionally exposes non-memoizable functions; the table owns them locally.
+  // eslint-disable-next-line react-hooks/incompatible-library
   const virtualizer = useVirtualizer({
     count: virtualCount,
     getScrollElement: () => scrollEl,
@@ -1622,22 +1494,22 @@ export function TaskTable({
   // Does NOT swap cell content → no blink, no mass remount on settle.
   useEffect(() => {
     if (!scrollEl) return;
+    const tbody = tbodyRef.current;
     let settle: ReturnType<typeof setTimeout> | null = null;
     const onScroll = () => {
-      const tb = tbodyRef.current;
-      if (tb && tb.style.pointerEvents !== "none") {
-        tb.style.pointerEvents = "none";
+      if (tbody && tbody.style.pointerEvents !== "none") {
+        tbody.style.pointerEvents = "none";
       }
       if (settle) clearTimeout(settle);
       settle = setTimeout(() => {
-        if (tb) tb.style.pointerEvents = "";
+        if (tbody) tbody.style.pointerEvents = "";
       }, 90);
     };
     scrollEl.addEventListener("scroll", onScroll, { passive: true });
     return () => {
       scrollEl.removeEventListener("scroll", onScroll);
       if (settle) clearTimeout(settle);
-      if (tbodyRef.current) tbodyRef.current.style.pointerEvents = "";
+      if (tbody) tbody.style.pointerEvents = "";
     };
   }, [scrollEl]);
 
@@ -1957,7 +1829,7 @@ export function TaskTable({
 
       {/* context menu — native columns + custom fields */}
       {ctxMenu && (
-        <ColumnContextMenu
+        <TaskTableColumnMenu
           menu={ctxMenu}
           canSort={
             ctxIsCustom

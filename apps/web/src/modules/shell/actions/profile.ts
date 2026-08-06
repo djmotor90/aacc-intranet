@@ -8,7 +8,7 @@
 "use server";
 
 import { randomUUID } from "node:crypto";
-import { db, permissionRoles, users } from "@aitim/db";
+import { db, permissionRoles, users, withDbRetry } from "@aitim/db";
 import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { platformRoleLabel } from "@/lib/role-labels";
@@ -118,12 +118,22 @@ export async function getMyProfile(): Promise<MyProfile> {
  * a client-side heartbeat while the app is open, so the profile panel's
  * "online" indicator reflects real activity rather than only last sign-in.
  */
-export async function heartbeat(): Promise<void> {
-  const sessionUser = await requireUser();
-  await db
-    .update(users)
-    .set({ lastActiveAt: new Date() })
-    .where(eq(users.id, sessionUser.id));
+export async function heartbeat(): Promise<boolean> {
+  try {
+    const sessionUser = await requireUser();
+    await withDbRetry(() =>
+      db
+        .update(users)
+        .set({ lastActiveAt: new Date() })
+        .where(eq(users.id, sessionUser.id)),
+    );
+    return true;
+  } catch (error) {
+    // Presence is best-effort; a transient database outage must not surface as
+    // an unhandled Server Action failure in the active application.
+    console.warn("[presence] heartbeat skipped", error);
+    return false;
+  }
 }
 
 export async function uploadMyAvatar(formData: FormData): Promise<MyProfile> {

@@ -388,7 +388,12 @@ function FilterPopover({
     const params = new URLSearchParams(searchParams.toString());
     // strip conditions with empty value (except ops that don't need one)
     const valid = draft.filter((c) => c.value !== "" || c.op === "is_empty" || c.op === "is_not_empty");
-    const filtersPayload = valid.map(({ _id: _ignored, ...rest }) => rest);
+    const filtersPayload: FilterCondition[] = valid.map((condition) => ({
+      field: condition.field,
+      op: condition.op,
+      value: condition.value,
+      ...(condition.conjunction ? { conjunction: condition.conjunction } : {}),
+    }));
     if (valid.length > 0) {
       params.set("filters", JSON.stringify(filtersPayload));
     } else {

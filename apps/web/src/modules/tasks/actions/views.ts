@@ -127,7 +127,7 @@ export async function saveListViewPrefs(
   },
 ) {
   "use server";
-  const { list, space } = await requireList(listId);
+  const { list } = await requireList(listId);
   const session = await (await import("@/lib/auth")).auth();
   if (!session?.user?.id) return;
   const role = await getListRole(

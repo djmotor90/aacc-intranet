@@ -5,13 +5,13 @@
  * Fingerprint: GURVER-KG-AITIM-2026-7F3C9E2A
  * License: Proprietary. All rights reserved. See LICENSE / COPYRIGHT.
  */
-import { db } from "@aitim/db";
+import { db, withDbRetry } from "@aitim/db";
 import { sql } from "drizzle-orm";
 import { NextResponse } from "next/server";
 
 export async function GET() {
   try {
-    await db.execute(sql`select 1`);
+    await withDbRetry(() => db.execute(sql`select 1`));
     return NextResponse.json({ status: "ok", db: "up" });
   } catch (err) {
     return NextResponse.json(

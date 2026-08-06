@@ -821,11 +821,15 @@ export function RichTextEditor({
   const isMinimal = resolvedVariant === "minimal";
   const isCollab = Boolean(collaboration?.document);
 
-  const uploadTarget: EditorUploadTarget | null = pageId
-    ? { type: "page", id: pageId }
-    : taskId
-      ? { type: "task", id: taskId }
-      : null;
+  const uploadTarget: EditorUploadTarget | null = useMemo(
+    () =>
+      pageId
+        ? { type: "page", id: pageId }
+        : taskId
+          ? { type: "task", id: taskId }
+          : null,
+    [pageId, taskId],
+  );
 
   const [storedJson, setStoredJson] = useState(() =>
     name
@@ -908,6 +912,8 @@ export function RichTextEditor({
   }, []);
 
   const extensions = useMemo((): AnyExtension[] => {
+    // These callbacks only read editor/upload refs after a user-triggered DOM event.
+    // eslint-disable-next-line react-hooks/refs
     const slash = createSlashCommand({
       onInsertImage: canUploadImages ? () => pickFiles(true) : undefined,
       onAttachFile: canUploadImages ? () => pickFiles(false) : undefined,
