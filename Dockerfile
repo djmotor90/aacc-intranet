@@ -16,6 +16,7 @@ WORKDIR /app
 # ── 2. deps — install all workspace deps (layer-cached on lockfile change) ──
 FROM base AS deps
 COPY pnpm-workspace.yaml package.json pnpm-lock.yaml ./
+COPY patches/                    patches/
 COPY apps/web/package.json       apps/web/
 COPY packages/db/package.json    packages/db/
 COPY packages/shared/package.json packages/shared/

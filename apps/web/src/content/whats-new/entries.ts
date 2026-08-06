@@ -19,6 +19,16 @@ export const whatsNewFeed: WhatsNewFeed = {
   schemaVersion: 1,
   entries: [
     {
+      id: "2026-08-06-super-admin-hidden-permissions",
+      date: "2026-08-06",
+      publishedAt: "2026-08-06T15:00:00.000Z",
+      kind: "fixed",
+      module: "admin",
+      title: "One clear Admin role in permissions",
+      body: "The permissions matrix now shows only the configurable space Admin role. Super Admin remains an unrestricted platform safeguard managed outside the matrix and cannot be accidentally edited or duplicated.",
+      tags: ["permissions", "roles", "admin"],
+    },
+    {
       id: "2026-08-06-aacc-actions-menu-system",
       date: "2026-08-06",
       publishedAt: "2026-08-06T14:30:00.000Z",

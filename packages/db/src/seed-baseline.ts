@@ -56,18 +56,18 @@ const ROLE_PRESETS: {
     },
   },
   {
-    slug: "admin",
+    slug: "owner",
     name: "Admin",
-    description: "Workspace administrator (not Super Admin).",
+    description: "Space administrator with full control of that space (not Super Admin).",
     position: "a2",
     permissions: {
-      manage_users: true,
-      manage_groups: true,
-      manage_roles: true,
+      manage_users: false,
+      manage_groups: false,
+      manage_roles: false,
       manage_space_members: true,
       manage_list_members: true,
-      manage_trash: true,
-      create_spaces: true,
+      manage_trash: false,
+      create_spaces: false,
       create_lists: true,
       create_folders: true,
       create_views: true,
@@ -161,7 +161,7 @@ async function main() {
   for (const preset of ROLE_PRESETS) {
     await upsertRole(preset);
   }
-  console.log("[seed-baseline] Permission roles: guest, member, admin");
+  console.log("[seed-baseline] Permission roles: guest, member, owner (displayed as Admin)");
 
   const adminEmail = process.env.CLIENT_ADMIN_EMAIL?.trim().toLowerCase();
   if (adminEmail) {

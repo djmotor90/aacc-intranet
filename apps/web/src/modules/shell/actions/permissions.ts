@@ -30,6 +30,13 @@ export type PermissionRoleRow = {
   permissions: PermissionMap;
 };
 
+/** Legacy platform-admin slugs are reserved and never belong in the editable matrix. */
+const HIDDEN_PLATFORM_ROLE_SLUGS = ["admin", "super-admin", "super_admin"] as const;
+const RESERVED_ROLE_SLUGS = new Set([
+  ...Object.keys(SYSTEM_ROLE_DEFAULTS),
+  ...HIDDEN_PLATFORM_ROLE_SLUGS,
+]);
+
 function slugify(name: string): string {
   return (
     name
@@ -96,6 +103,13 @@ export async function getPermissionRolesData(): Promise<{ roles: PermissionRoleR
   const rows = await db
     .select()
     .from(permissionRoles)
+    .where(
+      and(
+        ne(permissionRoles.slug, "admin"),
+        ne(permissionRoles.slug, "super-admin"),
+        ne(permissionRoles.slug, "super_admin"),
+      ),
+    )
     .orderBy(asc(permissionRoles.position), asc(permissionRoles.name));
   return {
     roles: rows.map((r) => ({
@@ -124,6 +138,9 @@ export async function setRolePermission(params: {
 
   const [role] = await db.select().from(permissionRoles).where(eq(permissionRoles.id, roleId));
   if (!role) throw new Error("Role not found");
+  if (HIDDEN_PLATFORM_ROLE_SLUGS.some((slug) => slug === role.slug)) {
+    throw new Error("Super Admin permissions are managed outside the role matrix");
+  }
 
   const permissions = normalizePermissionMap(role.permissions);
   permissions[permission] = enabled;
@@ -156,7 +173,7 @@ export async function createCustomRole(params: { name: string; description?: str
     : null;
 
   const baseSlug = slugify(name);
-  if (baseSlug in SYSTEM_ROLE_DEFAULTS) {
+  if (RESERVED_ROLE_SLUGS.has(baseSlug)) {
     throw new Error("That name is reserved for a system role");
   }
   const slug = await uniqueSlug(baseSlug);
