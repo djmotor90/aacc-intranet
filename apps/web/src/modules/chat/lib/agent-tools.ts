@@ -13,9 +13,11 @@
 import type { XaiToolCall, XaiToolDef } from "@/lib/xai";
 import { encodeMentionToken } from "./agent-mentions";
 import { saveMemoryFromChat, updateLinkedDocContent } from "./agent-write-tools";
+import { loadAgentKnowledgeContext } from "./knowledge";
 
 export const UPDATE_DOC_TOOL = "update_linked_doc";
 export const SAVE_MEMORY_TOOL = "save_memory";
+export const SEARCH_KNOWLEDGE_TOOL = "search_knowledge";
 
 const updateDocTool: XaiToolDef = {
   type: "function",
@@ -48,6 +50,29 @@ const updateDocTool: XaiToolDef = {
   },
 };
 
+const searchKnowledgeTool: XaiToolDef = {
+  type: "function",
+  function: {
+    name: SEARCH_KNOWLEDGE_TOOL,
+    description:
+      "Actively search linked Knowledge docs for content about a specific topic, term, or rule — " +
+      "on your own reformulated query, not just whatever the user happened to type. " +
+      "Use this BEFORE calling update_linked_doc to add or change a rule: search for the topic first " +
+      "to check whether existing guidance already says something different. This is how you catch a " +
+      "new instruction quietly contradicting a rule written somewhere else in the doc.",
+    parameters: {
+      type: "object",
+      properties: {
+        query: {
+          type: "string",
+          description: "Topic or phrase to search for, e.g. \"waitlist size\" or \"senior section fees\".",
+        },
+      },
+      required: ["query"],
+    },
+  },
+};
+
 const saveMemoryTool: XaiToolDef = {
   type: "function",
   function: {
@@ -72,6 +97,9 @@ const saveMemoryTool: XaiToolDef = {
 /** Build the tool list this turn actually offers, based on the agent's enabled tools. */
 export function buildOwnerToolDefs(toolList: string[]): XaiToolDef[] {
   const tools: XaiToolDef[] = [];
+  if (toolList.includes("docs.search") || toolList.includes("docs.update")) {
+    tools.push(searchKnowledgeTool);
+  }
   if (toolList.includes("docs.update")) tools.push(updateDocTool);
   if (toolList.includes("memory.save")) tools.push(saveMemoryTool);
   return tools;
@@ -100,6 +128,26 @@ export async function executeOwnerToolCall(
   ctx: { agentId: string; userId: string; conversationId: string },
 ): Promise<ToolExecResult> {
   const args = safeParseArgs(call.function.arguments);
+
+  if (call.function.name === SEARCH_KNOWLEDGE_TOOL) {
+    const query = typeof args.query === "string" ? args.query.trim() : "";
+    if (!query) {
+      return {
+        toolCallId: call.id,
+        resultContent: JSON.stringify({ ok: false, error: "Empty query" }),
+        actionNote: null,
+      };
+    }
+    const result = await loadAgentKnowledgeContext(ctx.agentId, query);
+    return {
+      toolCallId: call.id,
+      resultContent: JSON.stringify({
+        ok: true,
+        result: result || "No matching content found in linked Knowledge docs.",
+      }),
+      actionNote: null,
+    };
+  }
 
   if (call.function.name === UPDATE_DOC_TOOL) {
     const mode = args.mode === "replace" ? "replace" : "append";

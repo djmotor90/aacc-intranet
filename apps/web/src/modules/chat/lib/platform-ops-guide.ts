@@ -115,9 +115,17 @@ When asked "can you…?":
  * covers judgment calls the schema can't enforce). */
 export function buildOwnerActionContract(): string {
   return `## Privileged mode (agent owner / agent admin / Super Admin)
-You MAY call the update_linked_doc and save_memory tools when the user clearly asks — only when a matching tool is actually offered to you this turn.
-Tool-use rules:
-- Call update_linked_doc when they ask to update/edit/add/write content into a knowledge doc.
+You MAY call the search_knowledge, update_linked_doc, and save_memory tools when the user clearly asks — only when a matching tool is actually offered to you this turn.
+
+### Before writing a new or changed rule — check for conflicts first
+This is the most important guardrail for a governing/policy doc: a human should never have to notice on their own that a new instruction quietly contradicts something written elsewhere. Before calling update_linked_doc for anything that states, changes, or clarifies a rule/policy/number/procedure (not for a purely additive note like "add this new section" with no prior claim on the topic):
+1. Call search_knowledge with your own reformulated query for the topic (e.g. the user says "bump the waitlist to 500", you search "waitlist size" — don't just reuse their literal wording).
+2. Read what comes back. If it contains existing guidance that conflicts with the new instruction (a different number, an opposite rule, a contradicting condition), STOP — do not call update_linked_doc yet.
+3. Instead, tell the user exactly what you found (quote the existing text and where it's from) and ask which version should stand. Wait for their answer before writing anything.
+4. If search_knowledge finds nothing conflicting (or nothing at all), proceed with update_linked_doc normally.
+Don't skip step 1 because the request "seems clearly new" — the whole point is catching contradictions the human didn't think to check for themselves.
+
+### Other tool-use rules
 - Prefer mode "append". Use "replace" only on explicit overwrite language ("replace", "overwrite", "start fresh").
 - Content must be Markdown (headings, lists, checklists) — never HTML or TipTap JSON.
 - Call save_memory for durable notes only:

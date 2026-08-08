@@ -10,32 +10,15 @@
  */
 import { Server } from "@hocuspocus/server";
 import { TiptapTransformer } from "@hocuspocus/transformer";
-import Image from "@tiptap/extension-image";
-import StarterKit from "@tiptap/starter-kit";
 import { and, eq, isNull, sql } from "drizzle-orm";
 import * as Y from "yjs";
+import { COLLAB_SCHEMA_EXTENSIONS } from "@/lib/collab-schema";
 import { verifyCollabToken } from "./token";
 
 const PORT = Number(process.env.COLLAB_PORT ?? 1234);
 
 type BodyShape = { text?: string; doc?: unknown };
 
-/**
- * Match the image attributes used by the browser editor. Without this schema,
- * TiptapTransformer keeps the image node but strips src/size attributes.
- */
-const CollabImage = Image.extend({
-  addAttributes() {
-    return {
-      ...this.parent?.(),
-      uploadId: { default: null },
-      width: { default: null },
-      height: { default: null },
-    };
-  },
-});
-
-const COLLAB_SCHEMA_EXTENSIONS = [StarterKit, CollabImage];
 const UPLOAD_BATCH_MAP = "aitim-upload-batches";
 
 function plainTextFromDoc(doc: unknown): string {

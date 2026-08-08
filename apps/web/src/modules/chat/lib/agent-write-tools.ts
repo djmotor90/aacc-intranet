@@ -10,6 +10,7 @@
  */
 import { agentKnowledge, agents, db, docPages } from "@aitim/db";
 import { and, eq, inArray, isNull, sql } from "drizzle-orm";
+import { encodeDocAsYjsState } from "@/lib/collab-schema";
 import { getAgentAccess, userIsAgentOwnerOrAdmin } from "./agent-access";
 import {
   docBodyAppendMarkdown,
@@ -146,7 +147,7 @@ export async function updateLinkedDocContent(input: {
   if (!page) return { ok: false, error: "Page not found" };
 
   const existingText = bodyToText(page.body).trim();
-  let mode: "append" | "replace" = input.mode === "replace" ? "replace" : "append";
+  const mode: "append" | "replace" = input.mode === "replace" ? "replace" : "append";
 
   // Destruction guard: replacing a long page with a tiny stub is almost always a mistake
   if (mode === "replace" && existingText.length > 400) {
@@ -166,6 +167,20 @@ export async function updateLinkedDocContent(input: {
       ? docBodyFromMarkdown(content)
       : docBodyAppendMarkdown(page.body, content, input.sectionHeading ?? undefined);
 
+  // Keep ydoc_state in sync immediately rather than nulling it and relying on
+  // the next collab connection to reseed correctly from body — that reseed
+  // round trip (JSON -> Yjs -> JSON on next store) is extra surface area for
+  // exactly the kind of attribute loss this schema mismatch already caused
+  // once. Encoding it directly here means live collab picks up this write
+  // with no round trip involved at all.
+  let ydocState: Buffer | null;
+  try {
+    ydocState = encodeDocAsYjsState(body.doc);
+  } catch (err) {
+    console.error("[agent-write-tools] failed to encode ydoc_state, falling back to reseed", err);
+    ydocState = null;
+  }
+
   await db
     .update(docPages)
     .set({
@@ -173,8 +188,7 @@ export async function updateLinkedDocContent(input: {
       bodyVersion: sql`${docPages.bodyVersion} + 1`,
       updatedById: input.userId,
       updatedAt: new Date(),
-      // collab state would be stale — clear so next open reloads from body
-      ydocState: null,
+      ydocState,
     })
     .where(eq(docPages.id, page.id));
 

@@ -15,7 +15,12 @@ import {
 import { and, eq } from "drizzle-orm";
 import { hasXaiKey, xaiChatCompletion, type XaiChatMessage } from "@/lib/xai";
 import { encodeMentionToken, injectDocMentionTokens } from "@/modules/chat/lib/agent-mentions";
-import { buildOwnerToolDefs, executeOwnerToolCall } from "@/modules/chat/lib/agent-tools";
+import {
+  buildOwnerToolDefs,
+  executeOwnerToolCall,
+  SEARCH_KNOWLEDGE_TOOL,
+  UPDATE_DOC_TOOL,
+} from "@/modules/chat/lib/agent-tools";
 import { agentReplyBody } from "@/modules/chat/lib/body";
 import {
   DEFAULT_CHAT_MODEL,
@@ -291,7 +296,20 @@ async function buildXaiReply(
   // for tools; we execute them, feed the results back, and let it compose
   // the final reply grounded in what actually happened. Capped so a model
   // that insists on chaining calls can't loop forever.
+  //
+  // The very first update_linked_doc call this turn is intercepted rather
+  // than executed: a model told in the prompt to "search for conflicts
+  // before writing" mostly does — but "mostly" isn't good enough for a
+  // governing/policy doc (temperature > 0 means the exact same prompt can
+  // skip the check on a bad sample; verified empirically that it does,
+  // sometimes). Withholding the tool entirely until after a search was
+  // tried first and made things worse — the model concluded it had no write
+  // capability at all instead of understanding "search unlocks it." So
+  // instead the tool stays visible and callable; the first attempt just
+  // gets redirected into the search results instead of a real write, and
+  // the model decides from there whether to proceed or ask the user.
   const MAX_TOOL_ROUNDS = 4;
+  let hasSearchedThisTurn = false;
   for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
     const result = await xaiChatCompletion({
       model: chatModel,
@@ -308,6 +326,29 @@ async function buildXaiReply(
 
     messages.push({ role: "assistant", content: result.content, tool_calls: result.toolCalls });
     for (const call of result.toolCalls) {
+      if (call.function.name === SEARCH_KNOWLEDGE_TOOL) hasSearchedThisTurn = true;
+
+      if (call.function.name === UPDATE_DOC_TOOL && !hasSearchedThisTurn) {
+        const knowledgeCheck = await loadAgentKnowledgeContext(agent.id, triggerText);
+        messages.push({
+          role: "tool",
+          tool_call_id: call.id,
+          content: JSON.stringify({
+            ok: false,
+            deferred: true,
+            reason:
+              "Not written yet — check this existing guidance for a conflict with what you're about to write first.",
+            existingGuidance: knowledgeCheck || "(nothing relevant found in linked docs)",
+            instruction:
+              "If nothing here conflicts with the requested change, call update_linked_doc again to proceed. " +
+              "If something here conflicts (a different number, an opposite rule), do not call it again — " +
+              "tell the user what conflicts, quoting the existing text, and ask which version should stand.",
+          }),
+        });
+        hasSearchedThisTurn = true;
+        continue;
+      }
+
       const exec = await executeOwnerToolCall(call, { agentId: agent.id, userId, conversationId });
       messages.push({ role: "tool", tool_call_id: exec.toolCallId, content: exec.resultContent });
       if (exec.actionNote) actionNotes.push(exec.actionNote);
