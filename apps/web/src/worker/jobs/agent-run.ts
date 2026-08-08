@@ -13,15 +13,20 @@ import {
   db,
 } from "@aitim/db";
 import { and, eq } from "drizzle-orm";
-import { hasXaiKey, xaiChat } from "@/lib/xai";
+import { hasXaiKey, xaiChatCompletion, type XaiChatMessage } from "@/lib/xai";
 import { encodeMentionToken, injectDocMentionTokens } from "@/modules/chat/lib/agent-mentions";
+import { buildOwnerToolDefs, executeOwnerToolCall } from "@/modules/chat/lib/agent-tools";
 import { agentReplyBody } from "@/modules/chat/lib/body";
 import {
   DEFAULT_CHAT_MODEL,
   mergeMemorySettings,
   parseAgentConfig,
 } from "@/modules/chat/lib/agent-config";
-import { loadAgentKnowledgeContext } from "@/modules/chat/lib/knowledge";
+import {
+  loadAgentKnowledgeContext,
+  loadAgentKnowledgeImages,
+  type KnowledgeImage,
+} from "@/modules/chat/lib/knowledge";
 import {
   formatConversationSearchHits,
   looksLikeRecallIntent,
@@ -57,32 +62,6 @@ export type AgentRunPayload = {
 function toolsInclude(tools: unknown, name: string): boolean {
   if (!Array.isArray(tools)) return false;
   return tools.some((t) => t === name || t === name.replace("tasks.", ""));
-}
-
-type OwnerActionPayload = {
-  message: string;
-  docUpdate?: {
-    pageTitle?: string;
-    pageId?: string;
-    mode?: "append" | "replace";
-    content: string;
-    sectionHeading?: string;
-  } | null;
-  memorySave?: {
-    kind?: "preference" | "fact" | "intelligence" | "procedure";
-    content: string;
-  } | null;
-};
-
-function parseOwnerJson(raw: string): OwnerActionPayload | null {
-  try {
-    const cleaned = raw.replace(/^```json\s*/i, "").replace(/```$/i, "").trim();
-    const parsed = JSON.parse(cleaned) as OwnerActionPayload;
-    if (!parsed || typeof parsed.message !== "string") return null;
-    return parsed;
-  } catch {
-    return null;
-  }
 }
 
 async function buildStubReply(
@@ -194,10 +173,19 @@ async function buildXaiReply(
     }
   }
 
+  let knowledgeImages: KnowledgeImage[] = [];
   if (toolsInclude(agent.tools, "docs.search") || toolsInclude(agent.tools, "docs.update")) {
-    const knowledge = await loadAgentKnowledgeContext(agent.id);
+    const knowledge = await loadAgentKnowledgeContext(agent.id, triggerText);
     if (knowledge) {
       contextBlocks.push(`Knowledge base (linked Docs):\n${knowledge}`);
+    }
+    knowledgeImages = await loadAgentKnowledgeImages(agent.id);
+    if (knowledgeImages.length) {
+      contextBlocks.push(
+        `Knowledge base images: ${knowledgeImages.length} screenshot(s)/image(s) from linked docs are attached below as vision input — ` +
+          knowledgeImages.map((img) => `"${img.pageTitle}"${img.alt ? ` (${img.alt})` : ""}`).join(", ") +
+          ". Look at them directly when relevant instead of guessing from surrounding text.",
+      );
     }
   }
 
@@ -271,75 +259,65 @@ async function buildXaiReply(
     ? history.slice(0, -1).filter((m) => m.content.trim())
     : [];
 
-  const raw = await xaiChat({
-    model: chatModel,
-    temperature: 0.4,
-    maxTokens: 2000,
-    messages: [
-      { role: "system", content: systemParts.join("\n\n") },
-      ...prior,
-      { role: "user", content: triggerText || "Hello" },
-    ],
-  });
+  const ownerTools = isOwner ? buildOwnerToolDefs(toolList) : [];
 
-  let messageText = raw;
+  // Attach linked-doc images as vision input on the current turn — the
+  // knowledge text block above only ever described that an image exists.
+  const userTurn: XaiChatMessage = knowledgeImages.length
+    ? {
+        role: "user",
+        content: [
+          { type: "text", text: triggerText || "Hello" },
+          ...knowledgeImages.map(
+            (img): { type: "image_url"; image_url: { url: string } } => ({
+              type: "image_url",
+              image_url: { url: img.dataUri },
+            }),
+          ),
+        ],
+      }
+    : { role: "user", content: triggerText || "Hello" };
+
+  const messages: XaiChatMessage[] = [
+    { role: "system", content: systemParts.join("\n\n") },
+    ...prior,
+    userTurn,
+  ];
+
   const actionNotes: string[] = [];
+  let messageText = "";
 
-  if (isOwner) {
-    const parsed = parseOwnerJson(raw);
-    if (parsed) {
-      messageText = parsed.message;
+  // Native function-calling loop: the model either answers directly, or asks
+  // for tools; we execute them, feed the results back, and let it compose
+  // the final reply grounded in what actually happened. Capped so a model
+  // that insists on chaining calls can't loop forever.
+  const MAX_TOOL_ROUNDS = 4;
+  for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
+    const result = await xaiChatCompletion({
+      model: chatModel,
+      temperature: 0.4,
+      maxTokens: 2000,
+      messages,
+      tools: ownerTools.length ? ownerTools : undefined,
+    });
 
-      if (parsed.docUpdate?.content && toolsInclude(agent.tools, "docs.update")) {
-        const res = await updateLinkedDocContent({
-          agentId: agent.id,
-          userId,
-          pageId: parsed.docUpdate.pageId,
-          pageTitle: parsed.docUpdate.pageTitle,
-          mode: parsed.docUpdate.mode === "replace" ? "replace" : "append",
-          content: parsed.docUpdate.content,
-          sectionHeading: parsed.docUpdate.sectionHeading,
-        });
-        if (res.ok) {
-          const docChip = encodeMentionToken({
-            type: "doc",
-            id: res.pageId,
-            label: res.title,
-          });
-          actionNotes.push(
-            res.mode === "replace"
-              ? `Replaced the ${docChip} document.`
-              : `Saved an update to ${docChip}.`,
-          );
-        } else {
-          actionNotes.push(`Couldn't update the document: ${res.error}`);
-        }
-      }
-
-      if (parsed.memorySave?.content && toolsInclude(agent.tools, "memory.save")) {
-        const kind =
-          parsed.memorySave.kind === "fact" ||
-          parsed.memorySave.kind === "intelligence" ||
-          parsed.memorySave.kind === "preference" ||
-          parsed.memorySave.kind === "procedure"
-            ? parsed.memorySave.kind
-            : "preference";
-        const res = await saveMemoryFromChat({
-          agentId: agent.id,
-          userId,
-          conversationId,
-          kind,
-          content: parsed.memorySave.content,
-        });
-        if (res.ok) {
-          actionNotes.push(
-            kind === "procedure"
-              ? "Saved that workflow for next time."
-              : "Got it — I'll remember that.",
-          );
-        } else actionNotes.push(`Couldn't save memory: ${res.error}`);
-      }
+    if (result.toolCalls.length === 0) {
+      messageText = result.content;
+      break;
     }
+
+    messages.push({ role: "assistant", content: result.content, tool_calls: result.toolCalls });
+    for (const call of result.toolCalls) {
+      const exec = await executeOwnerToolCall(call, { agentId: agent.id, userId, conversationId });
+      messages.push({ role: "tool", tool_call_id: exec.toolCallId, content: exec.resultContent });
+      if (exec.actionNote) actionNotes.push(exec.actionNote);
+    }
+  }
+
+  if (!messageText) {
+    messageText = actionNotes.length
+      ? "Done — see below for what I did."
+      : "Sorry, I couldn't put together a reply that time — try rephrasing?";
   }
 
   if (actionNotes.length) {

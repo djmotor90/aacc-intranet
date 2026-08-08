@@ -55,12 +55,17 @@ function MentionChip({
   id,
   label,
   onPrimary,
+  labelOverrides,
 }: {
   type: AgentMentionType;
   id: string;
   label: string;
   onPrimary?: boolean;
+  labelOverrides?: Record<string, string>;
 }) {
+  // The label baked into the stored token is a point-in-time snapshot — prefer
+  // the entity's current name when we've resolved one (see resolveMentionLabels).
+  const resolvedLabel = labelOverrides?.[`${type}:${id}`] ?? label;
   const href = hrefFor(type, id);
   const className = cn(
     "inline-flex max-w-full items-center gap-1 rounded-md border px-1.5 py-0.5 align-baseline text-[12px] font-medium leading-tight shadow-sm",
@@ -71,7 +76,7 @@ function MentionChip({
       <span className="text-[10px] font-semibold uppercase tracking-wide opacity-70">
         {mentionChipPrefix(type)}
       </span>
-      <span className="truncate">{mentionChipLabel(type, label)}</span>
+      <span className="truncate">{mentionChipLabel(type, resolvedLabel)}</span>
     </>
   );
   if (href) {
@@ -144,10 +149,12 @@ export function MentionText({
   text,
   onPrimary,
   className,
+  labelOverrides,
 }: {
   text: string;
   onPrimary?: boolean;
   className?: string;
+  labelOverrides?: Record<string, string>;
 }) {
   const hasTokens = new RegExp(MENTION_TOKEN_RE.source, "i").test(text);
   if (!hasTokens) {
@@ -181,6 +188,7 @@ export function MentionText({
             id={seg.id}
             label={seg.label}
             onPrimary={onPrimary}
+            labelOverrides={labelOverrides}
           />
         );
       })}

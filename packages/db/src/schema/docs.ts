@@ -20,9 +20,13 @@ import {
   timestamp,
   uniqueIndex,
   uuid,
+  vector,
 } from "drizzle-orm/pg-core";
 import { users } from "./platform";
 import { spaces } from "./tasks";
+
+/** Dimensions for OpenAI text-embedding-3-small — change if the embedding model changes. */
+export const DOC_CHUNK_EMBEDDING_DIMENSIONS = 1536;
 
 /** Nullable bytea — Yjs document snapshots for live multiplayer. */
 const bytea = customType<{ data: Buffer | null; driverData: Buffer | null }>({
@@ -188,6 +192,38 @@ export const docAttachments = pgTable(
   (t) => [index("doc_attachments_page_idx").on(t.pageId)],
 );
 
+/**
+ * Retrieval chunks for pgvector-backed Super Agent knowledge search.
+ *
+ * One page's body is split into heading-scoped chunks (see
+ * modules/docs/lib/chunking.ts) and re-embedded whenever the page is saved
+ * (see worker/jobs/embed-doc.ts) — rows for a page are fully replaced on each
+ * re-embed rather than diffed, since chunk boundaries can shift on any edit.
+ */
+export const docChunks = pgTable(
+  "doc_chunks",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    pageId: uuid("page_id")
+      .notNull()
+      .references(() => docPages.id, { onDelete: "cascade" }),
+    chunkIndex: integer("chunk_index").notNull(),
+    /** Nearest enclosing heading, for citations / debugging retrieval hits. */
+    heading: text("heading"),
+    content: text("content").notNull(),
+    embedding: vector("embedding", { dimensions: DOC_CHUNK_EMBEDDING_DIMENSIONS }).notNull(),
+    model: text("model").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("doc_chunks_page_chunk_idx").on(t.pageId, t.chunkIndex),
+    index("doc_chunks_embedding_idx").using(
+      "hnsw",
+      t.embedding.op("vector_cosine_ops"),
+    ),
+  ],
+);
+
 export const docFoldersRelations = relations(docFolders, ({ one, many }) => ({
   homeSpace: one(spaces, { fields: [docFolders.homeSpaceId], references: [spaces.id] }),
   parent: one(docFolders, {
@@ -217,6 +253,7 @@ export const docPagesRelations = relations(docPages, ({ one, many }) => ({
   children: many(docPages, { relationName: "page_tree" }),
   links: many(docLinks),
   attachments: many(docAttachments),
+  chunks: many(docChunks),
   owner: one(users, { fields: [docPages.ownerId], references: [users.id] }),
   createdBy: one(users, {
     fields: [docPages.createdById],

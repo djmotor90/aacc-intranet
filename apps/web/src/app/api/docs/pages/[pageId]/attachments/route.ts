@@ -7,7 +7,7 @@
  */
 import { createHash, randomUUID } from "node:crypto";
 import { db, docAttachments, docPages } from "@aitim/db";
-import { and, eq, isNull } from "drizzle-orm";
+import { and, desc, eq, isNull } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { getSpaceRole } from "@/lib/rbac";
@@ -68,8 +68,40 @@ export async function POST(
   const checksum = createHash("sha256").update(buffer).digest("hex");
   const rawName = file.name?.trim() || `paste-${Date.now()}.png`;
   const safeName = rawName.replace(/[^\w.\- ]+/g, "_").slice(0, 200);
-  const objectKey = `docs/${pageId}/${randomUUID()}-${safeName}`;
   const mimeType = file.type || "application/octet-stream";
+
+  // Word often exposes the same binary more than once (HTML data URL plus a
+  // clipboard File), and users may retry a paste. Reuse the page attachment
+  // instead of storing duplicate S3 objects and duplicate metadata rows.
+  const [existing] = await db
+    .select({
+      id: docAttachments.id,
+      fileName: docAttachments.fileName,
+      mimeType: docAttachments.mimeType,
+      sizeBytes: docAttachments.sizeBytes,
+    })
+    .from(docAttachments)
+    .where(
+      and(
+        eq(docAttachments.pageId, pageId),
+        eq(docAttachments.checksumSha256, checksum),
+      ),
+    )
+    .orderBy(desc(docAttachments.createdAt))
+    .limit(1);
+
+  if (existing) {
+    return NextResponse.json({
+      id: existing.id,
+      fileName: existing.fileName,
+      mimeType: existing.mimeType,
+      sizeBytes: existing.sizeBytes,
+      url: `/api/docs/attachments/${existing.id}`,
+      reused: true,
+    });
+  }
+
+  const objectKey = `docs/${pageId}/${randomUUID()}-${safeName}`;
 
   await putObject(BUCKETS.attachments, objectKey, buffer, mimeType);
 

@@ -28,7 +28,22 @@ export function htmlHasSubstantialContent(html: string): boolean {
  * while stripping MSO junk and most inline styles.
  */
 export function sanitizePastedHtml(html: string): string {
+  return sanitizePastedHtmlDetailed(html).html;
+}
+
+/**
+ * Same cleanup as {@link sanitizePastedHtml}, but also reports how many
+ * `<img>` tags were dropped because their src pointed at a local resource
+ * the browser can't read (Word/Outlook on Windows commonly emit
+ * `src="file:///C:\...\clip_image001.png"` for embedded images — that path
+ * only exists on the sender's machine, never in the clipboard payload we get).
+ */
+export function sanitizePastedHtmlDetailed(html: string): {
+  html: string;
+  droppedImages: number;
+} {
   let out = html;
+  let droppedImages = 0;
 
   // Drop Office conditional comments and XML namespaces
   out = out.replace(/<!--\[if[\s\S]*?<!\[endif\]-->/gi, "");
@@ -86,15 +101,21 @@ export function sanitizePastedHtml(html: string): string {
   // Drop broken / local-only image sources we can't load
   out = out.replace(
     /<img\b[^>]*\bsrc=["'](?:file:|cid:|webkit-fake-url:)[^"']*["'][^>]*\/?>/gi,
-    "",
+    () => {
+      droppedImages += 1;
+      return "";
+    },
   );
   // Drop images with empty src
-  out = out.replace(/<img\b[^>]*\bsrc=["']\s*["'][^>]*\/?>/gi, "");
+  out = out.replace(/<img\b[^>]*\bsrc=["']\s*["'][^>]*\/?>/gi, () => {
+    droppedImages += 1;
+    return "";
+  });
 
   // Collapse excessive empty paragraphs
   out = out.replace(/(<p>\s*<\/p>\s*){3,}/gi, "<p></p>");
 
-  return out.trim();
+  return { html: out.trim(), droppedImages };
 }
 
 export type ExtractedDataImage = {
@@ -172,14 +193,46 @@ export function classifyPasteWithFiles(
   files: File[];
   sanitizedHtml: string;
   dataImages: ExtractedDataImage[];
+  /**
+   * `<img>` tags removed because their src was a local-only reference
+   * (`file:`/`cid:`/`webkit-fake-url:` or empty) — most commonly Word/Outlook
+   * on Windows pointing at an image that only exists on the sender's disk.
+   * These are unrecoverable unless a matching blob shows up in `files`.
+   */
+  droppedImageCount: number;
 } {
   const html = data?.getData("text/html")?.trim() ?? "";
   const plain = data?.getData("text/plain")?.trim() ?? "";
   const substantial = htmlHasSubstantialContent(html);
-  const cleaned = substantial ? sanitizePastedHtml(html) : "";
+  const { html: cleaned, droppedImages: droppedImageCount } = substantial
+    ? sanitizePastedHtmlDetailed(html)
+    : { html: "", droppedImages: 0 };
   const { html: withMarkers, images: dataImages } = substantial
     ? extractDataUrlImages(cleaned)
     : { html: cleaned, images: [] as ExtractedDataImage[] };
+
+  // Temporary diagnostics: sanitizePastedHtmlDetailed only counts <img> tags
+  // it can see *after* the MSO conditional-comment and VML strips run, so it
+  // can under-count (e.g. <v:imagedata src="file:...">, or an <img> that a
+  // non-greedy conditional-comment match happened to swallow). Compare the
+  // raw payload so a mismatch is visible instead of silently misdiagnosed.
+  if (typeof window !== "undefined" && html) {
+    const rawImgTags = html.match(/<img\b/gi)?.length ?? 0;
+    const rawFileSrcs = html.match(/\bsrc=["']file:/gi)?.length ?? 0;
+    const rawVmlImagedata = html.match(/<v:imagedata\b/gi)?.length ?? 0;
+    if (rawImgTags > 0 || rawFileSrcs > 0 || rawVmlImagedata > 0) {
+      console.warn("[paste] diagnostics", {
+        clipboardTypes: data ? Array.from(data.types) : [],
+        rawImgTags,
+        rawFileSrcs,
+        rawVmlImagedata,
+        droppedImageCount,
+        dataImageCount: dataImages.length,
+        clipboardFileCount: files.length,
+        clipboardFileTypes: files.map((f) => f.type),
+      });
+    }
+  }
 
   if (files.length > 0 && !substantial && dataImages.length === 0) {
     return {
@@ -189,6 +242,7 @@ export function classifyPasteWithFiles(
       files,
       sanitizedHtml: "",
       dataImages: [],
+      droppedImageCount,
     };
   }
 
@@ -200,6 +254,7 @@ export function classifyPasteWithFiles(
       files,
       sanitizedHtml: withMarkers,
       dataImages,
+      droppedImageCount,
     };
   }
 
@@ -210,5 +265,6 @@ export function classifyPasteWithFiles(
     files,
     sanitizedHtml: "",
     dataImages: [],
+    droppedImageCount,
   };
 }

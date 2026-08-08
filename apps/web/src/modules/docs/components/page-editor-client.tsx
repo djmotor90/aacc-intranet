@@ -73,6 +73,7 @@ import {
 } from "@/modules/docs/hooks/use-doc-collab";
 import { CollabPresence } from "./collab-presence";
 import { DocPageOutline } from "./doc-page-outline";
+import { PageHeadingOutline } from "./page-heading-outline";
 import { PageStylesPanel } from "./page-styles-panel";
 
 function formatLastUpdated(iso: string): string {
@@ -175,6 +176,8 @@ export function PageEditorClient({
   });
   const [pending, startTransition] = useTransition();
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const documentScrollRef = useRef<HTMLDivElement>(null);
+  const editorRootRef = useRef<HTMLDivElement>(null);
   const latestBody = useRef<StoredRichDoc>(
     docToStored(storedToDoc(page.body as StoredRichDoc)),
   );
@@ -182,6 +185,9 @@ export function PageEditorClient({
   const bodyVersionRef = useRef(page.bodyVersion);
   /** Serialize autosaves so image-upload flushes don't race each other. */
   const saveQueueRef = useRef(Promise.resolve());
+  /** Hold autosave while a paste replaces temporary image placeholders. */
+  const uploadBatchCountRef = useRef(0);
+  const uploadFlushPendingRef = useRef(false);
   /** Detect own rapid saves vs real multi-user conflicts. */
   const lastLocalSaveAtRef = useRef(0);
   /** Never remount a local editor into collab mode after the user has changed it. */
@@ -351,6 +357,30 @@ export function PageEditorClient({
     [page.id, useCollabEditor],
   );
 
+  const onUploadBatchChange = useCallback(
+    (active: boolean) => {
+      if (active) {
+        uploadBatchCountRef.current += 1;
+        if (saveTimer.current) clearTimeout(saveTimer.current);
+        setSaveState("saving");
+        return;
+      }
+
+      uploadBatchCountRef.current = Math.max(0, uploadBatchCountRef.current - 1);
+      if (uploadBatchCountRef.current > 0) return;
+      if (useCollabEditor) {
+        uploadFlushPendingRef.current = false;
+        setSaveState("saved");
+        return;
+      }
+      if (uploadFlushPendingRef.current) {
+        uploadFlushPendingRef.current = false;
+        void persistBody();
+      }
+    },
+    [persistBody, useCollabEditor],
+  );
+
   function onEditorChange(payload: { text: string; doc: unknown; empty: boolean }) {
     const stored = docToStored(
       storedToDoc({ text: payload.text, doc: payload.doc } as StoredRichDoc),
@@ -360,6 +390,11 @@ export function PageEditorClient({
     collabWindowOpen.current = false;
     setBodyText(stored?.text ?? payload.text ?? "");
     if (!canEdit) return;
+    if (uploadBatchCountRef.current > 0) {
+      uploadFlushPendingRef.current = true;
+      setSaveState("saving");
+      return;
+    }
     if (useCollabEditor) {
       setSaveState("saved");
       return;
@@ -373,6 +408,10 @@ export function PageEditorClient({
   }
 
   const flushUploadedBody = useCallback(() => {
+    if (uploadBatchCountRef.current > 0) {
+      uploadFlushPendingRef.current = true;
+      return;
+    }
     if (!canEdit || useCollabEditor) return;
     if (saveTimer.current) clearTimeout(saveTimer.current);
     void persistBody();
@@ -703,17 +742,35 @@ export function PageEditorClient({
         </div>
       )}
 
-      {/* Scrollable document canvas only */}
-      <div className="min-h-0 flex-1 overflow-y-auto">
-      <div
-        className={cn(
-          "relative mx-auto w-full px-4 pb-20 pt-6 sm:px-8 sm:pt-10",
-          pageWidthClass(styles.pageWidth),
-          fontStyleClass(styles.fontStyle),
-          fontSizeClass(styles.fontSize),
-          styles.focusBlock && "[&_.aitim-editor>*:not(:hover):not(:focus-within)]:opacity-40",
+      {/* Document scrollport + floating ClickUp-style outline card */}
+      <div className="relative flex min-h-0 flex-1 overflow-hidden">
+        <div
+          ref={documentScrollRef}
+          className="min-h-0 min-w-0 flex-1 overflow-y-auto scroll-smooth"
+        >
+          <div
+            className={cn(
+              "relative mx-auto w-full",
+              pageWidthClass(styles.pageWidth),
+            )}
+          >
+          <div
+            className={cn(
+              "relative mx-auto w-full min-w-0 px-4 pb-20 pt-6 sm:px-8 sm:pt-10",
+              fontStyleClass(styles.fontStyle),
+              fontSizeClass(styles.fontSize),
+              styles.focusBlock &&
+                "[&_.aitim-editor>*:not(:hover):not(:focus-within)]:opacity-40",
+            )}
+          >
+        {styles.showPageOutline && !styles.focusPage && !isDesktop && (
+          <PageHeadingOutline
+            pageId={page.id}
+            editorRootRef={editorRootRef}
+            scrollRootRef={documentScrollRef}
+            className="sticky top-2 z-10 mb-6 max-h-[40svh] overflow-y-auto"
+          />
         )}
-      >
         {styles.showCover && (
           <div className="mb-6 flex h-36 items-center justify-center rounded-xl border border-dashed bg-muted/40 text-sm text-muted-foreground">
             Cover image (coming soon)
@@ -834,7 +891,7 @@ export function PageEditorClient({
         )}
 
         {/* Body — opens immediately; multiplayer only if collab server is already up. */}
-        <div className="min-w-0 pb-16">
+        <div ref={editorRootRef} className="min-w-0 pb-16">
           {useCollabEditor ? (
             <RichTextEditor
               key={`collab-${page.id}`}
@@ -855,6 +912,7 @@ export function PageEditorClient({
               }}
               onChange={onEditorChange}
               onFilesUploaded={flushUploadedBody}
+              onUploadBatchChange={onUploadBatchChange}
               placeholder="Type / for commands, or start writing…"
               className="border-0 bg-transparent shadow-none"
               editorClassName="min-h-[50vh] pl-0! pr-0! py-0!"
@@ -870,6 +928,7 @@ export function PageEditorClient({
               initialContent={page.body as StoredRichDoc}
               onChange={onEditorChange}
               onFilesUploaded={flushUploadedBody}
+              onUploadBatchChange={onUploadBatchChange}
               placeholder="Type / for commands, or start writing…"
               className="border-0 bg-transparent shadow-none"
               editorClassName="min-h-[50vh] pl-0! pr-0! py-0!"
@@ -908,7 +967,17 @@ export function PageEditorClient({
             {children}
           </div>
         )}
-      </div>
+          </div>
+        </div>
+        </div>
+        {styles.showPageOutline && !styles.focusPage && isDesktop && (
+          <PageHeadingOutline
+            pageId={page.id}
+            editorRootRef={editorRootRef}
+            scrollRootRef={documentScrollRef}
+            className="absolute top-4 right-4 z-10 hidden max-h-[calc(100%-2rem)] w-52 overflow-y-auto shadow-lg lg:block"
+          />
+        )}
       </div>
 
       <Sheet open={relationsOpen} onOpenChange={setRelationsOpen}>

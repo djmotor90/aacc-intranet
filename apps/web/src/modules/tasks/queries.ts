@@ -94,16 +94,32 @@ export async function getSpaceContentTree(
   isOwner: boolean,
 ): Promise<{ folders: FolderNavNode[]; lists: ListNavNode[] }> {
   const [folderRows, listRows] = await Promise.all([
-    db
-      .select()
-      .from(folders)
-      .where(and(eq(folders.spaceId, spaceId), eq(folders.isArchived, false), isNull(folders.deletedAt)))
-      .orderBy(asc(folders.position), asc(folders.createdAt)),
-    db
-      .select()
-      .from(lists)
-      .where(and(eq(lists.spaceId, spaceId), eq(lists.isArchived, false), isNull(lists.deletedAt)))
-      .orderBy(asc(lists.position), asc(lists.createdAt)),
+    withDbRetry(() =>
+      db
+        .select()
+        .from(folders)
+        .where(
+          and(
+            eq(folders.spaceId, spaceId),
+            eq(folders.isArchived, false),
+            isNull(folders.deletedAt),
+          ),
+        )
+        .orderBy(asc(folders.position), asc(folders.createdAt)),
+    ),
+    withDbRetry(() =>
+      db
+        .select()
+        .from(lists)
+        .where(
+          and(
+            eq(lists.spaceId, spaceId),
+            eq(lists.isArchived, false),
+            isNull(lists.deletedAt),
+          ),
+        )
+        .orderBy(asc(lists.position), asc(lists.createdAt)),
+    ),
   ]);
 
   let visibleFolderIds: Set<string>;
@@ -194,22 +210,27 @@ export async function getTaskNavTreeForUser(user: SessionUserLike) {
 }
 
 const getTaskNavTreeForUserCached = cache(async (userId: string, platformRole: string | undefined) => {
-  const candidateSpaces = await db
-    .select({
-      id: spaces.id,
-      name: spaces.name,
-      slug: spaces.slug,
-      icon: spaces.icon,
-      color: spaces.color,
-      moduleId: spaces.moduleId,
-    })
-    .from(spaces)
-    .where(and(eq(spaces.isArchived, false), isNull(spaces.deletedAt)))
-    .orderBy(asc(spaces.name));
-
-  const roles = await Promise.all(
-    candidateSpaces.map((space) => getSpaceRole(userId, space.id, platformRole)),
+  const candidateSpaces = await withDbRetry(() =>
+    db
+      .select({
+        id: spaces.id,
+        name: spaces.name,
+        slug: spaces.slug,
+        icon: spaces.icon,
+        color: spaces.color,
+        moduleId: spaces.moduleId,
+      })
+      .from(spaces)
+      .where(and(eq(spaces.isArchived, false), isNull(spaces.deletedAt)))
+      .orderBy(asc(spaces.name)),
   );
+
+  // Keep role lookups sequential. On remote Postgres, a space-wide Promise.all
+  // competes with the other AppLayout queries and can exhaust the connection pool.
+  const roles: (Awaited<ReturnType<typeof getSpaceRole>>)[] = [];
+  for (const space of candidateSpaces) {
+    roles.push(await getSpaceRole(userId, space.id, platformRole));
+  }
   const roleBySpaceId = new Map(candidateSpaces.map((space, i) => [space.id, roles[i]]));
   const visibleSpaces = candidateSpaces.filter((space) => roleBySpaceId.get(space.id) !== null);
   const visibleSpaceIds = new Set(visibleSpaces.map((space) => space.id));
@@ -219,34 +240,38 @@ const getTaskNavTreeForUserCached = cache(async (userId: string, platformRole: s
   const groupIds = await getUserGroupIds(userId);
 
   const [directListSpaceRows, directFolderSpaceRows] = await Promise.all([
-    db
-      .select({ spaceId: lists.spaceId })
-      .from(listMembers)
-      .innerJoin(lists, eq(listMembers.listId, lists.id))
-      .where(
-        and(
-          eq(lists.isArchived, false),
-          isNull(lists.deletedAt),
-          or(
-            eq(listMembers.userId, userId),
-            groupIds.length > 0 ? inArray(listMembers.groupId, groupIds) : undefined,
+    withDbRetry(() =>
+      db
+        .select({ spaceId: lists.spaceId })
+        .from(listMembers)
+        .innerJoin(lists, eq(listMembers.listId, lists.id))
+        .where(
+          and(
+            eq(lists.isArchived, false),
+            isNull(lists.deletedAt),
+            or(
+              eq(listMembers.userId, userId),
+              groupIds.length > 0 ? inArray(listMembers.groupId, groupIds) : undefined,
+            ),
           ),
         ),
-      ),
-    db
-      .select({ spaceId: folders.spaceId })
-      .from(folderMembers)
-      .innerJoin(folders, eq(folderMembers.folderId, folders.id))
-      .where(
-        and(
-          eq(folders.isArchived, false),
-          isNull(folders.deletedAt),
-          or(
-            eq(folderMembers.userId, userId),
-            groupIds.length > 0 ? inArray(folderMembers.groupId, groupIds) : undefined,
+    ),
+    withDbRetry(() =>
+      db
+        .select({ spaceId: folders.spaceId })
+        .from(folderMembers)
+        .innerJoin(folders, eq(folderMembers.folderId, folders.id))
+        .where(
+          and(
+            eq(folders.isArchived, false),
+            isNull(folders.deletedAt),
+            or(
+              eq(folderMembers.userId, userId),
+              groupIds.length > 0 ? inArray(folderMembers.groupId, groupIds) : undefined,
+            ),
           ),
         ),
-      ),
+    ),
   ]);
 
   const extraSpaceIds = new Set(

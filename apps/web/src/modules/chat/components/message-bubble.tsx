@@ -27,9 +27,11 @@ function formatTime(iso: string) {
 export function MessageBubble({
   message,
   isOwn,
+  labelOverrides,
 }: {
   message: ChatMessageDTO;
   isOwn: boolean;
+  labelOverrides?: Record<string, string>;
 }) {
   const embeds = message.body.embeds ?? [];
   const plain = message.body.text ?? "";
@@ -73,7 +75,11 @@ export function MessageBubble({
         >
           {/* Unified path: DOC/Task chips + markdown in the same bubble */}
           {plain ? (
-            <MentionText text={plain} onPrimary={isOwn && !message.isAgent} />
+            <MentionText
+              text={plain}
+              onPrimary={isOwn && !message.isAgent}
+              labelOverrides={labelOverrides}
+            />
           ) : null}
           {embeds.map((embed, i) =>
             embed.type === "task_list" ? (

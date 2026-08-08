@@ -11,6 +11,8 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { markConversationRead } from "../actions/conversations";
 import { getChatMessage, pollConversationMessages } from "../actions/messages";
+import { resolveMentionLabels } from "../actions/mention-search";
+import { extractMentionTokens } from "../lib/agent-mentions";
 import type { ChatMessageDTO } from "../lib/types";
 import { ChatComposer } from "./chat-composer";
 import { MessageBubble, TypingIndicator } from "./message-bubble";
@@ -55,17 +57,13 @@ export function ConversationView({
 }) {
   const [messages, setMessages] = useState(initialMessages);
   const [agentTyping, setAgentTyping] = useState(false);
+  const [labelOverrides, setLabelOverrides] = useState<Record<string, string>>({});
   const bottomRef = useRef<HTMLDivElement>(null);
   const scrollerRef = useRef<HTMLDivElement>(null);
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastMessageIdRef = useRef<string | null>(
     initialMessages[initialMessages.length - 1]?.id ?? null,
   );
-
-  useEffect(() => {
-    setMessages(initialMessages);
-    lastMessageIdRef.current = initialMessages[initialMessages.length - 1]?.id ?? null;
-  }, [initialMessages, conversationId]);
 
   useEffect(() => {
     lastMessageIdRef.current = messages[messages.length - 1]?.id ?? null;
@@ -188,6 +186,40 @@ export function ConversationView({
     [startWaitingForAgent],
   );
 
+  // Stored mention tokens freeze the entity's name at send time — resolve
+  // current names (doc/task renamed since, etc.) so chips never go stale.
+  const mentionKeys = useMemo(() => {
+    const seen = new Set<string>();
+    for (const m of messages) {
+      for (const t of extractMentionTokens(m.body.text ?? "")) {
+        seen.add(`${t.type}:${t.id}`);
+      }
+    }
+    return [...seen].sort();
+  }, [messages]);
+  const mentionKeysSignature = mentionKeys.join(",");
+
+  useEffect(() => {
+    if (!mentionKeys.length) return;
+    let cancelled = false;
+    void resolveMentionLabels(
+      mentionKeys.map((k) => {
+        const [type, id] = k.split(":") as [
+          "user" | "task" | "space" | "doc" | "folder",
+          string,
+        ];
+        return { type, id };
+      }),
+    ).then((resolved) => {
+      if (!cancelled) setLabelOverrides((prev) => ({ ...prev, ...resolved }));
+    });
+    return () => {
+      cancelled = true;
+    };
+    // Re-resolve only when the actual set of referenced entities changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mentionKeysSignature]);
+
   const groups = useMemo(() => {
     const out: { label: string; items: ChatMessageDTO[] }[] = [];
     for (const m of messages) {
@@ -260,6 +292,7 @@ export function ConversationView({
                   key={m.id}
                   message={m}
                   isOwn={m.authorUserId === currentUserId && !m.isAgent}
+                  labelOverrides={labelOverrides}
                 />
               ))}
             </section>

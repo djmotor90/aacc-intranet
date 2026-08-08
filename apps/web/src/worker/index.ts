@@ -10,6 +10,7 @@
  */
 import { PgBoss, type ConstructorOptions } from "pg-boss";
 import { runAgentJob, type AgentRunPayload } from "./jobs/agent-run";
+import { runEmbedDocJob, type EmbedDocPayload } from "./jobs/embed-doc";
 import {
   runDueSoonScanner,
   runHourlyEmailDigest,
@@ -26,6 +27,7 @@ const QUEUES = {
   notificationDigest: "notification-email-digest",
   dueSoon: "due-soon-scanner",
   agentRun: "agent-run",
+  embedDoc: "embed-doc",
 } as const;
 
 /** node-pg Pool options pg-boss forwards but does not list on ConstructorOptions. */
@@ -86,6 +88,15 @@ async function main() {
 
   await boss.work<AgentRunPayload>(QUEUES.agentRun, async ([job]) => {
     console.log("[agent-run]", await runAgentJob(job.data));
+  });
+
+  await boss.work<EmbedDocPayload>(QUEUES.embedDoc, async ([job]) => {
+    try {
+      console.log("[embed-doc]", await runEmbedDocJob(job.data));
+    } catch (err) {
+      console.error("[embed-doc] failed", job.data.pageId, err);
+      throw err;
+    }
   });
 
   await boss.schedule(QUEUES.dueSoon, "0 7 * * *"); // daily 07:00

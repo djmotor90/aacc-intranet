@@ -25,10 +25,11 @@ import {
   useTransition,
 } from "react";
 import { cn } from "@/lib/utils";
-import { searchAgentMentions } from "../actions/mention-search";
+import { resolveMentionLabels, searchAgentMentions } from "../actions/mention-search";
 import {
   detectMentionQuery,
   encodeMentionToken,
+  extractMentionTokens,
   mentionChipLabel,
   mentionChipPrefix,
   mentionTypeLabel,
@@ -66,8 +67,18 @@ function escapeHtml(s: string): string {
     .replace(/"/g, "&quot;");
 }
 
-function chipHtml(type: AgentMentionType, id: string, label: string, token: string): string {
-  const safeLabel = escapeHtml(mentionChipLabel(type, label));
+function chipHtml(
+  type: AgentMentionType,
+  id: string,
+  label: string,
+  token: string,
+  labelOverrides: Record<string, string>,
+): string {
+  // The label baked into the stored token is a point-in-time snapshot — show
+  // the entity's current name when resolved (see resolveMentionLabels). The
+  // token itself (what actually gets saved) is untouched either way.
+  const displayLabel = labelOverrides[`${type}:${id}`] ?? label;
+  const safeLabel = escapeHtml(mentionChipLabel(type, displayLabel));
   const safeToken = escapeHtml(token);
   const prefix = escapeHtml(mentionChipPrefix(type));
   const color = CHIP_CLASS[type];
@@ -88,14 +99,14 @@ function chipHtml(type: AgentMentionType, id: string, label: string, token: stri
   );
 }
 
-function valueToHtml(value: string): string {
+function valueToHtml(value: string, labelOverrides: Record<string, string>): string {
   const segments = parseInstructionSegments(value);
   let html = "";
   for (const seg of segments) {
     if (seg.kind === "text") {
       html += escapeHtml(seg.text).replace(/\n/g, "<br>");
     } else {
-      html += chipHtml(seg.type, seg.id, seg.label, seg.token);
+      html += chipHtml(seg.type, seg.id, seg.label, seg.token, labelOverrides);
     }
   }
   // Ensure the caret has a place to go after a trailing chip
@@ -221,7 +232,9 @@ export function AgentInstructionEditor({
     query: string;
   } | null>(null);
   const valueRef = useRef(value);
-  valueRef.current = value;
+  useLayoutEffect(() => {
+    valueRef.current = value;
+  }, [value]);
   const skipNextSync = useRef(false);
 
   const [pending, startTransition] = useTransition();
@@ -235,6 +248,8 @@ export function AgentInstructionEditor({
     query: string;
   } | null>(null);
   const [focused, setFocused] = useState(false);
+  const [labelOverrides, setLabelOverrides] = useState<Record<string, string>>({});
+  const renderedLabelOverridesRef = useRef(labelOverrides);
 
   const hydrated = useSyncExternalStore(
     () => () => {},
@@ -242,18 +257,45 @@ export function AgentInstructionEditor({
     () => false,
   );
 
-  // Keep DOM chips in sync when parent sets value (e.g. AI build result)
+  // Stored tokens freeze the entity's name at the moment they were inserted
+  // (or last saved) — resolve current names so chips don't show a doc/task's
+  // old title after it's renamed.
+  const mentionKeysSignature = extractMentionTokens(value)
+    .map((t) => `${t.type}:${t.id}`)
+    .filter((k, i, arr) => arr.indexOf(k) === i)
+    .sort()
+    .join(",");
+
+  useEffect(() => {
+    if (!mentionKeysSignature) return;
+    let cancelled = false;
+    const items = mentionKeysSignature.split(",").map((k) => {
+      const [type, id] = k.split(":") as [AgentMentionType, string];
+      return { type, id };
+    });
+    void resolveMentionLabels(items).then((resolved) => {
+      if (!cancelled) setLabelOverrides((prev) => ({ ...prev, ...resolved }));
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [mentionKeysSignature]);
+
+  // Keep DOM chips in sync when parent sets value (e.g. AI build result) or
+  // when label resolution completes.
   useLayoutEffect(() => {
     const el = editorRef.current;
     if (!el || !hydrated) return;
+    const labelsChanged = renderedLabelOverridesRef.current !== labelOverrides;
     if (skipNextSync.current) {
       skipNextSync.current = false;
-      return;
+      if (!labelsChanged) return;
     }
     const current = serializeEditor(el);
-    if (current === value) return;
-    el.innerHTML = valueToHtml(value);
-  }, [value, hydrated]);
+    if (current === value && !labelsChanged) return;
+    renderedLabelOverridesRef.current = labelOverrides;
+    el.innerHTML = valueToHtml(value, labelOverrides);
+  }, [value, hydrated, labelOverrides]);
 
   const refreshMentions = useCallback((text: string, cursor: number) => {
     const det = detectMentionQuery(text, cursor);
@@ -302,7 +344,7 @@ export function AgentInstructionEditor({
     valueRef.current = next;
     skipNextSync.current = true;
     onChange(next);
-    el.innerHTML = valueToHtml(next);
+    el.innerHTML = valueToHtml(next, labelOverrides);
     setOpen(false);
     setQueryMeta(null);
     queryMetaRef.current = null;

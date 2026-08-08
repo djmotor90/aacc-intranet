@@ -11,6 +11,7 @@ import { db, docFolders, docLinks, docPages, spaces } from "@aitim/db";
 import { and, asc, desc, eq, inArray, isNull, ne, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
+import { enqueue } from "@/lib/queue";
 import { requireUser } from "@/lib/rbac";
 import {
   assertSpaceAccess,
@@ -519,7 +520,12 @@ async function copyPageTree({
     if (linkValues.length > 0) await tx.insert(docLinks).values(linkValues);
   });
 
-  return { id: rootId, slug: rootSlug, path: pagePath(rootId, rootSlug) };
+  return {
+    id: rootId,
+    slug: rootSlug,
+    path: pagePath(rootId, rootSlug),
+    pageIds: [...idMap.values()],
+  };
 }
 
 export async function duplicateDocPage(pageId: string) {
@@ -542,6 +548,11 @@ export async function duplicateDocPage(pageId: string) {
 
   revalidatePath("/docs");
   revalidatePath(result.path);
+  for (const id of result.pageIds) {
+    void enqueue("embed-doc", { pageId: id }).catch((err) =>
+      console.error("[docs] enqueue embed-doc failed", id, err),
+    );
+  }
   return result;
 }
 
@@ -632,6 +643,11 @@ export async function transferDocPage(input: z.infer<typeof transferPageSchema>)
     });
     revalidatePath("/docs");
     revalidatePath(result.path);
+    for (const id of result.pageIds) {
+      void enqueue("embed-doc", { pageId: id }).catch((err) =>
+        console.error("[docs] enqueue embed-doc failed", id, err),
+      );
+    }
     return result;
   }
 
@@ -694,9 +710,26 @@ const updateBodySchema = z.object({
   expectedUpdatedAt: z.string().optional(),
 });
 
+function hasUnresolvedDocImage(node: unknown): boolean {
+  if (!node || typeof node !== "object") return false;
+  const value = node as {
+    type?: unknown;
+    attrs?: { src?: unknown; uploadId?: unknown };
+    content?: unknown[];
+  };
+  if (value.type === "image") {
+    const src = typeof value.attrs?.src === "string" ? value.attrs.src.trim() : "";
+    if (!src || src.startsWith("data:") || value.attrs?.uploadId) return true;
+  }
+  return Array.isArray(value.content) && value.content.some(hasUnresolvedDocImage);
+}
+
 export async function updatePageBody(input: z.infer<typeof updateBodySchema>) {
   const user = await requireUser();
   const data = updateBodySchema.parse(input);
+  if (hasUnresolvedDocImage(data.body.doc)) {
+    throw new Error("Images are still finalizing. Wait for uploads to finish before saving.");
+  }
   const [page] = await db.select().from(docPages).where(eq(docPages.id, data.pageId)).limit(1);
   if (!page || page.deletedAt) throw new Error("Page not found");
   await requireEditDocs(user, page.homeSpaceId, page.isProtected);
@@ -768,6 +801,9 @@ export async function updatePageBody(input: z.infer<typeof updateBodySchema>) {
   }
 
   revalidatePath(pagePath(page.id, page.slug));
+  void enqueue("embed-doc", { pageId: page.id }).catch((err) =>
+    console.error("[docs] enqueue embed-doc failed", page.id, err),
+  );
   return {
     ok: true as const,
     conflict: false as const,

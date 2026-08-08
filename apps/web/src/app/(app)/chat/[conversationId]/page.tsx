@@ -43,6 +43,7 @@ export default async function ConversationPage({
       canCreateAgent={canCreateAgent}
     >
       <ConversationView
+        key={conversationId}
         conversationId={conversationId}
         agentName={agentName}
         agentTitle={agentTitle}

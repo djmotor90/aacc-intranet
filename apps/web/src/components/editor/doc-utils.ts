@@ -19,6 +19,24 @@ export function emptyDoc(): JSONContent {
   return { type: "doc", content: [{ type: "paragraph" }] };
 }
 
+/**
+ * prosemirror-model builds every node/mark `attrs` object via
+ * `Object.create(null)` (see computeAttrs) and `Node.prototype.toJSON` /
+ * `Mark.prototype.toJSON` assign that object in by reference, never cloning
+ * it into a plain object. Any node or mark with a non-empty attrs bag —
+ * an image, a heading, a `textStyle` color mark from pasted formatting —
+ * therefore comes out of `editor.getJSON()` holding a null-prototype value.
+ * React's Server Action argument encoder treats null-prototype objects as
+ * non-serializable class instances: it doesn't throw client-side (Next.js
+ * enables `temporaryReferences` for real action calls), it just swaps the
+ * value for an opaque reference, and the server then throws the moment any
+ * code reads a property off it (e.g. "Cannot access src on the server").
+ * Round-tripping through JSON strips every prototype back to plain Object.
+ */
+export function toPlainJSON<T>(value: T): T {
+  return JSON.parse(JSON.stringify(value)) as T;
+}
+
 /** Build a minimal TipTap doc from plain text (legacy data). */
 export function plainTextToDoc(text: string): JSONContent {
   const trimmed = text.trim();

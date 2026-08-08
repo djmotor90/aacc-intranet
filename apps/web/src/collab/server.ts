@@ -10,6 +10,7 @@
  */
 import { Server } from "@hocuspocus/server";
 import { TiptapTransformer } from "@hocuspocus/transformer";
+import Image from "@tiptap/extension-image";
 import StarterKit from "@tiptap/starter-kit";
 import { and, eq, isNull, sql } from "drizzle-orm";
 import * as Y from "yjs";
@@ -18,6 +19,24 @@ import { verifyCollabToken } from "./token";
 const PORT = Number(process.env.COLLAB_PORT ?? 1234);
 
 type BodyShape = { text?: string; doc?: unknown };
+
+/**
+ * Match the image attributes used by the browser editor. Without this schema,
+ * TiptapTransformer keeps the image node but strips src/size attributes.
+ */
+const CollabImage = Image.extend({
+  addAttributes() {
+    return {
+      ...this.parent?.(),
+      uploadId: { default: null },
+      width: { default: null },
+      height: { default: null },
+    };
+  },
+});
+
+const COLLAB_SCHEMA_EXTENSIONS = [StarterKit, CollabImage];
+const UPLOAD_BATCH_MAP = "aitim-upload-batches";
 
 function plainTextFromDoc(doc: unknown): string {
   if (!doc || typeof doc !== "object") return "";
@@ -30,6 +49,20 @@ function plainTextFromDoc(doc: unknown): string {
   };
   walk(doc);
   return parts.join(" ").replace(/\s+/g, " ").trim();
+}
+
+function hasUnresolvedImage(node: unknown): boolean {
+  if (!node || typeof node !== "object") return false;
+  const value = node as {
+    type?: unknown;
+    attrs?: { src?: unknown; uploadId?: unknown };
+    content?: unknown[];
+  };
+  if (value.type === "image") {
+    const src = typeof value.attrs?.src === "string" ? value.attrs.src.trim() : "";
+    if (!src || src.startsWith("data:") || value.attrs?.uploadId) return true;
+  }
+  return Array.isArray(value.content) && value.content.some(hasUnresolvedImage);
 }
 
 async function getDb() {
@@ -88,7 +121,11 @@ const server = new Server({
         : { type: "doc", content: [{ type: "paragraph" }] };
 
     try {
-      const seeded = TiptapTransformer.toYdoc(json, "default", [StarterKit]);
+      const seeded = TiptapTransformer.toYdoc(
+        json,
+        "default",
+        COLLAB_SCHEMA_EXTENSIONS,
+      );
       const update = Y.encodeStateAsUpdate(seeded);
       Y.applyUpdate(document, update);
     } catch (err) {
@@ -104,6 +141,11 @@ const server = new Server({
       return;
     }
 
+    // A Word paste can replace hundreds of image placeholders. Keep the live
+    // Yjs document updating, but serialize to Postgres only after the batch's
+    // final URL replacement so an intermediate body cannot win on refresh.
+    if (document.getMap(UPLOAD_BATCH_MAP).size > 0) return;
+
     const { db, docPages } = await getDb();
     const state = Buffer.from(Y.encodeStateAsUpdate(document));
 
@@ -112,6 +154,11 @@ const server = new Server({
       jsonDoc = TiptapTransformer.fromYdoc(document, "default");
     } catch (err) {
       console.error("[collab] fromYdoc failed", documentName, err);
+    }
+
+    if (hasUnresolvedImage(jsonDoc)) {
+      console.warn("[collab] skipped unresolved image snapshot", documentName);
+      return;
     }
 
     const text = plainTextFromDoc(jsonDoc);
@@ -150,7 +197,13 @@ const server = new Server({
       )
       .returning({ id: docPages.id });
 
-    if (contentUpdated) return;
+    if (contentUpdated) {
+      const { enqueue } = await import("@/lib/queue");
+      void enqueue("embed-doc", { pageId: documentName }).catch((err) =>
+        console.error("[collab] enqueue embed-doc failed", documentName, err),
+      );
+      return;
+    }
 
     // Equivalent JSON can still produce a newer binary snapshot. Persist that
     // bookkeeping without advancing the body revision or visible edit time.

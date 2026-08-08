@@ -6,7 +6,7 @@
  * License: Proprietary. All rights reserved. See LICENSE / COPYRIGHT.
  */
 import { Suspense } from "react";
-import { db, users } from "@aitim/db";
+import { db, users, withDbRetry } from "@aitim/db";
 import { eq } from "drizzle-orm";
 import { AppShell } from "@/components/shell/app-shell";
 import { NotificationBell } from "@/components/shell/notification-bell";
@@ -25,11 +25,12 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     await Promise.all([
       listEnabledWorkspaceModules(),
       getTaskNavTreeForUser(user),
-      db
-        .select({ photoKey: users.photoKey })
-        .from(users)
-        .where(eq(users.id, user.id))
-        .then((rows) => rows[0] ?? null),
+      withDbRetry(() =>
+        db
+          .select({ photoKey: users.photoKey })
+          .from(users)
+          .where(eq(users.id, user.id)),
+      ).then((rows) => rows[0] ?? null),
       isAdmin ? Promise.resolve(true) : userOwnsAnySpace(user.id, user.platformRole),
       isAdmin
         ? Promise.resolve(true)

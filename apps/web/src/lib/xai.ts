@@ -17,20 +17,52 @@ export function hasXaiKey(): boolean {
   return Boolean(process.env.XAI_API_KEY?.trim());
 }
 
-export type XaiChatMessage = {
-  role: "system" | "user" | "assistant";
+/** OpenAI-compatible function-tool definition (xAI's tool-calling schema). */
+export type XaiToolDef = {
+  type: "function";
+  function: {
+    name: string;
+    description: string;
+    /** JSON Schema for the arguments object. */
+    parameters: Record<string, unknown>;
+  };
+};
+
+export type XaiToolCall = {
+  id: string;
+  type: "function";
+  function: { name: string; arguments: string };
+};
+
+/** OpenAI-compatible multimodal content part (vision input). */
+export type XaiContentPart =
+  | { type: "text"; text: string }
+  | { type: "image_url"; image_url: { url: string; detail?: "auto" | "low" | "high" } };
+
+export type XaiChatMessage =
+  | { role: "system" | "user"; content: string | XaiContentPart[] }
+  | { role: "assistant"; content: string; tool_calls?: XaiToolCall[] }
+  | { role: "tool"; tool_call_id: string; content: string };
+
+export type XaiChatResult = {
+  /** May be "" when the model only returned tool_calls. */
   content: string;
+  toolCalls: XaiToolCall[];
 };
 
 /**
- * Chat completions against xAI. Returns plain text content or throws.
+ * Chat completions against xAI, with optional tool-calling. Returns the raw
+ * assistant message content plus any requested tool_calls — callers decide
+ * whether/how to execute tools and continue the conversation.
  */
-export async function xaiChat(input: {
+export async function xaiChatCompletion(input: {
   model?: string;
   messages: XaiChatMessage[];
   temperature?: number;
   maxTokens?: number;
-}): Promise<string> {
+  tools?: XaiToolDef[];
+  toolChoice?: "auto" | "none";
+}): Promise<XaiChatResult> {
   const apiKey = process.env.XAI_API_KEY?.trim();
   if (!apiKey) throw new Error("XAI_API_KEY is not set");
 
@@ -46,6 +78,9 @@ export async function xaiChat(input: {
       messages: input.messages,
       temperature: input.temperature ?? 0.4,
       max_tokens: input.maxTokens ?? 2048,
+      ...(input.tools?.length
+        ? { tools: input.tools, tool_choice: input.toolChoice ?? "auto" }
+        : {}),
     }),
   });
 
@@ -55,11 +90,31 @@ export async function xaiChat(input: {
   }
 
   const data = (await res.json()) as {
-    choices?: { message?: { content?: string } }[];
+    choices?: {
+      message?: { content?: string | null; tool_calls?: XaiToolCall[] };
+    }[];
   };
-  const text = data.choices?.[0]?.message?.content?.trim();
-  if (!text) throw new Error("xAI returned empty content");
-  return text;
+  const message = data.choices?.[0]?.message;
+  return {
+    content: message?.content?.trim() ?? "",
+    toolCalls: message?.tool_calls ?? [],
+  };
+}
+
+/**
+ * Chat completions against xAI. Returns plain text content or throws.
+ * Convenience wrapper over {@link xaiChatCompletion} for the common
+ * no-tools case.
+ */
+export async function xaiChat(input: {
+  model?: string;
+  messages: XaiChatMessage[];
+  temperature?: number;
+  maxTokens?: number;
+}): Promise<string> {
+  const result = await xaiChatCompletion(input);
+  if (!result.content) throw new Error("xAI returned empty content");
+  return result.content;
 }
 
 /** Expand a natural-language brief into structured Super Agent instructions. */

@@ -76,6 +76,7 @@ import {
   docToStored,
   isDocEmpty,
   storedToDoc,
+  toPlainJSON,
   type StoredRichDoc,
 } from "./doc-utils";
 import { BlockDragGrip } from "./block-drag-grip";
@@ -188,6 +189,8 @@ type RichTextEditorProps = {
   enableTaskEmbed?: boolean;
   /** Called after a file/image was uploaded (e.g. refresh attachments list). */
   onFilesUploaded?: () => void;
+  /** Allows autosave owners to collapse a multi-file paste into one final save. */
+  onUploadBatchChange?: (active: boolean) => void;
   /**
    * Live multiplayer (Yjs). When set, content is driven by the shared document
    * (not `initialContent`), history is disabled, and remote carets render.
@@ -825,6 +828,7 @@ export function RichTextEditor({
   pageId,
   enableTaskEmbed,
   onFilesUploaded,
+  onUploadBatchChange,
   collaboration = null,
 }: RichTextEditorProps) {
   const taskEmbedEnabled = enableTaskEmbed ?? Boolean(pageId);
@@ -833,6 +837,7 @@ export function RichTextEditor({
   const isCompact = resolvedVariant === "compact";
   const isMinimal = resolvedVariant === "minimal";
   const isCollab = Boolean(collaboration?.document);
+  const collaborationDocument = collaboration?.document;
 
   const uploadTarget: EditorUploadTarget | null = useMemo(
     () =>
@@ -863,11 +868,34 @@ export function RichTextEditor({
     ((files: File[], ed: Editor) => Promise<void>) | null
   >(null);
   const onFilesUploadedRef = useRef(onFilesUploaded);
+  const onUploadBatchChangeRef = useRef(onUploadBatchChange);
+  const uploadBatchCountRef = useRef(0);
+  const uploadBatchClientIdRef = useRef<string | null>(null);
   // Latest-value refs may only be written from effects, not during render.
   useEffect(() => {
     onFilesUploadedRef.current = onFilesUploaded;
+    onUploadBatchChangeRef.current = onUploadBatchChange;
     uploadTargetRef.current = uploadTarget;
   });
+
+  const beginUploadBatch = useCallback(() => {
+    uploadBatchCountRef.current += 1;
+    onUploadBatchChangeRef.current?.(true);
+    if (!collaborationDocument || uploadBatchCountRef.current !== 1) return;
+    const clientId = uploadBatchClientIdRef.current ?? crypto.randomUUID();
+    uploadBatchClientIdRef.current = clientId;
+    collaborationDocument.getMap("aitim-upload-batches").set(clientId, true);
+  }, [collaborationDocument]);
+
+  const endUploadBatch = useCallback(() => {
+    uploadBatchCountRef.current = Math.max(0, uploadBatchCountRef.current - 1);
+    onUploadBatchChangeRef.current?.(false);
+    if (!collaborationDocument || uploadBatchCountRef.current !== 0) return;
+    const clientId = uploadBatchClientIdRef.current;
+    if (clientId) {
+      collaborationDocument.getMap("aitim-upload-batches").delete(clientId);
+    }
+  }, [collaborationDocument]);
   // TipTap/ProseMirror must only mount on the client — keep a stable skeleton
   // for SSR + the first client paint to avoid hydration attribute mismatches.
   // Server snapshot false / client snapshot true: React re-renders before
@@ -1094,6 +1122,35 @@ export function RichTextEditor({
     [],
   );
 
+  /** Recovery for Word variants that create an image node without HTML attrs. */
+  const replaceFirstUnresolvedImage = useCallback(
+    (
+      ed: Editor,
+      toSrc: string,
+      meta?: { alt?: string; title?: string },
+    ): boolean => {
+      if (!ed || ed.isDestroyed) return false;
+      const tr = ed.state.tr;
+      let changed = false;
+      ed.state.doc.descendants((node, pos) => {
+        if (changed || node.type.name !== "image") return;
+        const src = typeof node.attrs.src === "string" ? node.attrs.src : "";
+        if (src && !src.startsWith("data:")) return;
+        tr.setNodeMarkup(pos, undefined, {
+          ...node.attrs,
+          src: toSrc,
+          alt: meta?.alt ?? node.attrs.alt,
+          title: meta?.title ?? node.attrs.title,
+          uploadId: null,
+        });
+        changed = true;
+      });
+      if (changed) ed.view.dispatch(tr);
+      return changed;
+    },
+    [],
+  );
+
   /**
    * Images → insert local preview immediately, upload in background, then swap src.
    * Non-image files → paperclip chip after upload (no good preview).
@@ -1133,6 +1190,7 @@ export function RichTextEditor({
       if (uploadJobs.length === 0) return;
 
       setFileUploading(true);
+      beginUploadBatch();
       setUploadProgress({ done: 0, total: uploadJobs.length });
       let done = 0;
       const errors: string[] = [];
@@ -1185,9 +1243,10 @@ export function RichTextEditor({
       } finally {
         setFileUploading(false);
         setUploadProgress(null);
+        endUploadBatch();
       }
     },
-    [uploadTarget, replacePendingImage],
+    [beginUploadBatch, endUploadBatch, uploadTarget, replacePendingImage],
   );
   // Sync the latest insertFiles into the ref from an effect (not render).
   useEffect(() => {
@@ -1203,6 +1262,7 @@ export function RichTextEditor({
       sanitizedHtml: string,
       dataImages: { marker: string; dataUrl: string; mime: string }[],
       extraFiles: File[],
+      droppedImageCount = 0,
     ) => {
       if (!uploadTarget) return;
       setFileError(null);
@@ -1210,6 +1270,7 @@ export function RichTextEditor({
       type Pending = {
         uploadId: string;
         file: File;
+        placeholderSrc: string;
       };
       const pending: Pending[] = [];
       let html = sanitizedHtml;
@@ -1228,8 +1289,8 @@ export function RichTextEditor({
           continue;
         }
         const uploadId = crypto.randomUUID();
-        pending.push({ uploadId, file });
         const placeholderSrc = uploadingPlaceholderDataUrl(`Uploading image ${i + 1}…`);
+        pending.push({ uploadId, file, placeholderSrc });
         html = html.replace(
           new RegExp(`(src=["'])${esc}(["'])`, "gi"),
           `$1${placeholderSrc}$2`,
@@ -1246,7 +1307,33 @@ export function RichTextEditor({
 
       // 1) Insert text + preview images immediately
       if (html.trim()) {
+        const insertFrom = ed.state.selection.from;
         ed.chain().focus().insertContent(html).run();
+
+        // Some Word HTML variants parse <img> as an image node but discard all
+        // attributes. Bind the newly inserted image nodes to their upload jobs
+        // by insertion order so replacement never depends on DOM attributes.
+        if (pending.length > 0) {
+          const insertTo = ed.state.selection.from;
+          const rangeStart = Math.max(0, Math.min(insertFrom, insertTo) - 2);
+          const rangeEnd = Math.max(insertFrom, insertTo) + 2;
+          const tr = ed.state.tr;
+          let pendingIndex = 0;
+          ed.state.doc.descendants((node, pos) => {
+            if (pendingIndex >= pending.length) return false;
+            if (pos < rangeStart || pos > rangeEnd) return;
+            if (node.type.name !== "image") return;
+            const job = pending[pendingIndex++]!;
+            tr.setNodeMarkup(pos, undefined, {
+              ...node.attrs,
+              src: job.placeholderSrc,
+              alt: job.file.name,
+              title: "Uploading…",
+              uploadId: job.uploadId,
+            });
+          });
+          if (tr.docChanged) ed.view.dispatch(tr);
+        }
       }
 
       // Extra clipboard files: images as previews now; non-images after upload
@@ -1261,11 +1348,12 @@ export function RichTextEditor({
         if (alreadyQueued) continue;
         if (isImageFile(file)) {
           const uploadId = crypto.randomUUID();
-          extraImageJobs.push({ uploadId, file });
+          const placeholderSrc = uploadingPlaceholderDataUrl("Uploading image…");
+          extraImageJobs.push({ uploadId, file, placeholderSrc });
           ed.chain()
             .focus()
             .setImage({
-              src: uploadingPlaceholderDataUrl("Uploading image…"),
+              src: placeholderSrc,
               alt: file.name,
               title: "Uploading…",
               uploadId,
@@ -1276,26 +1364,50 @@ export function RichTextEditor({
         }
       }
 
+      // sanitizePastedHtml has to drop <img> tags whose src is a local-only
+      // reference (file:/cid:/webkit-fake-url:) — that path only exists on
+      // the sender's machine, most often from Word/Outlook on Windows. If the
+      // clipboard didn't also hand us that image as a real file, it's gone;
+      // say so instead of silently losing it.
+      const missingImageCount = Math.max(0, droppedImageCount - extraImageJobs.length);
+
       const allPending = [...pending, ...extraImageJobs];
       const total = allPending.length + extraNonImages.length;
       if (total === 0) {
         onFilesUploadedRef.current?.();
+        if (missingImageCount > 0) {
+          setFileError(
+            missingImageCount === 1
+              ? "1 image from your paste couldn't be inserted. Copy and paste that image on its own, or drag its file in."
+              : `${missingImageCount} images from your paste couldn't be inserted. Copy and paste each image on its own, or drag its file in.`,
+          );
+        }
         return;
       }
 
       setFileUploading(true);
+      beginUploadBatch();
       setUploadProgress({ done: 0, total });
       let done = 0;
-      const errors: string[] = [];
+      const errors: string[] = missingImageCount > 0
+        ? [
+            missingImageCount === 1
+              ? "1 image from your paste couldn't be inserted"
+              : `${missingImageCount} images from your paste couldn't be inserted`,
+          ]
+        : [];
 
       try {
         for (const job of allPending) {
           try {
             const uploaded = await uploadEditorFile(uploadTarget, job.file);
-            const replaced = replacePendingImage(ed, job.uploadId, uploaded.url, {
+            const meta = {
               alt: uploaded.fileName,
               title: uploaded.fileName,
-            });
+            };
+            const replaced =
+              replacePendingImage(ed, job.uploadId, uploaded.url, meta) ||
+              replaceFirstUnresolvedImage(ed, uploaded.url, meta);
             if (!replaced) {
               throw new Error("The image placeholder was removed before upload completed");
             }
@@ -1346,9 +1458,16 @@ export function RichTextEditor({
       } finally {
         setFileUploading(false);
         setUploadProgress(null);
+        endUploadBatch();
       }
     },
-    [uploadTarget, replacePendingImage],
+    [
+      beginUploadBatch,
+      endUploadBatch,
+      replaceFirstUnresolvedImage,
+      replacePendingImage,
+      uploadTarget,
+    ],
   );
 
   const pasteHtmlWithAssetsRef = useRef(pasteHtmlWithAssets);
@@ -1421,6 +1540,7 @@ export function RichTextEditor({
               classified.sanitizedHtml,
               classified.dataImages,
               classified.files,
+              classified.droppedImageCount,
             );
             return true;
           }
@@ -1449,7 +1569,10 @@ export function RichTextEditor({
         },
       },
       onUpdate: ({ editor: ed }) => {
-        const doc = ed.getJSON();
+        // prosemirror-model gives every attrs-bearing node/mark a
+        // null-prototype attrs object (see toPlainJSON's doc comment) — plain
+        // JSON round-trip before this doc can travel through a Server Action.
+        const doc = toPlainJSON(ed.getJSON());
         // Include [Image] markers so image-only docs still have non-empty text.
         const text = docToPlainText(doc);
         if (name) setStoredJson(JSON.stringify(docToStored(doc)));
