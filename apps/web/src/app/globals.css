@@ -109,6 +109,28 @@
 .ProseMirror .mention {
   white-space: nowrap;
 }
+/* Lists: keep "1." next to first text line, not floating above empty space */
+.ProseMirror li {
+  margin-top: 0.15rem;
+  margin-bottom: 0.15rem;
+}
+.ProseMirror li > p {
+  margin-top: 0.15rem;
+  margin-bottom: 0.15rem;
+}
+.ProseMirror li > p:first-child {
+  margin-top: 0;
+}
+.ProseMirror li > p:last-child {
+  margin-bottom: 0;
+}
+/* Empty paragraphs inside list items shouldn't push the marker up */
+.ProseMirror li > p:empty,
+.ProseMirror li > p:has(br:only-child) {
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+}
 /* Pasted / embedded images (block + resizable) — also image-mime fileAttachment nodes */
 .ProseMirror img.aitim-editor-image,
 .aitim-editor img.aitim-editor-image,
@@ -126,6 +148,14 @@
   user-select: none;
   -webkit-user-drag: none;
   vertical-align: top;
+}
+/* Stable placeholder while S3/upload is in flight. Progress is shown below the editor. */
+.ProseMirror img.aitim-editor-image[src^="blob:"],
+.ProseMirror img[src^="blob:"],
+.ProseMirror img[title="Uploading…"] {
+  opacity: 0.82;
+  border-style: dashed;
+  border-color: color-mix(in oklch, var(--primary) 45%, var(--border));
 }
 /* Resize container — MUST shrink-wrap the image so selection outline matches size */
 .ProseMirror .aitim-image-resize,

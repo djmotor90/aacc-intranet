@@ -10,6 +10,7 @@
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import {
   useCallback,
   useEffect,
@@ -76,6 +77,12 @@ export function AppShell({
   header: ReactNode;
   children: ReactNode;
 }) {
+  const pathname = usePathname();
+  /** Chat is a fixed pane app — only the message list should scroll, not the whole shell. */
+  // Chat threads are full-bleed fixed panes; agent builder pages use normal scroll + padding.
+  const fullBleedMain =
+    pathname === "/chat" ||
+    (pathname.startsWith("/chat/") && !pathname.startsWith("/chat/agents"));
   const [width, setWidth] = useState(DEFAULT_WIDTH);
   const [collapsed, setCollapsed] = useState(false);
   const [hydrated, setHydrated] = useState(false);
@@ -285,7 +292,16 @@ export function AppShell({
         <header className="flex h-14 shrink-0 items-center justify-end border-b border-t-[3px] border-t-primary bg-background px-4 sm:px-6">
           {header}
         </header>
-        <main className="min-w-0 flex-1 overflow-x-auto overflow-y-auto bg-background p-6">{children}</main>
+        <main
+          className={cn(
+            "min-h-0 min-w-0 flex-1 bg-background",
+            fullBleedMain
+              ? "flex flex-col overflow-hidden p-0"
+              : "overflow-x-auto overflow-y-auto p-6",
+          )}
+        >
+          {children}
+        </main>
       </div>
     </div>
     </UserProfileProvider>

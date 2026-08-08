@@ -12,6 +12,11 @@ import { PluginKey } from "@tiptap/pm/state";
 import { ReactRenderer } from "@tiptap/react";
 import Suggestion, { type SuggestionOptions } from "@tiptap/suggestion";
 import {
+  toggleBulletListSmart,
+  toggleOrderedListSmart,
+  toggleTaskListSmart,
+} from "./list-helpers";
+import {
   AlignLeft,
   Bold,
   CheckSquare,
@@ -213,7 +218,8 @@ export function buildSlashSections(
           icon: CheckSquare,
           searchTerms: ["todo", "task", "checkbox", "checklist"],
           command: ({ editor, range }) => {
-            del(editor, range).toggleTaskList().run();
+            del(editor, range).run();
+            toggleTaskListSmart(editor);
           },
         },
         {
@@ -222,7 +228,8 @@ export function buildSlashSections(
           icon: List,
           searchTerms: ["ul", "bullet", "unordered", "list"],
           command: ({ editor, range }) => {
-            del(editor, range).toggleBulletList().run();
+            del(editor, range).run();
+            toggleBulletListSmart(editor);
           },
         },
         {
@@ -231,7 +238,8 @@ export function buildSlashSections(
           icon: ListOrdered,
           searchTerms: ["ol", "number", "ordered", "list"],
           command: ({ editor, range }) => {
-            del(editor, range).toggleOrderedList().run();
+            del(editor, range).run();
+            toggleOrderedListSmart(editor);
           },
         },
         {

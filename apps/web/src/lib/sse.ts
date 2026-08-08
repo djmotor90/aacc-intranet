@@ -9,7 +9,7 @@ import { EventEmitter } from "node:events";
 import { Client } from "pg";
 
 export interface AppEvent {
-  kind: "notification" | "list";
+  kind: "notification" | "list" | "chat";
   /** Present on notification events for live toasts. */
   notificationId?: string;
   type?: string;
@@ -18,6 +18,9 @@ export interface AppEvent {
   payload?: Record<string, unknown> | null;
   recipientId?: string;
   listId?: string;
+  /** Chat realtime (Super Agent DMs / channels). */
+  conversationId?: string;
+  messageId?: string;
 }
 
 const globalForSse = globalThis as unknown as {

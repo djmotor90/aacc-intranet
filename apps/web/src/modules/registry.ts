@@ -5,12 +5,13 @@
  * Fingerprint: GURVER-KG-AITIM-2026-7F3C9E2A
  * License: Proprietary. All rights reserved. See LICENSE / COPYRIGHT.
  */
+import { chatManifest } from "./chat/manifest";
 import { docsManifest } from "./docs/manifest";
 import { shellManifest } from "./shell/manifest";
 import type { ModuleManifest, NavIcon, NavItem, SessionUserLike } from "./types";
 
 /** Built-in shell modules only. Workspace apps (Tasks, Accounts, …) come from the DB. */
-export const moduleRegistry: ModuleManifest[] = [shellManifest, docsManifest];
+export const moduleRegistry: ModuleManifest[] = [shellManifest, docsManifest, chatManifest];
 
 export function navItemsFor(user: SessionUserLike) {
   return moduleRegistry.filter((m) => m.access(user)).flatMap((m) => m.navItems);
@@ -30,19 +31,28 @@ export function resolveNavIcon(icon: string | null | undefined): NavIcon {
     "tasks",
     "home",
     "docs",
+    "chat",
   ];
   if (icon && (allowed as string[]).includes(icon)) return icon as NavIcon;
   return "tasks";
 }
 
+/**
+ * Built-in product apps that must never appear as `/w/:slug` workspace nav.
+ * Real Docs/Chat come from module manifests (`/docs`, `/chat`).
+ */
+const BUILTIN_APP_SLUGS = new Set(["docs", "chat"]);
+
 export function workspaceModulesToNavItems(
   rows: { id: string; slug: string; name: string; icon: string }[],
 ): NavItem[] {
-  return rows.map((m) => ({
-    label: m.name,
-    href: m.slug === "tasks" ? "/tasks" : `/w/${m.slug}`,
-    icon: resolveNavIcon(m.icon),
-    moduleId: m.id,
-    moduleSlug: m.slug,
-  }));
+  return rows
+    .filter((m) => !BUILTIN_APP_SLUGS.has(m.slug))
+    .map((m) => ({
+      label: m.name,
+      href: m.slug === "tasks" ? "/tasks" : `/w/${m.slug}`,
+      icon: resolveNavIcon(m.icon),
+      moduleId: m.id,
+      moduleSlug: m.slug,
+    }));
 }

@@ -24,6 +24,8 @@ declare module "@tiptap/core" {
         src: string;
         alt?: string;
         title?: string;
+        /** Stable client-side id while a pasted image upload is pending. */
+        uploadId?: string | null;
         width?: number;
         height?: number;
       }) => ReturnType;
@@ -68,6 +70,12 @@ export const ResizableImage = Node.create<ResizableImageOptions>({
       src: { default: null },
       alt: { default: null },
       title: { default: null },
+      uploadId: {
+        default: null,
+        parseHTML: (el) => (el as HTMLElement).getAttribute("data-upload-id"),
+        renderHTML: (attrs) =>
+          attrs.uploadId ? { "data-upload-id": attrs.uploadId } : {},
+      },
       width: {
         default: null,
         parseHTML: (el) => {

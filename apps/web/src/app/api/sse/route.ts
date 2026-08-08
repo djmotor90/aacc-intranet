@@ -19,7 +19,9 @@ export async function GET(req: Request) {
   const session = await auth();
   if (!session?.user?.id) return new Response(null, { status: 401 });
   const userId = session.user.id;
-  const listId = new URL(req.url).searchParams.get("listId");
+  const url = new URL(req.url);
+  const listId = url.searchParams.get("listId");
+  const conversationId = url.searchParams.get("conversationId");
 
   const emitter = getSseEmitter();
   const encoder = new TextEncoder();
@@ -40,6 +42,15 @@ export async function GET(req: Request) {
           });
         } else if (e.kind === "list" && listId && e.listId === listId) {
           send("list", {});
+        } else if (e.kind === "chat") {
+          // Fan-out: recipient-scoped or conversation-scoped subscription
+          if (e.recipientId && e.recipientId !== userId) return;
+          if (conversationId && e.conversationId !== conversationId) return;
+          if (!conversationId && e.recipientId !== userId) return;
+          send("chat", {
+            conversationId: e.conversationId,
+            messageId: e.messageId,
+          });
         }
       };
       emitter.on("event", onEvent);

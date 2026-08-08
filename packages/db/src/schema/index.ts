@@ -10,3 +10,4 @@ export * from "./tasks";
 export * from "./forms";
 export * from "./secrets";
 export * from "./docs";
+export * from "./chat";

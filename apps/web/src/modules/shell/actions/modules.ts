@@ -8,7 +8,7 @@
  * License: Proprietary. All rights reserved. See LICENSE / COPYRIGHT.
  */
 import { db, modules, spaces } from "@aitim/db";
-import { and, asc, eq, isNull, ne, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull, ne, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireAdmin } from "@/lib/rbac";
@@ -25,8 +25,15 @@ function slugify(name: string): string {
   );
 }
 
+/**
+ * Slugs owned by first-class app routes / shell nav — never workspace modules.
+ * Only `tasks` is a real system workspace module (spaces/lists live under it).
+ * Docs and Chat are code modules (`/docs`, `/chat`), not rows in `modules`.
+ */
 const RESERVED_SLUGS = new Set([
   "tasks",
+  "docs",
+  "chat",
   "admin",
   "api",
   "login",
@@ -40,10 +47,13 @@ const RESERVED_SLUGS = new Set([
   "home",
 ]);
 
+/** Built-in product apps that must not appear as empty `/w/:slug` workspace modules. */
+const BUILTIN_APP_SLUGS = ["docs", "chat"] as const;
+
 async function uniqueSlug(base: string, excludeId?: string): Promise<string> {
   let candidate = base;
   let n = 2;
-   
+
   while (true) {
     if (RESERVED_SLUGS.has(candidate) && candidate !== base) {
       candidate = `${base}-${n++}`;
@@ -62,8 +72,37 @@ async function uniqueSlug(base: string, excludeId?: string): Promise<string> {
   }
 }
 
-/** Ensure the system Tasks module exists. */
+/**
+ * Remove legacy workspace rows that collide with first-class apps (e.g. seeded "docs").
+ * Empty modules are deleted; any that somehow have spaces are disabled so they stay out of nav.
+ */
+async function purgeBuiltinAppWorkspaceModules(): Promise<void> {
+  const rows = await db
+    .select({ id: modules.id, slug: modules.slug })
+    .from(modules)
+    .where(inArray(modules.slug, [...BUILTIN_APP_SLUGS]));
+
+  for (const row of rows) {
+    const [countRow] = await db
+      .select({ n: sql<number>`count(*)::int`.mapWith(Number) })
+      .from(spaces)
+      .where(and(eq(spaces.moduleId, row.id), isNull(spaces.deletedAt)));
+    const spaceCount = countRow?.n ?? 0;
+    if (spaceCount === 0) {
+      await db.delete(modules).where(eq(modules.id, row.id));
+    } else {
+      await db
+        .update(modules)
+        .set({ isEnabled: false, isSystem: false, updatedAt: new Date() })
+        .where(eq(modules.id, row.id));
+    }
+  }
+}
+
+/** Ensure the system Tasks module exists and strip colliding built-in app modules. */
 export async function ensureTasksModule(): Promise<void> {
+  await purgeBuiltinAppWorkspaceModules();
+
   const [existing] = await db.select({ id: modules.id }).from(modules).where(eq(modules.slug, "tasks"));
   if (existing) {
     await db
@@ -134,7 +173,7 @@ export async function listEnabledWorkspaceModules(): Promise<
   }[]
 > {
   await ensureTasksModule();
-  return db
+  const rows = await db
     .select({
       id: modules.id,
       slug: modules.slug,
@@ -146,6 +185,10 @@ export async function listEnabledWorkspaceModules(): Promise<
     .from(modules)
     .where(eq(modules.isEnabled, true))
     .orderBy(asc(modules.position), asc(modules.name));
+
+  // Never surface built-in product apps as workspace modules (Docs/Chat live in code).
+  // Only `tasks` may use a reserved slug; everything else reserved is blocked.
+  return rows.filter((m) => m.slug === "tasks" || !RESERVED_SLUGS.has(m.slug));
 }
 
 export async function createWorkspaceModule(params: {
@@ -165,8 +208,11 @@ export async function createWorkspaceModule(params: {
   const color = params.color?.trim() || null;
 
   const base = slugify(name);
+  // Do not mint docs-2 / chat-2 workspace apps that shadow first-class product routes.
   if (RESERVED_SLUGS.has(base) && base !== "tasks") {
-    // allow uniqueSlug to pick base-2 etc.
+    throw new Error(
+      `"${name}" conflicts with a built-in app (${base}). Choose a different name.`,
+    );
   }
   const slug = await uniqueSlug(base === "tasks" ? "app" : base);
 

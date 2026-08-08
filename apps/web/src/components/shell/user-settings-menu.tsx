@@ -8,6 +8,7 @@
  * License: Proprietary. All rights reserved. See LICENSE / COPYRIGHT.
  */
 import {
+  Bot,
   Building2,
   KeyRound,
   LogOut,
@@ -31,6 +32,7 @@ import {
 import { SettingsModulesPanel } from "@/components/shell/settings-modules-panel";
 import { SettingsAuditPanel } from "@/components/shell/settings-audit-panel";
 import { SettingsSecurityPanel } from "@/components/shell/settings-security-panel";
+import { SettingsSuperAgentsPanel } from "@/components/shell/settings-super-agents-panel";
 import { SettingsTrashPanel } from "@/components/shell/settings-trash-panel";
 import { AvatarUpload } from "@/components/shell/avatar-upload";
 import { UserAvatar } from "@/components/shell/user-avatar";
@@ -58,6 +60,7 @@ type SectionId =
   | "admin-groups"
   | "admin-security"
   | "admin-modules"
+  | "admin-super-agents"
   | "admin-trash"
   | "admin-audit";
 
@@ -234,6 +237,8 @@ export function UserSettingsMenu({
       groups: "admin-groups",
       security: "admin-security",
       modules: "admin-modules",
+      "super-agents": "admin-super-agents",
+      agents: "admin-super-agents",
     };
     const id = map[s];
     if (!id) return;
@@ -267,6 +272,12 @@ export function UserSettingsMenu({
           id: "admin-security",
           label: "Security & Permissions",
           icon: KeyRound,
+          group: "admin",
+        },
+        {
+          id: "admin-super-agents",
+          label: "Super Agents",
+          icon: Bot,
           group: "admin",
         },
         {
@@ -443,6 +454,7 @@ export function UserSettingsMenu({
                   <SettingsSecurityPanel />
                 </div>
               )}
+              {section === "admin-super-agents" && isAdmin && <SettingsSuperAgentsPanel />}
               {section === "admin-trash" && (isAdmin || canManageTrash) && (
                 <div className="mx-auto w-full max-w-3xl">
                   <SettingsTrashPanel />

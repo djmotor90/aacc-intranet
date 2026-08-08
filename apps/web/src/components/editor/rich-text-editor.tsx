@@ -103,6 +103,18 @@ import { RichDocView } from "./rich-doc-view";
 import { createSlashCommand } from "./slash-command";
 import { TaskEmbed } from "./task-embed-extension";
 import {
+  toggleBulletListSmart,
+  toggleOrderedListSmart,
+  toggleTaskListSmart,
+} from "./list-helpers";
+import {
+  classifyPasteWithFiles,
+  dataUrlToFile,
+  escapeRegExp,
+  sanitizePastedHtml,
+  uploadingPlaceholderDataUrl,
+} from "./paste-utils";
+import {
   collectFiles,
   isImageFile,
   uploadEditorFile,
@@ -111,7 +123,8 @@ import {
 
 const EditableImage = ResizableImage.configure({
   inline: false,
-  allowBase64: false,
+  // Allow data: SVG placeholders + brief previews while uploads finish
+  allowBase64: true,
   resizable: true,
   HTMLAttributes: {
     class: "aitim-editor-image",
@@ -492,21 +505,21 @@ function SelectionFormatToolbar({
         <ToolbarButton
           title="Bullet list"
           active={editor.isActive("bulletList")}
-          onClick={() => editor.chain().focus().toggleBulletList().run()}
+          onClick={() => toggleBulletListSmart(editor)}
         >
           <List className="size-3.5" />
         </ToolbarButton>
         <ToolbarButton
           title="Numbered list"
           active={editor.isActive("orderedList")}
-          onClick={() => editor.chain().focus().toggleOrderedList().run()}
+          onClick={() => toggleOrderedListSmart(editor)}
         >
           <ListOrdered className="size-3.5" />
         </ToolbarButton>
         <ToolbarButton
           title="Checklist"
           active={editor.isActive("taskList")}
-          onClick={() => editor.chain().focus().toggleTaskList().run()}
+          onClick={() => toggleTaskListSmart(editor)}
         >
           <CheckSquare className="size-3.5" />
         </ToolbarButton>
@@ -717,21 +730,21 @@ function FormatToolbar({
       <ToolbarButton
         title="Bullet list"
         active={editor.isActive("bulletList")}
-        onClick={() => editor.chain().focus().toggleBulletList().run()}
+        onClick={() => toggleBulletListSmart(editor)}
       >
         <List className="size-3.5" />
       </ToolbarButton>
       <ToolbarButton
         title="Numbered list"
         active={editor.isActive("orderedList")}
-        onClick={() => editor.chain().focus().toggleOrderedList().run()}
+        onClick={() => toggleOrderedListSmart(editor)}
       >
         <ListOrdered className="size-3.5" />
       </ToolbarButton>
       <ToolbarButton
         title="To-do list"
         active={editor.isActive("taskList")}
-        onClick={() => editor.chain().focus().toggleTaskList().run()}
+        onClick={() => toggleTaskListSmart(editor)}
       >
         <CheckSquare className="size-3.5" />
       </ToolbarButton>
@@ -839,6 +852,10 @@ export function RichTextEditor({
   const [focused, setFocused] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const [fileUploading, setFileUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<{
+    done: number;
+    total: number;
+  } | null>(null);
   const [fileError, setFileError] = useState<string | null>(null);
   const editorRef = useRef<Editor | null>(null);
   const uploadTargetRef = useRef(uploadTarget);
@@ -1048,32 +1065,257 @@ export function RichTextEditor({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hasMentions, placeholder, editable, canUploadImages, taskEmbedEnabled, isCollab]);
 
+  /** Swap a pending image by stable id (placeholder → permanent URL). */
+  const replacePendingImage = useCallback(
+    (
+      ed: Editor,
+      uploadId: string,
+      toSrc: string,
+      meta?: { alt?: string; title?: string },
+    ): boolean => {
+      if (!ed || ed.isDestroyed) return false;
+      const { tr } = ed.state;
+      let changed = false;
+      ed.state.doc.descendants((node, pos) => {
+        if (node.type.name !== "image") return;
+        if (node.attrs.uploadId !== uploadId) return;
+        tr.setNodeMarkup(pos, undefined, {
+          ...node.attrs,
+          src: toSrc,
+          alt: meta?.alt ?? node.attrs.alt,
+          title: meta?.title ?? node.attrs.title,
+          uploadId: null,
+        });
+        changed = true;
+      });
+      if (changed) ed.view.dispatch(tr);
+      return changed;
+    },
+    [],
+  );
+
   /**
-   * Images → real `image` nodes (same in comments + notification replies).
-   * Non-image files → paperclip chip only.
+   * Images → insert local preview immediately, upload in background, then swap src.
+   * Non-image files → paperclip chip after upload (no good preview).
    */
   const insertFiles = useCallback(
     async (files: File[], ed: Editor) => {
       if (!uploadTarget || files.length === 0) return;
       setFileError(null);
+
+      type Job =
+        | { kind: "image"; file: File; uploadId: string }
+        | { kind: "file"; file: File };
+
+      const jobs: Job[] = files.map((file) => {
+        const asImage = isImageFile(file);
+        if (asImage) {
+          return { kind: "image" as const, file, uploadId: crypto.randomUUID() };
+        }
+        return { kind: "file" as const, file };
+      });
+
+      // 1) Place images immediately so the user isn’t waiting on the network
+      for (const job of jobs) {
+        if (job.kind !== "image") continue;
+        ed.chain()
+          .focus()
+          .setImage({
+            src: uploadingPlaceholderDataUrl("Uploading image…"),
+            alt: job.file.name,
+            title: "Uploading…",
+            uploadId: job.uploadId,
+          })
+          .run();
+      }
+
+      const uploadJobs = jobs;
+      if (uploadJobs.length === 0) return;
+
       setFileUploading(true);
+      setUploadProgress({ done: 0, total: uploadJobs.length });
+      let done = 0;
+      const errors: string[] = [];
+
       try {
-        for (const file of files) {
-          const uploaded = await uploadEditorFile(uploadTarget, file);
-          const asImage =
-            isImageFile(file) ||
-            String(uploaded.mimeType ?? "").startsWith("image/") ||
-            /\.(png|jpe?g|gif|webp|heic|bmp|svg)$/i.test(uploaded.fileName ?? "");
-          if (asImage) {
-            ed.chain()
-              .focus()
-              .setImage({
-                src: uploaded.url,
+        for (const job of uploadJobs) {
+          try {
+            const uploaded = await uploadEditorFile(uploadTarget, job.file);
+            if (job.kind === "image") {
+              const replaced = replacePendingImage(ed, job.uploadId, uploaded.url, {
                 alt: uploaded.fileName,
                 title: uploaded.fileName,
-              })
-              .run();
-          } else {
+              });
+              if (!replaced) {
+                throw new Error("The image placeholder was removed before upload completed");
+              }
+            } else {
+              ed.chain()
+                .focus()
+                .setFileAttachment({
+                  id: uploaded.id,
+                  href: uploaded.url,
+                  fileName: uploaded.fileName,
+                  mimeType: uploaded.mimeType,
+                  sizeBytes: uploaded.sizeBytes,
+                })
+                .run();
+            }
+          } catch (err) {
+            const msg = err instanceof Error ? err.message : "Upload failed";
+            errors.push(msg);
+            if (job.kind === "image") {
+              replacePendingImage(ed, job.uploadId, uploadingPlaceholderDataUrl("Upload failed"), {
+                alt: job.file.name,
+                title: msg,
+              });
+            }
+          }
+          done += 1;
+          setUploadProgress({ done, total: uploadJobs.length });
+        }
+        onFilesUploadedRef.current?.();
+        if (errors.length) {
+          setFileError(
+            errors.length === 1
+              ? errors[0]!
+              : `${errors.length} files failed to upload`,
+          );
+        }
+      } finally {
+        setFileUploading(false);
+        setUploadProgress(null);
+      }
+    },
+    [uploadTarget, replacePendingImage],
+  );
+  // Sync the latest insertFiles into the ref from an effect (not render).
+  useEffect(() => {
+    insertFilesRef.current = insertFiles;
+  }, [insertFiles]);
+
+  /**
+   * Paste HTML immediately (text + image placeholders), then upload assets in background.
+   */
+  const pasteHtmlWithAssets = useCallback(
+    async (
+      ed: Editor,
+      sanitizedHtml: string,
+      dataImages: { marker: string; dataUrl: string; mime: string }[],
+      extraFiles: File[],
+    ) => {
+      if (!uploadTarget) return;
+      setFileError(null);
+
+      type Pending = {
+        uploadId: string;
+        file: File;
+      };
+      const pending: Pending[] = [];
+      let html = sanitizedHtml;
+
+      // Resolve markers → lightweight placeholders so the saved draft never contains blob URLs.
+      for (let i = 0; i < dataImages.length; i++) {
+        const img = dataImages[i]!;
+        const file = dataUrlToFile(img.dataUrl, img.mime, i);
+        const esc = escapeRegExp(img.marker);
+        if (!file) {
+          const ph = uploadingPlaceholderDataUrl("Image unavailable");
+          html = html.replace(
+            new RegExp(`(src=["'])${esc}(["'])`, "gi"),
+            `$1${ph}$2`,
+          );
+          continue;
+        }
+        const uploadId = crypto.randomUUID();
+        pending.push({ uploadId, file });
+        const placeholderSrc = uploadingPlaceholderDataUrl(`Uploading image ${i + 1}…`);
+        html = html.replace(
+          new RegExp(`(src=["'])${esc}(["'])`, "gi"),
+          `$1${placeholderSrc}$2`,
+        );
+        // Stable id survives editor normalization and collaborative transactions.
+        html = html.replace(
+          new RegExp(
+            `(<img\\b[^>]*\\bsrc=["']${escapeRegExp(placeholderSrc)}["'][^>]*)(>)`,
+            "gi",
+          ),
+          `$1 data-upload-id="${uploadId}" title="Uploading…" alt="${file.name.replace(/"/g, "")}"$2`,
+        );
+      }
+
+      // 1) Insert text + preview images immediately
+      if (html.trim()) {
+        ed.chain().focus().insertContent(html).run();
+      }
+
+      // Extra clipboard files: images as previews now; non-images after upload
+      const extraImageJobs: Pending[] = [];
+      const extraNonImages: File[] = [];
+      for (const file of extraFiles) {
+        // Word can expose the same image as both an HTML data URL and a
+        // clipboard File. Upload and insert that asset only once.
+        const alreadyQueued = pending.some(
+          (job) => job.file.size === file.size && job.file.type === file.type,
+        );
+        if (alreadyQueued) continue;
+        if (isImageFile(file)) {
+          const uploadId = crypto.randomUUID();
+          extraImageJobs.push({ uploadId, file });
+          ed.chain()
+            .focus()
+            .setImage({
+              src: uploadingPlaceholderDataUrl("Uploading image…"),
+              alt: file.name,
+              title: "Uploading…",
+              uploadId,
+            })
+            .run();
+        } else {
+          extraNonImages.push(file);
+        }
+      }
+
+      const allPending = [...pending, ...extraImageJobs];
+      const total = allPending.length + extraNonImages.length;
+      if (total === 0) {
+        onFilesUploadedRef.current?.();
+        return;
+      }
+
+      setFileUploading(true);
+      setUploadProgress({ done: 0, total });
+      let done = 0;
+      const errors: string[] = [];
+
+      try {
+        for (const job of allPending) {
+          try {
+            const uploaded = await uploadEditorFile(uploadTarget, job.file);
+            const replaced = replacePendingImage(ed, job.uploadId, uploaded.url, {
+              alt: uploaded.fileName,
+              title: uploaded.fileName,
+            });
+            if (!replaced) {
+              throw new Error("The image placeholder was removed before upload completed");
+            }
+          } catch (err) {
+            errors.push(err instanceof Error ? err.message : "Upload failed");
+            replacePendingImage(
+              ed,
+              job.uploadId,
+              uploadingPlaceholderDataUrl("Upload failed"),
+              { alt: job.file.name, title: "Upload failed" },
+            );
+          } finally {
+            done += 1;
+            setUploadProgress({ done, total });
+          }
+        }
+
+        for (const file of extraNonImages) {
+          try {
+            const uploaded = await uploadEditorFile(uploadTarget, file);
             ed.chain()
               .focus()
               .setFileAttachment({
@@ -1084,21 +1326,35 @@ export function RichTextEditor({
                 sizeBytes: uploaded.sizeBytes,
               })
               .run();
+          } catch (err) {
+            errors.push(err instanceof Error ? err.message : "Upload failed");
           }
+          done += 1;
+          setUploadProgress({ done, total });
         }
+
         onFilesUploadedRef.current?.();
+        if (errors.length) {
+          setFileError(
+            errors.length === 1
+              ? errors[0]!
+              : `${errors.length} images failed to upload`,
+          );
+        }
       } catch (err) {
-        setFileError(err instanceof Error ? err.message : "Upload failed");
+        setFileError(err instanceof Error ? err.message : "Paste failed");
       } finally {
         setFileUploading(false);
+        setUploadProgress(null);
       }
     },
-    [uploadTarget],
+    [uploadTarget, replacePendingImage],
   );
-  // Sync the latest insertFiles into the ref from an effect (not render).
+
+  const pasteHtmlWithAssetsRef = useRef(pasteHtmlWithAssets);
   useEffect(() => {
-    insertFilesRef.current = insertFiles;
-  }, [insertFiles]);
+    pasteHtmlWithAssetsRef.current = pasteHtmlWithAssets;
+  }, [pasteHtmlWithAssets]);
 
   const editor = useEditor(
     {
@@ -1139,15 +1395,38 @@ export function RichTextEditor({
           },
         },
         handlePaste: (_view, event) => {
-          if (!uploadTargetRef.current) return false;
-          const files = collectFiles(event.clipboardData);
-          if (files.length === 0) return false;
-          event.preventDefault();
           const ed = editorRef.current;
-          if (ed && insertFilesRef.current) {
-            void insertFilesRef.current(files, ed);
+          if (!ed || !uploadTargetRef.current) {
+            // No upload target — still sanitize via transformPastedHTML
+            return false;
           }
-          return true;
+
+          const files = collectFiles(event.clipboardData);
+          const classified = classifyPasteWithFiles(event.clipboardData, files);
+
+          // Screenshot / file-only paste (no real HTML body)
+          if (classified.mode === "files-only") {
+            event.preventDefault();
+            if (insertFilesRef.current) {
+              void insertFilesRef.current(classified.files, ed);
+            }
+            return true;
+          }
+
+          // Word / browser HTML that may include data-URL images and/or files
+          if (classified.mode === "html-with-assets") {
+            event.preventDefault();
+            void pasteHtmlWithAssetsRef.current?.(
+              ed,
+              classified.sanitizedHtml,
+              classified.dataImages,
+              classified.files,
+            );
+            return true;
+          }
+
+          // Plain text or trivial HTML — TipTap default + transformPastedHTML
+          return false;
         },
         handleDrop: (view, event, _slice, moved) => {
           // Internal block drag (from the 6-dot handle) — let ProseMirror move it
@@ -1164,13 +1443,9 @@ export function RichTextEditor({
           }
           return true;
         },
-        // Prefer plain text over messy Word/HTML paste; keep basic structure via TipTap defaults.
+        // Fallback path when we don't take over paste (simple browser HTML).
         transformPastedHTML(html) {
-          return html
-            .replace(/<!--[\s\S]*?-->/g, "")
-            .replace(/<\/?o:p[^>]*>/gi, "")
-            .replace(/\sstyle="[^"]*"/gi, "")
-            .replace(/\sclass="[^"]*"/gi, "");
+          return sanitizePastedHtml(html);
         },
       },
       onUpdate: ({ editor: ed }) => {
@@ -1494,11 +1769,23 @@ export function RichTextEditor({
       {(fileUploading || fileError) && (
         <div
           className={cn(
-            "border-t border-border/60 px-3 py-1.5 text-xs",
+            "flex items-center gap-2 border-t border-border/60 px-3 py-1.5 text-xs",
             fileError ? "text-destructive" : "text-muted-foreground",
           )}
         >
-          {fileUploading ? "Uploading…" : fileError}
+          {fileUploading && (
+            <span
+              className="size-3.5 shrink-0 animate-spin rounded-full border-2 border-muted-foreground/30 border-t-primary"
+              aria-hidden
+            />
+          )}
+          <span>
+            {fileUploading
+              ? uploadProgress
+                ? `Uploading images ${uploadProgress.done}/${uploadProgress.total}… you can keep editing`
+                : "Uploading images… you can keep editing"
+              : fileError}
+          </span>
         </div>
       )}
     </div>

@@ -158,7 +158,6 @@ export function PageEditorClient({
     "idle",
   );
   const [updatedAt, setUpdatedAt] = useState(page.updatedAt);
-  const [bodyVersion, setBodyVersion] = useState(page.bodyVersion);
   const [isProtected, setIsProtected] = useState(page.isProtected);
   const [isStale, setIsStale] = useState(page.isStale);
   const [kind, setKind] = useState(page.kind);
@@ -179,6 +178,14 @@ export function PageEditorClient({
   const latestBody = useRef<StoredRichDoc>(
     docToStored(storedToDoc(page.body as StoredRichDoc)),
   );
+  /** Always-current revision for CAS saves (avoids stale React state during paste/upload). */
+  const bodyVersionRef = useRef(page.bodyVersion);
+  /** Serialize autosaves so image-upload flushes don't race each other. */
+  const saveQueueRef = useRef(Promise.resolve());
+  /** Detect own rapid saves vs real multi-user conflicts. */
+  const lastLocalSaveAtRef = useRef(0);
+  /** Never remount a local editor into collab mode after the user has changed it. */
+  const localEditorChangedRef = useRef(false);
 
   const canEdit = page.canEdit && !(isProtected && !page.canManage);
   const { words: wordCount, chars: charCount } = countWordsAndChars(bodyText);
@@ -198,12 +205,17 @@ export function PageEditorClient({
   const collabWindowOpen = useRef(true);
   useEffect(() => {
     collabWindowOpen.current = true;
+    localEditorChangedRef.current = false;
     const t = window.setTimeout(() => {
       collabWindowOpen.current = false;
     }, COLLAB_CONNECT_WINDOW_MS);
     return () => window.clearTimeout(t);
   }, [page.id]);
   useEffect(() => {
+    if (localEditorChangedRef.current) {
+      collabWindowOpen.current = false;
+      return;
+    }
     if (collabReady && collabWindowOpen.current) {
       setCollabEditorPageId(page.id);
       collabWindowOpen.current = false;
@@ -260,38 +272,83 @@ export function PageEditorClient({
   }
 
   const persistBody = useCallback(
-    async (body: StoredRichDoc) => {
+    async () => {
       // When live collab is active, the collab server persists Yjs → body.
       if (useCollabEditor) {
         setSaveState("saved");
         return;
       }
-      setSaveState("saving");
-      try {
-        const res = await updatePageBody({
-          pageId: page.id,
-          body: {
-            text: body?.text ?? "",
-            doc: body?.doc ?? null,
-          },
-          expectedBodyVersion: bodyVersion,
-        });
-        if (!res.ok && res.conflict) {
+
+      // Queue: each job always saves latestBody with latest known version.
+      const job = async () => {
+        setSaveState("saving");
+        const payload = {
+          text: latestBody.current?.text ?? "",
+          doc: latestBody.current?.doc ?? null,
+        };
+        try {
+          const expected = bodyVersionRef.current;
+          let res = await updatePageBody({
+            pageId: page.id,
+            body: payload,
+            expectedBodyVersion: expected,
+          });
+
+          // Own race: a previous save (or image-upload flush) already advanced the
+          // version. Retry once with the server's version + our newest draft.
+          if (!res.ok && res.conflict) {
+            const likelyOwnRace =
+              Date.now() - lastLocalSaveAtRef.current < 8_000 ||
+              res.bodyVersion === bodyVersionRef.current + 1 ||
+              res.bodyVersion === expected + 1;
+            if (likelyOwnRace) {
+              bodyVersionRef.current = res.bodyVersion;
+              res = await updatePageBody({
+                pageId: page.id,
+                body: {
+                  text: latestBody.current?.text ?? "",
+                  doc: latestBody.current?.doc ?? null,
+                },
+                expectedBodyVersion: res.bodyVersion,
+              });
+            }
+          }
+
+          if (!res.ok && res.conflict) {
+            bodyVersionRef.current = res.bodyVersion;
+            setUpdatedAt(res.updatedAt);
+            setSaveState("error");
+            toast.error("This page was updated elsewhere. Reload to merge, or keep typing and save again.", {
+              action: {
+                label: "Reload",
+                onClick: () => window.location.reload(),
+              },
+              duration: 10_000,
+            });
+            return;
+          }
+
+          if (res.ok) {
+            bodyVersionRef.current = res.bodyVersion;
+            lastLocalSaveAtRef.current = Date.now();
+            setUpdatedAt(res.updatedAt);
+            setSaveState("saved");
+          }
+        } catch (e) {
           setSaveState("error");
-          toast.error("Someone else saved this page. Reload to see their changes.");
-          return;
+          toast.error(e instanceof Error ? e.message : "Save failed");
         }
-        if (res.ok) {
-          setUpdatedAt(res.updatedAt);
-          setBodyVersion(res.bodyVersion);
-          setSaveState("saved");
-        }
-      } catch (e) {
-        setSaveState("error");
-        toast.error(e instanceof Error ? e.message : "Save failed");
-      }
+      };
+
+      // Chain jobs so overlapping pastes/uploads never send the same version twice
+      const run = saveQueueRef.current.then(job, job);
+      saveQueueRef.current = run.then(
+        () => undefined,
+        () => undefined,
+      );
+      await run;
     },
-    [bodyVersion, page.id, useCollabEditor],
+    [page.id, useCollabEditor],
   );
 
   function onEditorChange(payload: { text: string; doc: unknown; empty: boolean }) {
@@ -299,6 +356,8 @@ export function PageEditorClient({
       storedToDoc({ text: payload.text, doc: payload.doc } as StoredRichDoc),
     );
     latestBody.current = stored;
+    localEditorChangedRef.current = true;
+    collabWindowOpen.current = false;
     setBodyText(stored?.text ?? payload.text ?? "");
     if (!canEdit) return;
     if (useCollabEditor) {
@@ -307,10 +366,22 @@ export function PageEditorClient({
     }
     if (saveTimer.current) clearTimeout(saveTimer.current);
     setSaveState("saving");
+    // Slightly longer debounce while many image uploads fire onChange
     saveTimer.current = setTimeout(() => {
-      void persistBody(stored);
-    }, 700);
+      void persistBody();
+    }, 900);
   }
+
+  const flushUploadedBody = useCallback(() => {
+    if (!canEdit || useCollabEditor) return;
+    if (saveTimer.current) clearTimeout(saveTimer.current);
+    void persistBody();
+  }, [canEdit, persistBody, useCollabEditor]);
+
+  // Keep ref aligned if server props change (navigation / refresh)
+  useEffect(() => {
+    bodyVersionRef.current = page.bodyVersion;
+  }, [page.id, page.bodyVersion]);
 
   useEffect(() => {
     return () => {
@@ -783,6 +854,7 @@ export function PageEditorClient({
                 },
               }}
               onChange={onEditorChange}
+              onFilesUploaded={flushUploadedBody}
               placeholder="Type / for commands, or start writing…"
               className="border-0 bg-transparent shadow-none"
               editorClassName="min-h-[50vh] pl-0! pr-0! py-0!"
@@ -797,6 +869,7 @@ export function PageEditorClient({
               pageId={page.id}
               initialContent={page.body as StoredRichDoc}
               onChange={onEditorChange}
+              onFilesUploaded={flushUploadedBody}
               placeholder="Type / for commands, or start writing…"
               className="border-0 bg-transparent shadow-none"
               editorClassName="min-h-[50vh] pl-0! pr-0! py-0!"

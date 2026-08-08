@@ -25,6 +25,7 @@ import {
   FileText,
   Home,
   type LucideIcon,
+  MessageCircle,
   Shield,
   SquareCheckBig,
   Users,
@@ -90,6 +91,7 @@ const ICONS: Record<NavIcon, LucideIcon> = {
   tasks: SquareCheckBig,
   home: Home,
   docs: FileText,
+  chat: MessageCircle,
 };
 
 export interface TaskNavTreeItem {

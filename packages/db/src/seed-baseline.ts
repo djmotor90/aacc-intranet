@@ -16,7 +16,7 @@
  */
 import { eq } from "drizzle-orm";
 import { db, getPool } from "./index";
-import { modules, permissionRoles, users } from "./schema/index";
+import { agents, modules, permissionRoles, users } from "./schema/index";
 
 /** Sensible defaults for system roles (matches app permission catalog keys). */
 const ROLE_PRESETS: {
@@ -154,9 +154,14 @@ async function main() {
   const clientName = process.env.CLIENT_DISPLAY_NAME?.trim() || "client";
   console.log(`[seed-baseline] Starting baseline for: ${clientName}`);
 
+  // Only Tasks is a workspace module (spaces/lists). Docs and Chat are first-class
+  // code modules (`/docs`, `/chat`) — never seed them into `modules` or the sidebar
+  // will show a second empty "Docs" entry linking to `/w/docs`.
   await upsertModule("tasks", "Tasks", "tasks", "a0");
-  await upsertModule("docs", "Docs", "docs", "a1");
-  console.log("[seed-baseline] Modules: tasks, docs");
+  // Drop legacy empty workspace rows that collide with built-in apps.
+  await db.delete(modules).where(eq(modules.slug, "docs"));
+  await db.delete(modules).where(eq(modules.slug, "chat"));
+  console.log("[seed-baseline] Modules: tasks (docs/chat are code modules, not workspace apps)");
 
   for (const preset of ROLE_PRESETS) {
     await upsertRole(preset);
@@ -199,6 +204,72 @@ async function main() {
       "[seed-baseline] No CLIENT_ADMIN_EMAIL — skipped admin user (set env to create break-glass admin).",
     );
   }
+
+  // Super Agents (ClickUp-style AI teammates for Chat)
+  const seedAgents: {
+    slug: string;
+    displayName: string;
+    title: string;
+    description: string;
+    avatarEmoji: string;
+    systemPrompt: string;
+    tools: string[];
+  }[] = [
+    {
+      slug: "deadline-dale",
+      displayName: "Deadline Dale",
+      title: "Deadline enforcer",
+      description: "Nags you about overdue work with a dry sense of humor.",
+      avatarEmoji: "⏰",
+      systemPrompt:
+        "You are Deadline Dale, a Super Agent who tracks overdue and due-soon tasks. Be direct, a little dry, and helpful. List concrete tasks with due dates when relevant.",
+      tools: ["tasks.list_overdue", "tasks.search"],
+    },
+    {
+      slug: "ops-brief",
+      displayName: "Ops Brief",
+      title: "Daily operations summary",
+      description: "Quick operational briefings for open work.",
+      avatarEmoji: "📋",
+      systemPrompt:
+        "You are Ops Brief, a Super Agent that summarizes open operational work. Be concise and structured.",
+      tools: ["tasks.list_overdue", "tasks.search"],
+    },
+  ];
+
+  for (const a of seedAgents) {
+    const existing = await db.select().from(agents).where(eq(agents.slug, a.slug)).limit(1);
+    if (existing[0]) {
+      await db
+        .update(agents)
+        .set({
+          displayName: a.displayName,
+          title: a.title,
+          description: a.description,
+          avatarEmoji: a.avatarEmoji,
+          systemPrompt: a.systemPrompt,
+          tools: a.tools,
+          isEnabled: true,
+          isSystem: true,
+          updatedAt: new Date(),
+        })
+        .where(eq(agents.id, existing[0].id));
+    } else {
+      await db.insert(agents).values({
+        slug: a.slug,
+        displayName: a.displayName,
+        title: a.title,
+        description: a.description,
+        avatarEmoji: a.avatarEmoji,
+        systemPrompt: a.systemPrompt,
+        tools: a.tools,
+        runtime: "stub",
+        isEnabled: true,
+        isSystem: true,
+      });
+    }
+  }
+  console.log("[seed-baseline] Super Agents: deadline-dale, ops-brief");
 
   console.log("[seed-baseline] Complete.");
   await getPool().end();

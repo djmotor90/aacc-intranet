@@ -9,6 +9,7 @@
  * Dev: pnpm worker:dev · Prod: node dist/worker.js (same image as web)
  */
 import { PgBoss, type ConstructorOptions } from "pg-boss";
+import { runAgentJob, type AgentRunPayload } from "./jobs/agent-run";
 import {
   runDueSoonScanner,
   runHourlyEmailDigest,
@@ -24,6 +25,7 @@ const QUEUES = {
   notificationEmail: "send-notification-email",
   notificationDigest: "notification-email-digest",
   dueSoon: "due-soon-scanner",
+  agentRun: "agent-run",
 } as const;
 
 /** node-pg Pool options pg-boss forwards but does not list on ConstructorOptions. */
@@ -80,6 +82,10 @@ async function main() {
 
   await boss.work(QUEUES.dueSoon, async () => {
     console.log("[due-soon]", await runDueSoonScanner());
+  });
+
+  await boss.work<AgentRunPayload>(QUEUES.agentRun, async ([job]) => {
+    console.log("[agent-run]", await runAgentJob(job.data));
   });
 
   await boss.schedule(QUEUES.dueSoon, "0 7 * * *"); // daily 07:00
