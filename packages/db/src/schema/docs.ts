@@ -154,6 +154,29 @@ export const docPages = pgTable(
   ],
 );
 
+/** Immutable content snapshots used by Docs history, compare, and restore. */
+export const docPageRevisions = pgTable(
+  "doc_page_revisions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    pageId: uuid("page_id")
+      .notNull()
+      .references(() => docPages.id, { onDelete: "cascade" }),
+    /** The page body revision this snapshot represents. */
+    bodyVersion: integer("body_version").notNull(),
+    body: jsonb("body").notNull(),
+    /** saved | restored — restores themselves remain part of the timeline. */
+    changeType: text("change_type").notNull().default("saved"),
+    restoredFromRevisionId: uuid("restored_from_revision_id"),
+    createdById: uuid("created_by_id").references(() => users.id, { onDelete: "set null" }),
+    ...timestamps,
+  },
+  (t) => [
+    index("doc_page_revisions_page_created_idx").on(t.pageId, t.createdAt),
+    uniqueIndex("doc_page_revisions_page_version_idx").on(t.pageId, t.bodyVersion),
+  ],
+);
+
 export const docLinks = pgTable(
   "doc_links",
   {

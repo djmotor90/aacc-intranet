@@ -5,6 +5,7 @@
  * Fingerprint: GURVER-KG-AITIM-2026-7F3C9E2A
  * License: Proprietary. All rights reserved. See LICENSE / COPYRIGHT.
  */
+import type { JSONContent } from "@tiptap/react";
 import {
   agents,
   chatConversationMembers,
@@ -32,6 +33,7 @@ import {
   loadAgentKnowledgeImages,
   type KnowledgeImage,
 } from "@/modules/chat/lib/knowledge";
+import { loadChatMessageImages, type ChatMessageImage } from "@/modules/chat/lib/chat-images";
 import {
   formatConversationSearchHits,
   looksLikeRecallIntent,
@@ -153,6 +155,7 @@ async function buildXaiReply(
   conversationId: string,
   triggerText: string,
   isOwner: boolean,
+  triggerDoc?: JSONContent | null,
 ): Promise<ChatMessageBody> {
   const chatModel =
     agent.chatModel?.trim() ||
@@ -177,6 +180,11 @@ async function buildXaiReply(
       contextBlocks.push("Overdue tasks for this user: none.");
     }
   }
+
+  // Images the user pasted/dropped directly into the triggering message —
+  // shown to the model regardless of tool config, since the user handed
+  // them over explicitly this turn (unlike linked-knowledge screenshots).
+  const messageImages: ChatMessageImage[] = await loadChatMessageImages(triggerDoc);
 
   let knowledgeImages: KnowledgeImage[] = [];
   if (toolsInclude(agent.tools, "docs.search") || toolsInclude(agent.tools, "docs.update")) {
@@ -266,14 +274,16 @@ async function buildXaiReply(
 
   const ownerTools = isOwner ? buildOwnerToolDefs(toolList) : [];
 
-  // Attach linked-doc images as vision input on the current turn — the
-  // knowledge text block above only ever described that an image exists.
-  const userTurn: XaiChatMessage = knowledgeImages.length
+  // Attach the message's own images plus linked-doc images as vision input
+  // on the current turn — the knowledge text block above only ever
+  // described that an image exists, never showed it.
+  const turnImages = [...messageImages, ...knowledgeImages];
+  const userTurn: XaiChatMessage = turnImages.length
     ? {
         role: "user",
         content: [
           { type: "text", text: triggerText || "Hello" },
-          ...knowledgeImages.map(
+          ...turnImages.map(
             (img): { type: "image_url"; image_url: { url: string } } => ({
               type: "image_url",
               image_url: { url: img.dataUri },
@@ -415,6 +425,10 @@ export async function runAgentJob(payload: AgentRunPayload): Promise<string> {
     trigger && typeof trigger.body === "object" && trigger.body && "text" in trigger.body
       ? String((trigger.body as { text?: string }).text ?? "")
       : "";
+  const triggerDoc =
+    trigger && typeof trigger.body === "object" && trigger.body && "doc" in trigger.body
+      ? ((trigger.body as { doc?: JSONContent }).doc ?? null)
+      : null;
 
   const access = await getAgentAccess(agent, userId);
   const canWrite = access.canEdit; // owner + agent admin + platform super admin
@@ -436,7 +450,14 @@ export async function runAgentJob(payload: AgentRunPayload): Promise<string> {
   let body: ChatMessageBody;
   try {
     if (canXai) {
-      body = await buildXaiReply(agentWithTools, userId, conversationId, triggerText, canWrite);
+      body = await buildXaiReply(
+        agentWithTools,
+        userId,
+        conversationId,
+        triggerText,
+        canWrite,
+        triggerDoc,
+      );
     } else {
       body = await buildStubReply(agentWithTools, userId, triggerText, canWrite);
     }

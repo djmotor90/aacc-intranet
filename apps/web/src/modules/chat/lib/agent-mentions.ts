@@ -85,7 +85,6 @@ export function detectMentionQuery(
   // Examples: "@ki", "@@saf", "@@@ ", "@user kim", "@@@@pol"
   const m = before.match(/(^|[\s(\[{])(@{1,5})(?:(user|task|space|doc|folder)[\s:]*)?([^\s@{}]*)$/i);
   if (!m || m.index === undefined) return null;
-  const full = m[0];
   const lead = m[1] ?? "";
   const ats = m[2] ?? "@";
   const typeWord = (m[3] ?? "").toLowerCase() as AgentMentionType | "";
@@ -265,6 +264,16 @@ export function injectDocMentionTokens(
       });
     }
   }
+
+  // A model will occasionally introduce a source as `(per DOC Title):`.
+  // Once the title becomes a DOC chip, the leftover `):` looks like a sad
+  // emoticon instead of a citation. Normalize that specific construction
+  // after token insertion so the citation remains readable in chat.
+  out = out.replace(
+    /\(\s*per\s+(@\{doc:[0-9a-f-]{36}\|[^}]+\})\s*\)\s*:/gi,
+    "See $1:",
+  );
+
   return out;
 }
 

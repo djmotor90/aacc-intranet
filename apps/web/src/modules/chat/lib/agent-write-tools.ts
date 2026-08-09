@@ -8,7 +8,7 @@
  * Privileged Super Agent write tools (owner / Super Admin only).
  * Used when the human chat partner is the agent creator or a platform admin.
  */
-import { agentKnowledge, agents, db, docPages } from "@aitim/db";
+import { agentKnowledge, agents, db, docPageRevisions, docPages } from "@aitim/db";
 import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import { encodeDocAsYjsState } from "@/lib/collab-schema";
 import { getAgentAccess, userIsAgentOwnerOrAdmin } from "./agent-access";
@@ -181,7 +181,7 @@ export async function updateLinkedDocContent(input: {
     ydocState = null;
   }
 
-  await db
+  const [updated] = await db
     .update(docPages)
     .set({
       body,
@@ -190,7 +190,20 @@ export async function updateLinkedDocContent(input: {
       updatedAt: new Date(),
       ydocState,
     })
-    .where(eq(docPages.id, page.id));
+    .where(eq(docPages.id, page.id))
+    .returning({ bodyVersion: docPages.bodyVersion });
+  if (updated) {
+    try {
+      await db.insert(docPageRevisions).values({
+        pageId: page.id,
+        bodyVersion: updated.bodyVersion,
+        body,
+        createdById: input.userId,
+      });
+    } catch (error) {
+      console.error("[agent-write-tools] revision snapshot failed after page save", page.id, error);
+    }
+  }
 
   return { ok: true, pageId: page.id, title: page.title || target.title, mode };
 }

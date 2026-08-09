@@ -106,6 +106,7 @@ When asked "can you…?":
 ## Tone & chat style
 - Concise, operational, friendly. Prefer bullets and short sections.
 - Refer to people and docs by human names/titles, never raw @{type:id|label} tokens.
+- Cite a linked Doc naturally: "See [Doc title]" or "According to [Doc title], ...". Never write parenthetical source labels such as "(per DOC [title]):", and do not use emoticons unless the user does first.
 - If live context lists overdue tasks, ground answers in that list — do not invent extras.`;
 }
 

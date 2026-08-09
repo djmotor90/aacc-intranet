@@ -7,12 +7,14 @@
  */
 "use server";
 
-import { db, docFolders, docLinks, docPages, spaces } from "@aitim/db";
+import { db, docFolders, docLinks, docPageRevisions, docPages, spaces, users } from "@aitim/db";
 import { and, asc, desc, eq, inArray, isNull, ne, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { enqueue } from "@/lib/queue";
 import { requireUser } from "@/lib/rbac";
+import { writeAuditLog } from "@/lib/audit";
+import { encodeDocAsYjsState } from "@/lib/collab-schema";
 import {
   assertSpaceAccess,
   assertTargetAccessible,
@@ -800,6 +802,30 @@ export async function updatePageBody(input: z.infer<typeof updateBodySchema>) {
     };
   }
 
+  // History must never turn a successful page save into a visible save
+  // failure (for example, during a rolling deploy before its migration runs).
+  try {
+    await db.insert(docPageRevisions).values({
+      pageId: page.id,
+      bodyVersion: updated.bodyVersion,
+      body: data.body,
+      createdById: user.id,
+    });
+  } catch (error) {
+    console.error("[docs] revision snapshot failed after page save", page.id, error);
+  }
+  void writeAuditLog({
+    category: "other",
+    eventType: "DOC_PAGE_SAVED",
+    title: "Document content updated",
+    actorId: user.id,
+    targetType: "doc_page",
+    targetId: page.id,
+    targetLabel: page.title,
+    spaceId: page.homeSpaceId,
+    payload: { bodyVersion: updated.bodyVersion },
+  });
+
   revalidatePath(pagePath(page.id, page.slug));
   void enqueue("embed-doc", { pageId: page.id }).catch((err) =>
     console.error("[docs] enqueue embed-doc failed", page.id, err),
@@ -810,6 +836,85 @@ export async function updatePageBody(input: z.infer<typeof updateBodySchema>) {
     bodyVersion: updated.bodyVersion,
     updatedAt: updated.updatedAt.toISOString(),
   };
+}
+
+export async function listPageRevisions(pageId: string) {
+  const user = await requireUser();
+  const [page] = await db.select().from(docPages).where(eq(docPages.id, pageId)).limit(1);
+  if (!page || page.deletedAt) throw new Error("Page not found");
+  // History is readable by anyone who can read the page; restoring remains
+  // protected by requireEditDocs below.
+  await assertSpaceAccess(user, page.homeSpaceId);
+  return db
+    .select({
+      id: docPageRevisions.id,
+      bodyVersion: docPageRevisions.bodyVersion,
+      body: docPageRevisions.body,
+      changeType: docPageRevisions.changeType,
+      restoredFromRevisionId: docPageRevisions.restoredFromRevisionId,
+      createdAt: docPageRevisions.createdAt,
+      actorName: users.displayName,
+    })
+    .from(docPageRevisions)
+    .leftJoin(users, eq(docPageRevisions.createdById, users.id))
+    .where(eq(docPageRevisions.pageId, pageId))
+    .orderBy(desc(docPageRevisions.createdAt))
+    .limit(100);
+}
+
+export async function restorePageRevision(pageId: string, revisionId: string) {
+  const user = await requireUser();
+  const [page] = await db.select().from(docPages).where(eq(docPages.id, pageId)).limit(1);
+  if (!page || page.deletedAt) throw new Error("Page not found");
+  await requireEditDocs(user, page.homeSpaceId, page.isProtected);
+  const [revision] = await db
+    .select()
+    .from(docPageRevisions)
+    .where(and(eq(docPageRevisions.id, revisionId), eq(docPageRevisions.pageId, pageId)))
+    .limit(1);
+  if (!revision) throw new Error("Revision not found");
+
+  const [updated] = await db
+    .update(docPages)
+    .set({
+      body: revision.body,
+      ydocState: encodeDocAsYjsState(
+        (revision.body as { doc?: unknown }).doc ?? { type: "doc", content: [{ type: "paragraph" }] },
+      ),
+      bodyVersion: sql`${docPages.bodyVersion} + 1`,
+      updatedById: user.id,
+      updatedAt: new Date(),
+    })
+    .where(eq(docPages.id, pageId))
+    .returning({ bodyVersion: docPages.bodyVersion, updatedAt: docPages.updatedAt });
+  if (!updated) throw new Error("Could not restore this revision");
+  // History must never turn a successful page save into a visible save
+  // failure (for example, during a rolling deploy before its migration runs).
+  try {
+    await db.insert(docPageRevisions).values({
+      pageId,
+      bodyVersion: updated.bodyVersion,
+      body: revision.body,
+      changeType: "restored",
+      restoredFromRevisionId: revision.id,
+      createdById: user.id,
+    });
+  } catch (error) {
+    console.error("[docs] revision snapshot failed after restore", pageId, error);
+  }
+  void writeAuditLog({
+    category: "other",
+    eventType: "DOC_PAGE_REVISION_RESTORED",
+    title: "Document version restored",
+    actorId: user.id,
+    targetType: "doc_page",
+    targetId: pageId,
+    targetLabel: page.title,
+    spaceId: page.homeSpaceId,
+    payload: { restoredFromRevisionId: revision.id, restoredFromBodyVersion: revision.bodyVersion, bodyVersion: updated.bodyVersion },
+  });
+  revalidatePath(pagePath(page.id, page.slug));
+  return { body: revision.body, bodyVersion: updated.bodyVersion, updatedAt: updated.updatedAt.toISOString() };
 }
 
 export async function setPageProtected(pageId: string, isProtected: boolean) {

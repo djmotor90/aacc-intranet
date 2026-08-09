@@ -83,6 +83,7 @@ export function ChatComposer({
           key={editorKey}
           variant="compact"
           placeholder={`Message ${agentName}…`}
+          conversationId={conversationId}
           onChange={({ text, doc, empty: isEmpty }) => {
             setPayload({ text, doc });
             setEmpty(isEmpty);

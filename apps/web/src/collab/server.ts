@@ -49,8 +49,8 @@ function hasUnresolvedImage(node: unknown): boolean {
 }
 
 async function getDb() {
-  const { db, docPages } = await import("@aitim/db");
-  return { db, docPages };
+  const { db, docPageRevisions, docPages } = await import("@aitim/db");
+  return { db, docPageRevisions, docPages };
 }
 
 const server = new Server({
@@ -129,7 +129,7 @@ const server = new Server({
     // final URL replacement so an intermediate body cannot win on refresh.
     if (document.getMap(UPLOAD_BATCH_MAP).size > 0) return;
 
-    const { db, docPages } = await getDb();
+    const { db, docPageRevisions, docPages } = await getDb();
     const state = Buffer.from(Y.encodeStateAsUpdate(document));
 
     let jsonDoc: unknown = { type: "doc", content: [{ type: "paragraph" }] };
@@ -178,9 +178,19 @@ const server = new Server({
           sql`${docPages.body} IS DISTINCT FROM ${JSON.stringify(body)}::jsonb`,
         ),
       )
-      .returning({ id: docPages.id });
+      .returning({ id: docPages.id, bodyVersion: docPages.bodyVersion });
 
     if (contentUpdated) {
+      try {
+        await db.insert(docPageRevisions).values({
+          pageId: documentName,
+          bodyVersion: contentUpdated.bodyVersion,
+          body,
+          createdById: user?.id ?? null,
+        });
+      } catch (error) {
+        console.error("[collab] revision snapshot failed after page save", documentName, error);
+      }
       const { enqueue } = await import("@/lib/queue");
       void enqueue("embed-doc", { pageId: documentName }).catch((err) =>
         console.error("[collab] enqueue embed-doc failed", documentName, err),

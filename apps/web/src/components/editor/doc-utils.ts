@@ -137,10 +137,28 @@ export function docToPlainText(doc: JSONContent | null | undefined): string {
   return parts.join("").replace(/\n+$/, "").trim();
 }
 
-/** True when the doc has no text and no media (images / file chips). */
-export function docHasContent(doc: JSONContent | null | undefined): boolean {
+export type DocImageRef = { src: string; alt: string };
+
+/** Every `image` node in a TipTap doc, in document order (rendering + vision). */
+export function extractDocImages(doc: JSONContent | null | undefined): DocImageRef[] {
+  const out: DocImageRef[] = [];
+  function walk(node: JSONContent) {
+    if (node.type === "image" && typeof node.attrs?.src === "string") {
+      out.push({
+        src: node.attrs.src,
+        alt: typeof node.attrs.alt === "string" ? node.attrs.alt : "",
+      });
+    }
+    if (node.content) for (const child of node.content) walk(child);
+  }
+  if (doc) walk(doc);
+  return out;
+}
+
+/** True when the doc has any image or file-attachment node — never safe to
+ * discard by regenerating the doc from its plain-text projection. */
+export function docHasMedia(doc: JSONContent | null | undefined): boolean {
   if (!doc) return false;
-  if (docToPlainText(doc).trim()) return true;
   let hasMedia = false;
   function walk(node: JSONContent) {
     if (node.type === "image" && node.attrs?.src) hasMedia = true;
@@ -151,6 +169,13 @@ export function docHasContent(doc: JSONContent | null | undefined): boolean {
   }
   walk(doc);
   return hasMedia;
+}
+
+/** True when the doc has no text and no media (images / file chips). */
+export function docHasContent(doc: JSONContent | null | undefined): boolean {
+  if (!doc) return false;
+  if (docToPlainText(doc).trim()) return true;
+  return docHasMedia(doc);
 }
 
 /** Normalize anything we might have stored into a TipTap doc. */

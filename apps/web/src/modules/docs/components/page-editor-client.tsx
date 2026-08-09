@@ -12,6 +12,7 @@ import {
   ChevronRight,
   FileText,
   ImageIcon,
+  History,
   Link2,
   Lock,
   LockOpen,
@@ -20,6 +21,7 @@ import {
   Settings2,
   Smile,
   Trash2,
+  RotateCcw,
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -49,6 +51,8 @@ import {
 } from "@/components/ui/sheet";
 import {
   setPageProtected,
+  listPageRevisions,
+  restorePageRevision,
   trashPage,
   updatePageBody,
   updatePageMeta,
@@ -75,6 +79,7 @@ import { CollabPresence } from "./collab-presence";
 import { DocPageOutline } from "./doc-page-outline";
 import { PageHeadingOutline } from "./page-heading-outline";
 import { PageStylesPanel } from "./page-styles-panel";
+import { DocRevisionDiff } from "./doc-revision-diff";
 
 function formatLastUpdated(iso: string): string {
   const d = new Date(iso);
@@ -99,6 +104,22 @@ function formatLastUpdated(iso: string): string {
     month: "short",
     day: "numeric",
   })} at ${time}`;
+}
+
+/** A stable, visual-content signature used to ignore editor hydration events. */
+function bodySignature(body: StoredRichDoc): string {
+  const normalize = (value: unknown): unknown => {
+    if (value == null) return undefined;
+    if (Array.isArray(value)) return value.map(normalize).filter((item) => item !== undefined);
+    if (typeof value !== "object") return value;
+    const entries = Object.entries(value as Record<string, unknown>)
+      .filter(([key, entry]) => entry != null && key !== "uploadId")
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([key, entry]) => [key, normalize(entry)] as const)
+      .filter(([, entry]) => entry !== undefined);
+    return Object.fromEntries(entries);
+  };
+  return JSON.stringify(normalize(body));
 }
 
 function MetaChip({
@@ -166,6 +187,18 @@ export function PageEditorClient({
   /** Desktop left pages rail — collapsible for more writing space. */
   const [pagesRailOpen, setPagesRailOpen] = useState(false);
   const [stylesOpen, setStylesOpen] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [revisions, setRevisions] = useState<
+    Array<{
+      id: string;
+      bodyVersion: number;
+      body: unknown;
+      changeType: string;
+      createdAt: Date;
+      actorName: string | null;
+    }>
+  >([]);
+  const [selectedRevisionId, setSelectedRevisionId] = useState<string | null>(null);
   const [isDesktop, setIsDesktop] = useState(false);
   const [relationsOpen, setRelationsOpen] = useState(false);
   const [styles, setStyles] = useState<DocPageStyles>(DEFAULT_DOC_PAGE_STYLES);
@@ -174,12 +207,23 @@ export function PageEditorClient({
     const stored = docToStored(storedToDoc(page.body as StoredRichDoc));
     return stored?.text ?? "";
   });
+  const [bodyPreview, setBodyPreview] = useState<StoredRichDoc>(() =>
+    docToStored(storedToDoc(page.body as StoredRichDoc)),
+  );
+  /** Set on restore only, so the editor remounts with the restored content
+   * without remounting on every regular autosave (which would wipe cursor
+   * position and undo history). */
+  const [restoredBody, setRestoredBody] = useState<StoredRichDoc | null>(null);
+  const [restoreNonce, setRestoreNonce] = useState(0);
   const [pending, startTransition] = useTransition();
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const documentScrollRef = useRef<HTMLDivElement>(null);
   const editorRootRef = useRef<HTMLDivElement>(null);
   const latestBody = useRef<StoredRichDoc>(
     docToStored(storedToDoc(page.body as StoredRichDoc)),
+  );
+  const savedBodySignatureRef = useRef(
+    bodySignature(docToStored(storedToDoc(page.body as StoredRichDoc))),
   );
   /** Always-current revision for CAS saves (avoids stale React state during paste/upload). */
   const bodyVersionRef = useRef(page.bodyVersion);
@@ -194,10 +238,53 @@ export function PageEditorClient({
   const localEditorChangedRef = useRef(false);
 
   const canEdit = page.canEdit && !(isProtected && !page.canManage);
+  /** Pages open for reading. A deliberate double-click enters edit mode. */
+  const [isEditMode, setIsEditMode] = useState(false);
+  /** Collaboration should not initialize a Yjs snapshot for a no-op edit. */
+  const [hasUserChanged, setHasUserChanged] = useState(false);
+  const isEditorEditable = canEdit && isEditMode;
   const { words: wordCount, chars: charCount } = countWordsAndChars(bodyText);
+  const selectedRevision = revisions.find((revision) => revision.id === selectedRevisionId) ?? null;
 
-  // Live multiplayer — optional. Editor never blocks if collab server is down.
-  const collab = useDocCollab(page.id, true);
+  const openHistory = useCallback(() => {
+    startTransition(async () => {
+      try {
+        const result = await listPageRevisions(page.id);
+        setRevisions(result);
+        setSelectedRevisionId(result[0]?.id ?? null);
+        setHistoryOpen(true);
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : "Could not load version history");
+      }
+    });
+  }, [page.id, startTransition]);
+
+  const restoreRevision = useCallback(() => {
+    if (!selectedRevision) return;
+    startTransition(async () => {
+      try {
+        const result = await restorePageRevision(page.id, selectedRevision.id);
+        const stored = docToStored(storedToDoc(result.body as StoredRichDoc));
+        latestBody.current = stored;
+        bodyVersionRef.current = result.bodyVersion;
+        savedBodySignatureRef.current = bodySignature(stored);
+        setRestoredBody(result.body as StoredRichDoc);
+        setRestoreNonce((n) => n + 1);
+        setBodyPreview(stored);
+        setBodyText(stored?.text ?? "");
+        setUpdatedAt(result.updatedAt);
+        setHistoryOpen(false);
+        toast.success(`Restored version ${selectedRevision.bodyVersion}`);
+        router.refresh();
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : "Could not restore this version");
+      }
+    });
+  }, [page.id, router, selectedRevision, startTransition]);
+
+  // Live multiplayer starts only once the user explicitly enters edit mode;
+  // merely opening a Doc must not create a collab store/save on refresh.
+  const collab = useDocCollab(page.id, isEditorEditable && hasUserChanged);
   const collabReady = Boolean(
     collab.status === "synced" && collab.ydoc && collab.provider && collab.self,
   );
@@ -210,14 +297,16 @@ export function PageEditorClient({
   const useCollabEditor = collabEditorPageId === page.id;
   const collabWindowOpen = useRef(true);
   useEffect(() => {
-    collabWindowOpen.current = true;
+    collabWindowOpen.current = isEditorEditable;
     localEditorChangedRef.current = false;
+    if (!isEditorEditable) return;
     const t = window.setTimeout(() => {
       collabWindowOpen.current = false;
     }, COLLAB_CONNECT_WINDOW_MS);
     return () => window.clearTimeout(t);
-  }, [page.id]);
+  }, [isEditorEditable, page.id]);
   useEffect(() => {
+    if (!isEditorEditable) return;
     if (localEditorChangedRef.current) {
       collabWindowOpen.current = false;
       return;
@@ -226,7 +315,7 @@ export function PageEditorClient({
       setCollabEditorPageId(page.id);
       collabWindowOpen.current = false;
     }
-  }, [collabReady, page.id]);
+  }, [collabReady, isEditorEditable, page.id]);
 
   useEffect(() => {
     queueMicrotask(() => {
@@ -320,6 +409,8 @@ export function PageEditorClient({
             }
           }
 
+          if (res.ok) savedBodySignatureRef.current = bodySignature(latestBody.current);
+
           if (!res.ok && res.conflict) {
             bodyVersionRef.current = res.bodyVersion;
             setUpdatedAt(res.updatedAt);
@@ -385,11 +476,18 @@ export function PageEditorClient({
     const stored = docToStored(
       storedToDoc({ text: payload.text, doc: payload.doc } as StoredRichDoc),
     );
+    // TipTap/Yjs emits an update while it hydrates. It is not a user edit and
+    // must not start an autosave just because edit mode was entered.
+    if (bodySignature(stored) === savedBodySignatureRef.current) return;
     latestBody.current = stored;
+    setHasUserChanged(true);
+    setBodyPreview(stored);
     localEditorChangedRef.current = true;
     collabWindowOpen.current = false;
     setBodyText(stored?.text ?? payload.text ?? "");
-    if (!canEdit) return;
+    // Ignore any editor/collaboration normalization event while reading.
+    // A page open must never become a save unless the user entered edit mode.
+    if (!isEditorEditable) return;
     if (uploadBatchCountRef.current > 0) {
       uploadFlushPendingRef.current = true;
       setSaveState("saving");
@@ -599,6 +697,65 @@ export function PageEditorClient({
             <Settings2 className="size-3.5" />
             <span className="hidden sm:inline">Styles</span>
           </Button>
+
+          <Sheet open={historyOpen} onOpenChange={setHistoryOpen}>
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              className="gap-1.5"
+              onClick={openHistory}
+              disabled={pending}
+            >
+              <History className="size-3.5" />
+              <span className="hidden sm:inline">History</span>
+            </Button>
+            <SheetContent side="right" className="w-full overflow-y-auto border-l-[#007582]/20 bg-[#f7fbfb] p-0 sm:max-w-4xl">
+              <div className="border-b border-[#007582]/15 bg-gradient-to-r from-[#eaf5f5] via-white to-[#fffaf6] px-6 py-6 sm:px-8">
+                <SheetHeader className="text-left">
+                  <div>
+                    <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-[#007582]">CEWD · Document control</p>
+                    <SheetTitle className="mt-1 text-xl font-semibold tracking-tight text-[#17373b]">Version history</SheetTitle>
+                    <p className="mt-1 max-w-2xl text-sm leading-6 text-[#557075]">{page.title}</p>
+                  </div>
+                </SheetHeader>
+                <div className="mt-5 flex flex-wrap gap-2 text-xs font-medium">
+                  <span className="rounded-full bg-[#007582]/10 px-3 py-1.5 text-[#006570]">{revisions.length} retained version{revisions.length === 1 ? "" : "s"}</span>
+                  <span className="rounded-full bg-[#BE5513]/10 px-3 py-1.5 text-[#93400d]">CEWD controlled document</span>
+                </div>
+              </div>
+              <div className="p-6 sm:p-8">
+                {revisions.length === 0 ? (
+                  <div className="mx-auto max-w-md rounded-2xl border border-dashed border-[#007582]/25 bg-white px-6 py-12 text-center shadow-sm">
+                    <span className="mx-auto flex size-12 items-center justify-center rounded-2xl bg-[#e6f3f3] text-[#007582]"><History className="size-6" /></span>
+                    <h3 className="mt-4 text-lg font-semibold text-[#17373b]">Your first controlled version is next</h3>
+                    <p className="mt-2 text-sm leading-6 text-[#557075]">History starts after the next completed save. From then on, every save is retained with the editor and timestamp.</p>
+                  </div>
+                ) : (
+                  <div className="grid gap-5 2xl:grid-cols-[15rem_minmax(0,1fr)]">
+                    <aside className="rounded-2xl border border-[#007582]/15 bg-white p-2 shadow-sm">
+                      <p className="px-3 pb-2 pt-2 text-[11px] font-bold uppercase tracking-[0.16em] text-[#557075]">Timeline</p>
+                      <div className="space-y-1">{revisions.map((revision) => (
+                        <button key={revision.id} type="button" onClick={() => setSelectedRevisionId(revision.id)} className={cn("w-full rounded-xl border px-3 py-3 text-left transition-colors", selectedRevisionId === revision.id ? "border-[#007582]/30 bg-[#e6f3f3]" : "border-transparent hover:bg-[#f2f8f8]")}>
+                          <span className="flex items-center justify-between gap-2 font-semibold text-[#17373b]">Version {revision.bodyVersion}{revision.changeType === "restored" && <span className="rounded bg-[#BE5513]/10 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-[#93400d]">Restored</span>}</span>
+                          <span className="mt-1 block text-xs leading-5 text-[#557075]">{new Date(revision.createdAt).toLocaleString()}<br />{revision.actorName ?? "System"}</span>
+                        </button>
+                      ))}</div>
+                    </aside>
+                    <section className="min-w-0">
+                      {selectedRevision && <>
+                        <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+                          <div><p className="text-[11px] font-bold uppercase tracking-[0.16em] text-[#007582]">Version comparison</p><h3 className="mt-1 text-lg font-semibold text-[#17373b]">Version {selectedRevision.bodyVersion} vs. current</h3><p className="mt-1 text-sm text-[#557075]">Review before restoring. A restore creates a new traceable version.</p></div>
+                          {canEdit && <Button size="sm" disabled={pending} onClick={restoreRevision} className="bg-[#007582] text-white hover:bg-[#006570]"><RotateCcw className="size-3.5" /> Restore version</Button>}
+                        </div>
+                        <DocRevisionDiff previous={selectedRevision.body as StoredRichDoc} current={bodyPreview} />
+                      </>}
+                    </section>
+                  </div>
+                )}
+              </div>
+            </SheetContent>
+          </Sheet>
 
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -890,17 +1047,24 @@ export function PageEditorClient({
           <div className="mb-6" />
         )}
 
-        {/* Body — opens immediately; multiplayer only if collab server is already up. */}
-        <div ref={editorRootRef} className="min-w-0 pb-16">
+        {/* Body starts in reading mode. Double-clicking is the explicit intent to edit. */}
+        <div
+          ref={editorRootRef}
+          className={cn("min-w-0 pb-16", !isEditorEditable && canEdit && "cursor-text")}
+          onDoubleClick={() => {
+            if (canEdit && !isEditMode) setIsEditMode(true);
+          }}
+          title={canEdit && !isEditMode ? "Double-click the document to edit" : undefined}
+        >
           {useCollabEditor ? (
             <RichTextEditor
-              key={`collab-${page.id}`}
+              key={`collab-${page.id}-${restoreNonce}`}
               variant="minimal"
-              editable={canEdit}
+              editable={isEditorEditable}
               expandable
               expandTitle={title}
               pageId={page.id}
-              initialContent={page.body as StoredRichDoc}
+              initialContent={restoredBody ?? (page.body as StoredRichDoc)}
               collaboration={{
                 document: collab.ydoc!,
                 provider: collab.provider,
@@ -919,18 +1083,18 @@ export function PageEditorClient({
             />
           ) : (
             <RichTextEditor
-              key={`local-${page.id}`}
+              key={`local-${page.id}-${restoreNonce}`}
               variant="minimal"
-              editable={canEdit}
+              editable={isEditorEditable}
               expandable
               expandTitle={title}
               pageId={page.id}
-              initialContent={page.body as StoredRichDoc}
+              initialContent={restoredBody ?? (page.body as StoredRichDoc)}
               onChange={onEditorChange}
               onFilesUploaded={flushUploadedBody}
               onUploadBatchChange={onUploadBatchChange}
               placeholder="Type / for commands, or start writing…"
-              className="border-0 bg-transparent shadow-none"
+              className="border-0 !bg-transparent shadow-none"
               editorClassName="min-h-[50vh] pl-0! pr-0! py-0!"
             />
           )}

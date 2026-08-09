@@ -6,7 +6,7 @@
  * License: Proprietary. All rights reserved. See LICENSE / COPYRIGHT.
  */
 import type { JSONContent } from "@tiptap/react";
-import { emptyDoc, plainTextToDoc } from "@/components/editor/doc-utils";
+import { docHasMedia, emptyDoc, plainTextToDoc } from "@/components/editor/doc-utils";
 import { markdownToDoc } from "./markdown-to-doc";
 import type { ChatEmbed, ChatMessageBody } from "./types";
 
@@ -44,11 +44,13 @@ export function parseMessageBody(raw: unknown): ChatMessageBody {
   const text = typeof o.text === "string" ? o.text : "";
   let doc = o.doc as JSONContent | undefined;
   // Prefer markdown rendering when the stored doc was a flat plain-text conversion
-  // but the text still has markdown markers (legacy agent replies).
-  if (textLooksLikeMarkdown(text)) {
+  // but the text still has markdown markers (legacy agent replies). Never discard
+  // a doc that actually carries media (pasted images/files) just because its
+  // caption happens to contain markdown-looking characters like "**".
+  if (!doc) {
+    doc = textLooksLikeMarkdown(text) ? markdownToDoc(text) : plainTextToDoc(text);
+  } else if (textLooksLikeMarkdown(text) && !docHasMedia(doc)) {
     doc = markdownToDoc(text);
-  } else if (!doc) {
-    doc = plainTextToDoc(text);
   }
   const embeds = Array.isArray(o.embeds) ? (o.embeds as ChatEmbed[]) : undefined;
   return { text, doc, embeds };

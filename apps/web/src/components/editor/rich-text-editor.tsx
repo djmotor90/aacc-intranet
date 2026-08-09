@@ -185,6 +185,11 @@ type RichTextEditorProps = {
    * `/api/docs/attachments/:id`). Prefer over taskId when both are set.
    */
   pageId?: string;
+  /**
+   * Chat conversation id for uploads (stored as chat_attachments, served via
+   * `/api/chat/attachments/:id`). Used when neither pageId nor taskId is set.
+   */
+  conversationId?: string;
   /** Enable /Task slash embed (live task chip). Default true when pageId set. */
   enableTaskEmbed?: boolean;
   /** Called after a file/image was uploaded (e.g. refresh attachments list). */
@@ -826,6 +831,7 @@ export function RichTextEditor({
   expandTitle = "Description",
   taskId,
   pageId,
+  conversationId,
   enableTaskEmbed,
   onFilesUploaded,
   onUploadBatchChange,
@@ -845,8 +851,10 @@ export function RichTextEditor({
         ? { type: "page", id: pageId }
         : taskId
           ? { type: "task", id: taskId }
-          : null,
-    [pageId, taskId],
+          : conversationId
+            ? { type: "chat", id: conversationId }
+            : null,
+    [pageId, taskId, conversationId],
   );
 
   const [storedJson, setStoredJson] = useState(() =>

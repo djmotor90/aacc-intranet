@@ -45,6 +45,7 @@ export function ConversationView({
   isAdmin = false,
   currentUserId,
   initialMessages,
+  initialLabelOverrides,
 }: {
   conversationId: string;
   agentName: string;
@@ -54,10 +55,15 @@ export function ConversationView({
   isAdmin?: boolean;
   currentUserId: string;
   initialMessages: ChatMessageDTO[];
+  /** Server-resolved current names for mentions in initialMessages, so chips
+   * never flash the stale send-time label on first paint. */
+  initialLabelOverrides?: Record<string, string>;
 }) {
   const [messages, setMessages] = useState(initialMessages);
   const [agentTyping, setAgentTyping] = useState(false);
-  const [labelOverrides, setLabelOverrides] = useState<Record<string, string>>({});
+  const [labelOverrides, setLabelOverrides] = useState<Record<string, string>>(
+    initialLabelOverrides ?? {},
+  );
   const bottomRef = useRef<HTMLDivElement>(null);
   const scrollerRef = useRef<HTMLDivElement>(null);
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);

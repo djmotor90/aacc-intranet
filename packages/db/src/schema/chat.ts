@@ -9,6 +9,7 @@ import { relations, sql } from "drizzle-orm";
 import {
   boolean,
   index,
+  integer,
   jsonb,
   pgEnum,
   pgTable,
@@ -210,6 +211,37 @@ export const chatMessages = pgTable(
     uniqueIndex("chat_messages_client_id_idx").on(t.conversationId, t.clientMessageId),
   ],
 );
+
+/** Images/files pasted or dropped into chat, embedded as `image`/`fileAttachment`
+ * nodes in a message's body.doc — served via `/api/chat/attachments/:id`. */
+export const chatAttachments = pgTable(
+  "chat_attachments",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    conversationId: uuid("conversation_id")
+      .notNull()
+      .references(() => chatConversations.id, { onDelete: "cascade" }),
+    uploaderId: uuid("uploader_id").references(() => users.id, { onDelete: "set null" }),
+    objectKey: text("object_key").notNull(),
+    fileName: text("file_name").notNull(),
+    mimeType: text("mime_type").notNull(),
+    sizeBytes: integer("size_bytes").notNull(),
+    checksumSha256: text("checksum_sha256"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("chat_attachments_conversation_idx").on(t.conversationId),
+    index("chat_attachments_checksum_idx").on(t.conversationId, t.checksumSha256),
+  ],
+);
+
+export const chatAttachmentsRelations = relations(chatAttachments, ({ one }) => ({
+  conversation: one(chatConversations, {
+    fields: [chatAttachments.conversationId],
+    references: [chatConversations.id],
+  }),
+  uploader: one(users, { fields: [chatAttachments.uploaderId], references: [users.id] }),
+}));
 
 export const agentsRelations = relations(agents, ({ many, one }) => ({
   conversations: many(chatConversations),

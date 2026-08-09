@@ -15,6 +15,8 @@ import {
   listMessages,
 } from "@/modules/chat/queries";
 import { userCanCreateSuperAgent } from "@/lib/app-settings";
+import { resolveMentionLabels } from "@/modules/chat/actions/mention-search";
+import { extractMentionTokens } from "@/modules/chat/lib/agent-mentions";
 
 export default async function ConversationPage({
   params,
@@ -30,6 +32,16 @@ export default async function ConversationPage({
     userCanCreateSuperAgent(user.id),
   ]);
   if (!ctx) notFound();
+
+  const mentionKeys = new Map<string, { type: "user" | "task" | "space" | "doc" | "folder"; id: string }>();
+  for (const m of messages) {
+    for (const t of extractMentionTokens(m.body.text ?? "")) {
+      mentionKeys.set(`${t.type}:${t.id}`, { type: t.type, id: t.id });
+    }
+  }
+  const initialLabelOverrides = mentionKeys.size
+    ? await resolveMentionLabels([...mentionKeys.values()])
+    : {};
 
   const agentName = ctx.agent?.displayName ?? ctx.conversation.title ?? "Chat";
   const agentTitle = ctx.agent?.title ?? null;
@@ -52,6 +64,7 @@ export default async function ConversationPage({
         isAdmin={isAdmin}
         currentUserId={user.id}
         initialMessages={messages}
+        initialLabelOverrides={initialLabelOverrides}
       />
     </ChatShell>
   );

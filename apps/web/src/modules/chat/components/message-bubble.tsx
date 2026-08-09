@@ -7,6 +7,7 @@
  */
 "use client";
 
+import { extractDocImages } from "@/components/editor/doc-utils";
 import { UserAvatar } from "@/components/shell/user-avatar";
 import { cn } from "@/lib/utils";
 import type { ChatMessageDTO } from "../lib/types";
@@ -35,6 +36,7 @@ export function MessageBubble({
 }) {
   const embeds = message.body.embeds ?? [];
   const plain = message.body.text ?? "";
+  const images = extractDocImages(message.body.doc);
 
   return (
     <div className={cn("flex gap-3 px-4 py-3", isOwn && "flex-row-reverse")}>
@@ -80,6 +82,22 @@ export function MessageBubble({
               onPrimary={isOwn && !message.isAgent}
               labelOverrides={labelOverrides}
             />
+          ) : null}
+          {images.length > 0 ? (
+            <div className={cn("mt-2 flex flex-wrap gap-2", plain && "mt-2")}>
+              {images.map((img, i) => (
+                <a
+                  key={i}
+                  href={img.src}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="block max-w-[220px] overflow-hidden rounded-lg border"
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element -- private, session-gated attachment URL; next/image can't proxy auth headers */}
+                  <img src={img.src} alt={img.alt} className="max-h-60 w-full object-cover" />
+                </a>
+              ))}
+            </div>
           ) : null}
           {embeds.map((embed, i) =>
             embed.type === "task_list" ? (

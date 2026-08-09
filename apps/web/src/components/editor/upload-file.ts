@@ -156,15 +156,25 @@ export async function uploadDocPageFile(
   return postUpload(`/api/docs/pages/${pageId}/attachments`, file);
 }
 
+/** Upload an image/file embed for a chat conversation. */
+export async function uploadChatFile(
+  conversationId: string,
+  file: File,
+): Promise<UploadedFile> {
+  return postUpload(`/api/chat/conversations/${conversationId}/attachments`, file);
+}
+
 export type EditorUploadTarget =
   | { type: "task"; id: string }
-  | { type: "page"; id: string };
+  | { type: "page"; id: string }
+  | { type: "chat"; id: string };
 
 export async function uploadEditorFile(
   target: EditorUploadTarget,
   file: File,
 ): Promise<UploadedFile> {
   if (target.type === "page") return uploadDocPageFile(target.id, file);
+  if (target.type === "chat") return uploadChatFile(target.id, file);
   return uploadTaskFile(target.id, file);
 }
 
