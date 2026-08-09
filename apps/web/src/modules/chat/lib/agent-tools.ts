@@ -138,7 +138,7 @@ export async function executeOwnerToolCall(
         actionNote: null,
       };
     }
-    const result = await loadAgentKnowledgeContext(ctx.agentId, query);
+    const result = await loadAgentKnowledgeContext(ctx.agentId, query, ctx.userId);
     return {
       toolCallId: call.id,
       resultContent: JSON.stringify({

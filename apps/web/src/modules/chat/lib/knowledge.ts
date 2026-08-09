@@ -105,7 +105,11 @@ function fullDumpFallback(pages: { title: string; body: unknown }[]): string {
  * (just linked, or its embed job hasn't run) still get a short raw-text
  * snippet folded in so they're not invisible during that window.
  */
-export async function loadAgentKnowledgeContext(agentId: string, query: string): Promise<string> {
+export async function loadAgentKnowledgeContext(
+  agentId: string,
+  query: string,
+  actorUserId?: string,
+): Promise<string> {
   const pages = await loadLinkedPages(agentId);
   if (pages.length === 0) return "";
 
@@ -113,7 +117,11 @@ export async function loadAgentKnowledgeContext(agentId: string, query: string):
 
   const pageIds = pages.map((p) => p.id);
   try {
-    const queryVector = await embedText(query);
+    const queryVector = await embedText(query, {
+      purpose: "knowledge-query",
+      actorUserId,
+      agentId,
+    });
     const distance = cosineDistance(docChunks.embedding, queryVector);
     const hits = await db
       .select({

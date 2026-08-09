@@ -12,6 +12,7 @@ import {
   extractMentionTokens,
   rehydrateMentionsInText,
 } from "@/modules/chat/lib/agent-mentions";
+import { recordAiUsage, type AiUsagePurpose } from "@/lib/ai-usage";
 
 export function hasXaiKey(): boolean {
   return Boolean(process.env.XAI_API_KEY?.trim());
@@ -44,16 +45,31 @@ export type XaiChatMessage =
   | { role: "assistant"; content: string; tool_calls?: XaiToolCall[] }
   | { role: "tool"; tool_call_id: string; content: string };
 
+export type XaiUsage = { promptTokens: number; completionTokens: number; totalTokens: number };
+
 export type XaiChatResult = {
   /** May be "" when the model only returned tool_calls. */
   content: string;
   toolCalls: XaiToolCall[];
+  usage: XaiUsage;
+};
+
+/** Who/what to attribute a call's token usage + duration to, for the admin AI tab. */
+export type XaiUsageContext = {
+  purpose: AiUsagePurpose;
+  actorUserId?: string | null;
+  agentId?: string | null;
+  conversationId?: string | null;
 };
 
 /**
  * Chat completions against xAI, with optional tool-calling. Returns the raw
  * assistant message content plus any requested tool_calls — callers decide
  * whether/how to execute tools and continue the conversation.
+ *
+ * Every call — success or failure — is logged via recordAiUsage when
+ * `usageContext` is passed, so per-agent/per-user token spend is always
+ * visible in the admin AI tab, not just estimated after the fact.
  */
 export async function xaiChatCompletion(input: {
   model?: string;
@@ -62,42 +78,81 @@ export async function xaiChatCompletion(input: {
   maxTokens?: number;
   tools?: XaiToolDef[];
   toolChoice?: "auto" | "none";
+  usageContext?: XaiUsageContext;
 }): Promise<XaiChatResult> {
   const apiKey = process.env.XAI_API_KEY?.trim();
   if (!apiKey) throw new Error("XAI_API_KEY is not set");
 
   const model = input.model?.trim() || DEFAULT_CHAT_MODEL;
-  const res = await fetch("https://api.x.ai/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
+  const ctx = input.usageContext;
+  const startedAt = Date.now();
+
+  const logUsage = (usage: Partial<XaiUsage>, ok: boolean, errorMessage?: string) => {
+    if (!ctx) return;
+    void recordAiUsage({
+      provider: "xai",
       model,
-      messages: input.messages,
-      temperature: input.temperature ?? 0.4,
-      max_tokens: input.maxTokens ?? 2048,
-      ...(input.tools?.length
-        ? { tools: input.tools, tool_choice: input.toolChoice ?? "auto" }
-        : {}),
-    }),
-  });
+      purpose: ctx.purpose,
+      actorUserId: ctx.actorUserId,
+      agentId: ctx.agentId,
+      conversationId: ctx.conversationId,
+      promptTokens: usage.promptTokens,
+      completionTokens: usage.completionTokens,
+      totalTokens: usage.totalTokens,
+      durationMs: Date.now() - startedAt,
+      ok,
+      errorMessage,
+    });
+  };
+
+  let res: Response;
+  try {
+    res = await fetch("https://api.x.ai/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model,
+        messages: input.messages,
+        temperature: input.temperature ?? 0.4,
+        max_tokens: input.maxTokens ?? 2048,
+        ...(input.tools?.length
+          ? { tools: input.tools, tool_choice: input.toolChoice ?? "auto" }
+          : {}),
+      }),
+    });
+  } catch (err) {
+    logUsage({}, false, err instanceof Error ? err.message : String(err));
+    throw err;
+  }
 
   if (!res.ok) {
     const errText = await res.text().catch(() => "");
-    throw new Error(`xAI error ${res.status}: ${errText.slice(0, 400)}`);
+    const message = `xAI error ${res.status}: ${errText.slice(0, 400)}`;
+    logUsage({}, false, message);
+    throw new Error(message);
   }
 
   const data = (await res.json()) as {
     choices?: {
       message?: { content?: string | null; tool_calls?: XaiToolCall[] };
     }[];
+    usage?: { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number };
   };
   const message = data.choices?.[0]?.message;
+  const usage: XaiUsage = {
+    promptTokens: data.usage?.prompt_tokens ?? 0,
+    completionTokens: data.usage?.completion_tokens ?? 0,
+    totalTokens: data.usage?.total_tokens ?? 0,
+  };
+  logUsage(usage, true);
+
   return {
     content: message?.content?.trim() ?? "",
     toolCalls: message?.tool_calls ?? [],
+    usage,
   };
 }
 
@@ -111,6 +166,7 @@ export async function xaiChat(input: {
   messages: XaiChatMessage[];
   temperature?: number;
   maxTokens?: number;
+  usageContext?: XaiUsageContext;
 }): Promise<string> {
   const result = await xaiChatCompletion(input);
   if (!result.content) throw new Error("xAI returned empty content");
@@ -118,7 +174,11 @@ export async function xaiChat(input: {
 }
 
 /** Expand a natural-language brief into structured Super Agent instructions. */
-export async function expandAgentBrief(brief: string, agentName?: string): Promise<{
+export async function expandAgentBrief(
+  brief: string,
+  agentName?: string,
+  actorUserId?: string,
+): Promise<{
   displayName: string;
   title: string;
   description: string;
@@ -139,6 +199,7 @@ export async function expandAgentBrief(brief: string, agentName?: string): Promi
     model,
     temperature: 0.5,
     maxTokens: 2500,
+    usageContext: { purpose: "agent-brief-expand", actorUserId },
     messages: [
       {
         role: "system",

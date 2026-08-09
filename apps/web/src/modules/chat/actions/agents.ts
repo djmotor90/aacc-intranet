@@ -40,6 +40,7 @@ export async function expandBriefAction(brief: string, nameHint?: string) {
   if (!canCreate) {
     return { ok: false as const, error: "You don't have permission to create Super Agents." };
   }
+  const user = await requireUser();
   if (!brief.trim()) return { ok: false as const, error: "Describe what the agent should do." };
   const tokens = extractMentionTokens(brief);
   if (!hasXaiKey()) {
@@ -68,7 +69,7 @@ export async function expandBriefAction(brief: string, nameHint?: string) {
     };
   }
   try {
-    const draft = await expandAgentBrief(brief.trim(), nameHint);
+    const draft = await expandAgentBrief(brief.trim(), nameHint, user.id);
     return {
       ok: true as const,
       draft: {

@@ -19,6 +19,18 @@ export const whatsNewFeed: WhatsNewFeed = {
   schemaVersion: 1,
   entries: [
     {
+      id: "2026-08-09-admin-ai-usage",
+      date: "2026-08-09",
+      publishedAt: "2026-08-09T18:00:00.000Z",
+      kind: "new",
+      module: "admin",
+      title: "New Admin tab: AI Usage",
+      body: "Settings → AI Usage now shows every AI call platform-wide — who triggered it, which Super Agent, model, purpose, duration, and prompt/completion/total tokens — with breakdowns by agent, user, model, and purpose.",
+      href: "/?settings=ai",
+      tags: ["admin", "ai", "tokens", "observability"],
+      audience: "admin",
+    },
+    {
       id: "2026-08-09-chat-image-vision",
       date: "2026-08-09",
       publishedAt: "2026-08-09T17:00:00.000Z",

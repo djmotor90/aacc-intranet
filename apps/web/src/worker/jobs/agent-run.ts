@@ -188,7 +188,7 @@ async function buildXaiReply(
 
   let knowledgeImages: KnowledgeImage[] = [];
   if (toolsInclude(agent.tools, "docs.search") || toolsInclude(agent.tools, "docs.update")) {
-    const knowledge = await loadAgentKnowledgeContext(agent.id, triggerText);
+    const knowledge = await loadAgentKnowledgeContext(agent.id, triggerText, userId);
     if (knowledge) {
       contextBlocks.push(`Knowledge base (linked Docs):\n${knowledge}`);
     }
@@ -327,6 +327,12 @@ async function buildXaiReply(
       maxTokens: 2000,
       messages,
       tools: ownerTools.length ? ownerTools : undefined,
+      usageContext: {
+        purpose: "agent-chat-reply",
+        actorUserId: userId,
+        agentId: agent.id,
+        conversationId,
+      },
     });
 
     if (result.toolCalls.length === 0) {
@@ -339,7 +345,7 @@ async function buildXaiReply(
       if (call.function.name === SEARCH_KNOWLEDGE_TOOL) hasSearchedThisTurn = true;
 
       if (call.function.name === UPDATE_DOC_TOOL && !hasSearchedThisTurn) {
-        const knowledgeCheck = await loadAgentKnowledgeContext(agent.id, triggerText);
+        const knowledgeCheck = await loadAgentKnowledgeContext(agent.id, triggerText, userId);
         messages.push({
           role: "tool",
           tool_call_id: call.id,

@@ -18,6 +18,7 @@ export type PermissionKey =
   | "manage_space_members"
   | "manage_list_members"
   | "manage_trash"
+  | "create_super_agents"
   // Structure
   | "create_spaces"
   | "create_lists"
@@ -96,6 +97,12 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
         label: "Manage Trash",
         description:
           "View, restore, and permanently delete trashed spaces, folders, lists, and tasks across every space — even ones this role doesn't otherwise administer. Space Admins and Super Admins already have this for spaces they own; this grants it independently.",
+      },
+      {
+        key: "create_super_agents",
+        label: "Create Super Agents",
+        description:
+          "Open Create Agent in Chat and build new Super Agent teammates. Super Admins can always create them.",
       },
     ],
   },
@@ -269,6 +276,7 @@ export const SYSTEM_ROLE_DEFAULTS: Record<
       manage_space_members: false,
       manage_list_members: false,
       manage_trash: false,
+      create_super_agents: false,
       create_spaces: false,
       create_lists: false,
       create_folders: false,
@@ -301,6 +309,7 @@ export const SYSTEM_ROLE_DEFAULTS: Record<
       manage_space_members: false,
       manage_list_members: false,
       manage_trash: false,
+      create_super_agents: false,
       create_spaces: false,
       create_lists: false,
       create_folders: false,
@@ -335,6 +344,7 @@ export const SYSTEM_ROLE_DEFAULTS: Record<
       manage_space_members: true,
       manage_list_members: true,
       manage_trash: false,
+      create_super_agents: false,
       create_spaces: false,
       create_lists: true,
       create_folders: true,

@@ -243,6 +243,55 @@ export const chatAttachmentsRelations = relations(chatAttachments, ({ one }) => 
   uploader: one(users, { fields: [chatAttachments.uploaderId], references: [users.id] }),
 }));
 
+/** Upstream LLM/embeddings provider a usage event was billed against. */
+export const aiUsageProvider = pgEnum("ai_usage_provider", ["xai", "openai"]);
+
+/**
+ * One row per outbound AI API call (chat completion or embeddings request) —
+ * the full usage ledger: who triggered it, which agent/conversation it was
+ * for, what it cost in tokens, and how long it took. Written by
+ * `recordAiUsage` (apps/web/src/lib/ai-usage.ts) from every call site in
+ * lib/xai.ts and lib/embeddings.ts, success or failure, so the admin AI tab
+ * has a complete picture rather than a sample.
+ */
+export const aiUsageEvents = pgTable(
+  "ai_usage_events",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    provider: aiUsageProvider("provider").notNull(),
+    model: text("model").notNull(),
+    /** e.g. "agent-chat-reply", "agent-brief-expand", "doc-embedding", "knowledge-query" */
+    purpose: text("purpose").notNull(),
+    actorUserId: uuid("actor_user_id").references(() => users.id, { onDelete: "set null" }),
+    agentId: uuid("agent_id").references(() => agents.id, { onDelete: "set null" }),
+    conversationId: uuid("conversation_id").references(() => chatConversations.id, {
+      onDelete: "set null",
+    }),
+    promptTokens: integer("prompt_tokens").notNull().default(0),
+    completionTokens: integer("completion_tokens").notNull().default(0),
+    totalTokens: integer("total_tokens").notNull().default(0),
+    durationMs: integer("duration_ms").notNull(),
+    ok: boolean("ok").notNull().default(true),
+    errorMessage: text("error_message"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("ai_usage_events_created_idx").on(t.createdAt),
+    index("ai_usage_events_actor_idx").on(t.actorUserId),
+    index("ai_usage_events_agent_idx").on(t.agentId),
+    index("ai_usage_events_model_idx").on(t.model),
+  ],
+);
+
+export const aiUsageEventsRelations = relations(aiUsageEvents, ({ one }) => ({
+  actor: one(users, { fields: [aiUsageEvents.actorUserId], references: [users.id] }),
+  agent: one(agents, { fields: [aiUsageEvents.agentId], references: [agents.id] }),
+  conversation: one(chatConversations, {
+    fields: [aiUsageEvents.conversationId],
+    references: [chatConversations.id],
+  }),
+}));
+
 export const agentsRelations = relations(agents, ({ many, one }) => ({
   conversations: many(chatConversations),
   messages: many(chatMessages),

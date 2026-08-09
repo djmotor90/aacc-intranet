@@ -43,7 +43,7 @@ export async function runEmbedDocJob(payload: EmbedDocPayload): Promise<string> 
     return `page ${pageId} has no chunkable text — cleared any stale chunks`;
   }
 
-  const vectors = await embedTexts(chunks.map(chunkEmbeddingText));
+  const vectors = await embedTexts(chunks.map(chunkEmbeddingText), { purpose: "doc-embedding" });
 
   await db.transaction(async (tx) => {
     await tx.delete(docChunks).where(eq(docChunks.pageId, pageId));
