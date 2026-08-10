@@ -251,7 +251,7 @@ export const listViews = pgTable(
       .notNull()
       .references(() => lists.id, { onDelete: "cascade" }),
     name: text("name").notNull(),
-    /** "table" | "board" | "form" */
+    /** "table" | "board" | "form" | "grid" */
     type: text("type").notNull().default("table"),
     /** FilterCondition[] stored as JSON */
     filters: jsonb("filters").notNull().default(sql`'[]'::jsonb`),
@@ -304,6 +304,8 @@ export const tasks = pgTable(
     priority: taskPriority("priority"),
     dueDate: date("due_date"),
     startDate: date("start_date"),
+    /** Space-scoped task type (Task/Project/etc.) — null = untyped, unchanged behavior. */
+    taskTypeId: uuid("task_type_id").references(() => taskTypes.id, { onDelete: "set null" }),
     position: text("position").notNull().default("a0"),
     /** { [customFieldDefinitionId]: value } */
     customFields: jsonb("custom_fields").notNull().default(sql`'{}'::jsonb`),
@@ -405,6 +407,61 @@ export const taskTags = pgTable(
     primaryKey({ columns: [t.taskId, t.tagId] }),
     index("task_tags_tag_idx").on(t.tagId),
   ],
+);
+
+/**
+ * Space-scoped task types (Task/Project/Bug/etc., ClickUp-style) — shared across every
+ * list in the space, same scoping as `tags`. `showDeliveryTimeline` gates the
+ * subtask/checklist-completion progress bar on the task detail view.
+ */
+export const taskTypes = pgTable(
+  "task_types",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    spaceId: uuid("space_id")
+      .notNull()
+      .references(() => spaces.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    /** Emoji, same convention as space/list/folder icons (see entity-icon.tsx). */
+    icon: text("icon"),
+    color: text("color").notNull().default("#64748b"),
+    showDeliveryTimeline: boolean("show_delivery_timeline").notNull().default(false),
+    position: text("position").notNull().default("a0"),
+    isArchived: boolean("is_archived").notNull().default(false),
+    createdBy: uuid("created_by").references(() => users.id),
+    ...timestamps,
+  },
+  (t) => [index("task_types_space_idx").on(t.spaceId)],
+);
+
+export const taskChecklists = pgTable(
+  "task_checklists",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    taskId: uuid("task_id")
+      .notNull()
+      .references(() => tasks.id, { onDelete: "cascade" }),
+    title: text("title").notNull().default("Checklist"),
+    position: text("position").notNull().default("a0"),
+    createdBy: uuid("created_by").references(() => users.id),
+    ...timestamps,
+  },
+  (t) => [index("task_checklists_task_idx").on(t.taskId)],
+);
+
+export const taskChecklistItems = pgTable(
+  "task_checklist_items",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    checklistId: uuid("checklist_id")
+      .notNull()
+      .references(() => taskChecklists.id, { onDelete: "cascade" }),
+    title: text("title").notNull(),
+    isChecked: boolean("is_checked").notNull().default(false),
+    position: text("position").notNull().default("a0"),
+    ...timestamps,
+  },
+  (t) => [index("task_checklist_items_checklist_idx").on(t.checklistId)],
 );
 
 export const customFieldDefinitions = pgTable(

@@ -11,6 +11,7 @@ import type { CSSProperties, ReactNode } from "react";
 // ReactNode used for optional ⋯ menu slot
 import { ProfileAvatar } from "@/components/shell/profile-avatar";
 import { cn } from "@/lib/utils";
+import { EntityIcon } from "./entity-icon";
 import { TagChips } from "./tag-picker";
 
 /**
@@ -59,6 +60,7 @@ export interface TaskCardData {
   assignees: { id: string; displayName: string; photoKey: string | null }[];
   tags?: { id: string; name: string; color: string }[];
   hasAttachments?: boolean;
+  taskType?: { id: string; name: string; icon: string | null; color: string } | null;
 }
 
 function Chip({
@@ -125,11 +127,20 @@ export function TaskCardContent({
         <Link
           href={`/tasks/task/${task.number}`}
           className={cn(
-            "min-w-0 text-sm font-medium leading-snug hover:underline",
+            "flex min-w-0 items-center gap-1.5 text-sm font-medium leading-snug hover:underline",
             menu && "pr-8",
           )}
         >
-          {task.title}
+          {task.taskType && (
+            <EntityIcon
+              icon={task.taskType.icon}
+              color={task.taskType.color}
+              fallback="taskType"
+              size="xs"
+              className="shrink-0"
+            />
+          )}
+          <span className="min-w-0 truncate">{task.title}</span>
         </Link>
         {task.hasAttachments && (
           <span

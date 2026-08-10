@@ -11,6 +11,7 @@ import {
   Archive,
   Bell,
   BellOff,
+  Check,
   Copy,
   ExternalLink,
   FolderInput,
@@ -20,6 +21,7 @@ import {
   ListChecks,
   MoreHorizontal,
   Pencil,
+  Shapes,
   SquareArrowOutUpRight,
   Trash2,
 } from "lucide-react";
@@ -62,16 +64,20 @@ import {
   duplicateTask,
   getTaskFollowState,
   moveTaskToList,
+  setTaskType,
   toggleTaskFollow,
   trashTaskById,
 } from "../actions";
-import type { WritableListOption } from "../queries";
+import type { TaskTypeMeta, WritableListOption } from "../queries";
+import { EntityIcon } from "./entity-icon";
 
 export type TaskMenuTask = {
   id: string;
   number: string;
   title: string;
   listId: string;
+  /** Current task type id, if any — drives the checkmark in the "Task Type" submenu. */
+  taskTypeId?: string | null;
 };
 
 function taskUrl(number: string): string {
@@ -190,11 +196,13 @@ function useTaskMenuLogic({
 function TaskMenuBody({
   task,
   canEdit,
+  taskTypes,
   api,
   logic,
 }: {
   task: TaskMenuTask;
   canEdit: boolean;
+  taskTypes: TaskTypeMeta[];
   api: MenuApi;
   logic: ReturnType<typeof useTaskMenuLogic>;
 }) {
@@ -297,6 +305,42 @@ function TaskMenuBody({
             <Copy className={MENU_ICON_CLASS} />
             Duplicate
           </Item>
+
+          {taskTypes.length > 0 && (
+            <Sub>
+              <SubTrigger className={MENU_ITEM_CLASS} disabled={busy}>
+                <Shapes className={MENU_ICON_CLASS} />
+                Task Type
+              </SubTrigger>
+              <SubContent className="max-h-72 w-64 overflow-y-auto rounded-xl border border-brand-teal/10 p-1.5 shadow-xl">
+                <Item
+                  className={MENU_ITEM_CLASS}
+                  disabled={busy}
+                  onSelect={() =>
+                    run(() => setTaskType(task.id, null), { success: "Task type cleared" })
+                  }
+                >
+                  <EntityIcon fallback="taskType" size="xs" />
+                  <span className="flex-1">None</span>
+                  {!task.taskTypeId && <Check className="size-3.5" />}
+                </Item>
+                {taskTypes.map((t) => (
+                  <Item
+                    key={t.id}
+                    className={MENU_ITEM_CLASS}
+                    disabled={busy}
+                    onSelect={() =>
+                      run(() => setTaskType(task.id, t.id), { success: `Converted to ${t.name}` })
+                    }
+                  >
+                    <EntityIcon icon={t.icon} color={t.color} fallback="taskType" size="xs" />
+                    <span className="flex-1">{t.name}</span>
+                    {task.taskTypeId === t.id && <Check className="size-3.5" />}
+                  </Item>
+                ))}
+              </SubContent>
+            </Sub>
+          )}
 
           {otherLists.length > 0 && (
             <>
@@ -422,6 +466,7 @@ export function TaskContextMenu({
   task,
   canEdit,
   lists,
+  taskTypes = [],
   children,
   className,
   asChild = true,
@@ -431,6 +476,8 @@ export function TaskContextMenu({
   task: TaskMenuTask;
   canEdit: boolean;
   lists: WritableListOption[];
+  /** Space's task types — powers the "Task Type" submenu (hidden when empty). */
+  taskTypes?: TaskTypeMeta[];
   children: ReactNode;
   className?: string;
   asChild?: boolean;
@@ -455,6 +502,7 @@ export function TaskContextMenu({
         <TaskMenuBody
           task={task}
           canEdit={canEdit}
+          taskTypes={taskTypes}
           logic={logic}
           api={{
             Item: ContextMenuItem,
@@ -477,6 +525,7 @@ export function TaskActionsMenu({
   task,
   canEdit,
   lists,
+  taskTypes = [],
   className,
   buttonClassName,
   align = "end",
@@ -485,6 +534,8 @@ export function TaskActionsMenu({
   task: TaskMenuTask;
   canEdit: boolean;
   lists: WritableListOption[];
+  /** Space's task types — powers the "Task Type" submenu (hidden when empty). */
+  taskTypes?: TaskTypeMeta[];
   className?: string;
   buttonClassName?: string;
   align?: "start" | "center" | "end";
@@ -538,6 +589,7 @@ export function TaskActionsMenu({
         <TaskMenuBody
           task={task}
           canEdit={canEdit}
+          taskTypes={taskTypes}
           logic={logic}
           api={{
             Item: DropdownMenuItem,

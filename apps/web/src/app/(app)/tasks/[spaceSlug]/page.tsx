@@ -16,6 +16,7 @@ import {
   getSpaceBySlug,
   getSpaceContentTree,
   getSpaceMembers,
+  getTaskTypesForSpace,
   type FolderNavNode,
   type ListNavNode,
 } from "@/modules/tasks/queries";
@@ -70,9 +71,9 @@ export default async function SpacePage(props: { params: Promise<{ spaceSlug: st
   if (!role) notFound();
 
   const tree = await getSpaceContentTree(space.id, user.id, user.platformRole, role === "owner");
-  const [members, activeUsers] = role === "owner"
-    ? await Promise.all([getSpaceMembers(space.id), getActiveUsers()])
-    : [[], []];
+  const [members, activeUsers, taskTypes] = role === "owner"
+    ? await Promise.all([getSpaceMembers(space.id), getActiveUsers(), getTaskTypesForSpace(space.id)])
+    : [[], [], []];
   const memberUserIds = new Set(members.map((m) => m.userId));
   const addableUsers = activeUsers.filter((u) => !memberUserIds.has(u.id));
 
@@ -84,7 +85,12 @@ export default async function SpacePage(props: { params: Promise<{ spaceSlug: st
           {space.name}
         </h1>
         {role === "owner" && (
-          <SpaceSettingsMenu spaceId={space.id} members={members} addableUsers={addableUsers} />
+          <SpaceSettingsMenu
+            spaceId={space.id}
+            members={members}
+            addableUsers={addableUsers}
+            taskTypes={taskTypes}
+          />
         )}
       </div>
       <p className="mb-6 text-sm text-muted-foreground">

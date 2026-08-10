@@ -41,8 +41,11 @@ import {
 } from "@/modules/tasks/components/task-context-menu";
 import { SecretsPanel } from "@/modules/tasks/components/secrets-panel";
 import { SubtasksCardHeader, SubtasksPanel } from "@/modules/tasks/components/subtasks-panel";
+import { ChecklistCardHeader, ChecklistPanel } from "@/modules/tasks/components/checklist-panel";
+import { DeliveryTimeline } from "@/modules/tasks/components/delivery-timeline";
 import { TagPicker } from "@/modules/tasks/components/tag-picker";
 import { TaskDetailShell } from "@/modules/tasks/components/task-detail-shell";
+import { TaskTypeSelect } from "@/modules/tasks/components/task-type-select";
 import { RichTextViewer } from "@/components/editor/rich-text-editor";
 import type { StoredRichDoc } from "@/components/editor/doc-utils";
 import { TaskDescriptionEditor } from "@/modules/tasks/components/task-description-editor";
@@ -60,9 +63,12 @@ import {
   getTaskAttachmentFolders,
   getTaskAttachments,
   getTaskByNumber,
+  getTaskChecklists,
   getTaskFollowers,
   getTaskComments,
   getTaskParentChain,
+  getTaskProgress,
+  getTaskTypesForSpace,
   getUsersWithListAccess,
   getWritableListsForUser,
 } from "@/modules/tasks/queries";
@@ -171,6 +177,8 @@ export default async function TaskDetailPage(props: { params: Promise<{ number: 
     followers,
     linkedPages,
     docsSpaces,
+    spaceTaskTypes,
+    checklists,
   ] = await Promise.all([
     getStatusesForList(task.listId),
     getFieldDefinitions(task.listId),
@@ -189,7 +197,13 @@ export default async function TaskDetailPage(props: { params: Promise<{ number: 
     getTaskFollowers(task.id),
     listPagesLinkedToTarget(user, "task", task.id),
     listSpacesForDocs(user),
+    getTaskTypesForSpace(space.id),
+    getTaskChecklists(task.id),
   ]);
+  const currentTaskType = task.taskTypeId
+    ? (spaceTaskTypes.find((t) => t.id === task.taskTypeId) ?? null)
+    : null;
+  const progress = currentTaskType?.showDeliveryTimeline ? await getTaskProgress(task.id) : null;
   const me = activeUsers.find((u) => u.id === user.id);
   const { taskAssignees: ta } = await import("@aitim/db");
   const assigneeRows = await db
@@ -232,9 +246,11 @@ export default async function TaskDetailPage(props: { params: Promise<{ number: 
               number: task.number,
               title: task.title,
               listId: task.listId,
+              taskTypeId: currentTaskType?.id ?? null,
             }}
             canEdit={canEdit && !task.isArchived}
             lists={writableLists}
+            taskTypes={spaceTaskTypes}
             redirectOnRemove={`/tasks/${space.slug}/${list.slug}`}
           >
             <button
@@ -251,6 +267,12 @@ export default async function TaskDetailPage(props: { params: Promise<{ number: 
             </Badge>
           )}
         </div>
+        <TaskTypeSelect
+          taskId={task.id}
+          current={currentTaskType}
+          options={spaceTaskTypes}
+          canEdit={canEdit && !task.isArchived}
+        />
         {currentStatus && (
           <span
             className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium"
@@ -275,9 +297,11 @@ export default async function TaskDetailPage(props: { params: Promise<{ number: 
             number: task.number,
             title: task.title,
             listId: task.listId,
+            taskTypeId: currentTaskType?.id ?? null,
           }}
           canEdit={canEdit && !task.isArchived}
           lists={writableLists}
+          taskTypes={spaceTaskTypes}
           buttonClassName="size-8"
           redirectOnRemove={`/tasks/${space.slug}/${list.slug}`}
         />
@@ -287,6 +311,8 @@ export default async function TaskDetailPage(props: { params: Promise<{ number: 
 
   const detailsBody = (
     <div className="flex flex-col gap-4">
+        {progress && <DeliveryTimeline progress={progress} startDate={task.startDate} dueDate={task.dueDate} />}
+
         <form action={updateTaskCore} className="flex flex-col gap-5">
           <input type="hidden" name="taskId" value={task.id} />
 
@@ -512,6 +538,15 @@ export default async function TaskDetailPage(props: { params: Promise<{ number: 
             </CardContent>
           </Card>
         )}
+
+        <Card>
+          <CardHeader className="border-b border-border">
+            <ChecklistCardHeader count={checklists.length} />
+          </CardHeader>
+          <CardContent className="pt-4">
+            <ChecklistPanel taskId={task.id} checklists={checklists} canEdit={canEdit && !task.isArchived} />
+          </CardContent>
+        </Card>
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between gap-3 border-b border-border">

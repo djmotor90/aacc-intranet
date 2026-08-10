@@ -22,6 +22,7 @@ import { ListTasksShell } from "@/modules/tasks/components/list-tasks-shell";
 import { ListViewTabs } from "@/modules/tasks/components/list-view-tabs";
 import { NewTaskDialog } from "@/modules/tasks/components/new-task-dialog";
 import { ShowClosedToggle } from "@/modules/tasks/components/show-closed-toggle";
+import { TaskGrid } from "@/modules/tasks/components/task-grid";
 import { parseRequiredCoreFields } from "@/modules/tasks/lib/required-fields";
 import {
   countFormSubmissions,
@@ -34,6 +35,7 @@ import {
   getStatusesForList,
   getTagsForSpace,
   getTasksPage,
+  getTaskTypesForSpace,
   getWritableListsForUser,
   type ListViewRow,
 } from "@/modules/tasks/queries";
@@ -78,8 +80,8 @@ export default async function ListPage(props: {
 
   // URL overrides for the active view's stored settings (so live filters work
   // without waiting for a save). When no override is present, use the view.
-  const view: "table" | "board" | "form" =
-    sp.view === "board" || sp.view === "table" || sp.view === "form"
+  const view: "table" | "board" | "form" | "grid" =
+    sp.view === "board" || sp.view === "table" || sp.view === "form" || sp.view === "grid"
       ? sp.view
       : activeView.type;
 
@@ -185,27 +187,29 @@ export default async function ListPage(props: {
     );
   }
 
-  const [listStatuses, fieldDefs, activeUsers, page, spaceTags, writableLists] = await Promise.all([
-    getStatusesForList(list.id),
-    getFieldDefinitions(list.id),
-    getActiveUsers(),
-    getTasksPage({
-      listId: list.id,
-      conditions,
-      groupBy: view === "table" ? groupBy || undefined : undefined,
-      limit: view === "board" ? BOARD_LIMIT : TABLE_PAGE_SIZE,
-      offset: 0,
-      showClosed,
-    }),
-    getTagsForSpace(space.id),
-    getWritableListsForUser(user),
-  ]);
+  const [listStatuses, fieldDefs, activeUsers, page, spaceTags, writableLists, spaceTaskTypes] =
+    await Promise.all([
+      getStatusesForList(list.id),
+      getFieldDefinitions(list.id),
+      getActiveUsers(),
+      getTasksPage({
+        listId: list.id,
+        conditions,
+        groupBy: view === "table" ? groupBy || undefined : undefined,
+        limit: view === "board" ? BOARD_LIMIT : TABLE_PAGE_SIZE,
+        offset: 0,
+        showClosed,
+      }),
+      getTagsForSpace(space.id),
+      getWritableListsForUser(user),
+      getTaskTypesForSpace(space.id),
+    ]);
   const boardStatuses = showClosed
     ? listStatuses
     : listStatuses.filter((s) => s.category !== "done" && s.category !== "cancelled");
 
   const statusById = new Map(listStatuses.map((s) => [s.id, s]));
-  const boardTasks = page.items.map(({ task, assignees, tags: taskTags, hasAttachments }) => {
+  const boardTasks = page.items.map(({ task, assignees, tags: taskTags, hasAttachments, taskType }) => {
     const st = statusById.get(task.statusId);
     return {
       id: task.id,
@@ -219,6 +223,7 @@ export default async function ListPage(props: {
       assignees,
       tags: taskTags,
       hasAttachments,
+      taskType,
       listId: list.id,
     };
   });
@@ -296,8 +301,24 @@ export default async function ListPage(props: {
             tasks={boardTasks}
             canEdit={canEdit}
             writableLists={writableLists}
+            taskTypes={spaceTaskTypes}
           />
         </>
+      ) : view === "grid" ? (
+        <TaskGrid
+          listId={list.id}
+          viewId={activeView.id}
+          items={page.items}
+          totalCount={page.total}
+          conditions={conditions}
+          statuses={listStatuses}
+          fieldDefs={fieldDefs}
+          activeUsers={activeUsers}
+          spaceTags={spaceTags}
+          showClosed={showClosed}
+          canEdit={canEdit}
+          initialColumnOrder={columnOrder}
+        />
       ) : (
         <ListTasksShell
           listId={list.id}
@@ -313,6 +334,7 @@ export default async function ListPage(props: {
           activeUsers={activeUsers}
           spaceTags={spaceTags}
           writableLists={writableLists}
+          taskTypes={spaceTaskTypes}
           showClosed={showClosed}
           canEdit={canEdit}
           initialColumnOrder={columnOrder}

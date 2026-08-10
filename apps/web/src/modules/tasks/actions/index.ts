@@ -26,3 +26,5 @@ export * from "./comments";
 export * from "./attachments";
 export * from "./views";
 export * from "./forms";
+export * from "./task-types";
+export * from "./checklists";

@@ -7,7 +7,7 @@
  * Fingerprint: GURVER-KG-AITIM-2026-7F3C9E2A
  * License: Proprietary. All rights reserved. See LICENSE / COPYRIGHT.
  */
-import { ListPlus, Settings, Share2 } from "lucide-react";
+import { ListPlus, Settings, Shapes, Share2 } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
@@ -26,8 +26,9 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { addSpaceMember, createList, removeSpaceMember } from "../actions";
-import type { SpaceMemberRow } from "../queries";
+import type { SpaceMemberRow, TaskTypeMeta } from "../queries";
 import { SharingDialogBody } from "./sharing-dialog-body";
+import { TaskTypeManager } from "./task-type-manager";
 
 interface UserOption {
   id: string;
@@ -38,13 +39,16 @@ export function SpaceSettingsMenu({
   spaceId,
   members,
   addableUsers,
+  taskTypes = [],
 }: {
   spaceId: string;
   members: SpaceMemberRow[];
   addableUsers: UserOption[];
+  taskTypes?: TaskTypeMeta[];
 }) {
   const [sharingOpen, setSharingOpen] = useState(false);
   const [newListOpen, setNewListOpen] = useState(false);
+  const [taskTypesOpen, setTaskTypesOpen] = useState(false);
 
   return (
     <>
@@ -58,6 +62,10 @@ export function SpaceSettingsMenu({
           <DropdownMenuItem onSelect={() => setNewListOpen(true)} className="gap-2">
             <ListPlus className="size-4" />
             New List
+          </DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => setTaskTypesOpen(true)} className="gap-2">
+            <Shapes className="size-4" />
+            Task Types
           </DropdownMenuItem>
           <DropdownMenuItem onSelect={() => setSharingOpen(true)} className="gap-2">
             <Share2 className="size-4" />
@@ -81,6 +89,19 @@ export function SpaceSettingsMenu({
             addAction={addSpaceMember}
             removeAction={removeSpaceMember}
           />
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={taskTypesOpen} onOpenChange={setTaskTypesOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Task Types</DialogTitle>
+            <DialogDescription>
+              Shared across every list in this space. Turn on &quot;Delivery timeline&quot; for
+              types (like Project) that should show a completion bar on the task detail view.
+            </DialogDescription>
+          </DialogHeader>
+          <TaskTypeManager spaceId={spaceId} initialTypes={taskTypes} />
         </DialogContent>
       </Dialog>
 

@@ -31,6 +31,7 @@ import {
   Pencil,
   Plus,
   SquareKanban,
+  Table2,
   Trash2,
 } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -67,6 +68,7 @@ function viewQueryParams(view: ListViewRow): URLSearchParams {
   params.set("v", view.id);
   if (view.type === "board") params.set("view", "board");
   else if (view.type === "form") params.set("view", "form");
+  else if (view.type === "grid") params.set("view", "grid");
   if (view.type !== "form") {
     if (view.groupBy) params.set("groupBy", view.groupBy);
     if (view.showClosed) params.set("closed", "1");
@@ -81,6 +83,7 @@ function viewQueryParams(view: ListViewRow): URLSearchParams {
 function ViewTypeIcon({ type, className }: { type: ListViewRow["type"]; className?: string }) {
   if (type === "board") return <SquareKanban className={className} />;
   if (type === "form") return <ClipboardList className={className} />;
+  if (type === "grid") return <Table2 className={className} />;
   return <Columns3 className={className} />;
 }
 
@@ -342,7 +345,7 @@ export function ListViewTabs({
     });
   }
 
-  function create(type: "table" | "board" | "form") {
+  function create(type: "table" | "board" | "form" | "grid") {
     startTransition(async () => {
       try {
         let id: string;
@@ -361,6 +364,7 @@ export function ListViewTabs({
         params.set("v", id);
         if (type === "board") params.set("view", "board");
         else if (type === "form") params.set("view", "form");
+        else if (type === "grid") params.set("view", "grid");
         else params.delete("view");
         // Form views don't use table filters/groupBy.
         if (type === "form") {
@@ -471,6 +475,10 @@ export function ListViewTabs({
             <DropdownMenuItem onClick={() => create("board")}>
               <SquareKanban className="size-3.5" />
               Board view
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => create("grid")}>
+              <Table2 className="size-3.5" />
+              Table view
             </DropdownMenuItem>
             <DropdownMenuItem onClick={() => create("form")}>
               <ClipboardList className="size-3.5" />

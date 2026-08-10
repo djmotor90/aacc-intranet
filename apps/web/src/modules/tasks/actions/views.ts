@@ -146,7 +146,9 @@ export async function saveListViewPrefs(
     if (!row) return;
 
     const updates: Partial<typeof listViews.$inferInsert> = {};
-    if ("view" in prefs && prefs.view) updates.type = prefs.view === "board" ? "board" : "table";
+    if ("view" in prefs && prefs.view) {
+      updates.type = prefs.view === "board" ? "board" : prefs.view === "grid" ? "grid" : "table";
+    }
     if ("groupBy" in prefs) updates.groupBy = prefs.groupBy || null;
     if ("filters" in prefs) updates.filters = prefs.filters ?? [];
     if ("showClosed" in prefs) updates.showClosed = prefs.showClosed === true;
@@ -189,12 +191,12 @@ function nextViewPosition(existing: { position: string }[]): string {
 export async function createListView(params: {
   listId: string;
   name?: string;
-  type?: "table" | "board";
+  type?: "table" | "board" | "grid";
   copyFromViewId?: string;
 }): Promise<{ id: string }> {
   "use server";
   const listId = z.string().uuid().parse(params.listId);
-  const type = params.type === "board" ? "board" : "table";
+  const type = params.type === "board" ? "board" : params.type === "grid" ? "grid" : "table";
   const user = await requireUser();
   const { assertPermission } = await import("@/lib/permissions");
   await assertPermission(user, "create_views");
@@ -226,7 +228,9 @@ export async function createListView(params: {
     }
   }
 
-  const baseName = (params.name?.trim() || (type === "board" ? "Board" : "List")).slice(0, 60);
+  const baseName = (
+    params.name?.trim() || (type === "board" ? "Board" : type === "grid" ? "Table" : "List")
+  ).slice(0, 60);
   // Unique-ish name: "List", "List 2", "List 3"…
   let name = baseName;
   let i = 2;
@@ -325,7 +329,7 @@ export async function updateListViewConfig(
     filters?: unknown;
     groupBy?: string | null;
     showClosed?: boolean;
-    type?: "table" | "board";
+    type?: "table" | "board" | "grid";
     tableColumnOrder?: unknown;
   },
 ) {
@@ -340,7 +344,9 @@ export async function updateListViewConfig(
   if ("filters" in config) updates.filters = config.filters ?? [];
   if ("groupBy" in config) updates.groupBy = config.groupBy || null;
   if ("showClosed" in config) updates.showClosed = config.showClosed === true;
-  if ("type" in config && config.type) updates.type = config.type === "board" ? "board" : "table";
+  if ("type" in config && config.type) {
+    updates.type = config.type === "board" ? "board" : config.type === "grid" ? "grid" : "table";
+  }
   if ("tableColumnOrder" in config) updates.tableColumnOrder = config.tableColumnOrder ?? null;
   if (Object.keys(updates).length === 0) return;
 

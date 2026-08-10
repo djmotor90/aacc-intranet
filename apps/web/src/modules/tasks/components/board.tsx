@@ -21,7 +21,7 @@ import {
 import { useOptimistic, useState, useTransition } from "react";
 import { cn } from "@/lib/utils";
 import { updateTaskStatus } from "../actions";
-import type { WritableListOption } from "../queries";
+import type { TaskTypeMeta, WritableListOption } from "../queries";
 import { TaskCardContent, type TaskCardData } from "./task-card";
 import { TaskActionsMenu, TaskContextMenu } from "./task-context-menu";
 
@@ -41,10 +41,12 @@ function DraggableCard({
   task,
   canEdit,
   writableLists,
+  taskTypes,
 }: {
   task: BoardTask;
   canEdit: boolean;
   writableLists: WritableListOption[];
+  taskTypes: TaskTypeMeta[];
 }) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: task.id });
   return (
@@ -60,9 +62,11 @@ function DraggableCard({
           number: task.number,
           title: task.title,
           listId: task.listId,
+          taskTypeId: task.taskType?.id ?? null,
         }}
         canEdit={canEdit}
         lists={writableLists}
+        taskTypes={taskTypes}
       >
         <div className="rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-ring">
           <TaskCardContent
@@ -74,9 +78,11 @@ function DraggableCard({
                   number: task.number,
                   title: task.title,
                   listId: task.listId,
+                  taskTypeId: task.taskType?.id ?? null,
                 }}
                 canEdit={canEdit}
                 lists={writableLists}
+                taskTypes={taskTypes}
               />
             }
           />
@@ -91,11 +97,13 @@ function Column({
   tasks,
   canEdit,
   writableLists,
+  taskTypes,
 }: {
   status: BoardStatus;
   tasks: BoardTask[];
   canEdit: boolean;
   writableLists: WritableListOption[];
+  taskTypes: TaskTypeMeta[];
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: status.id, disabled: !canEdit });
   return (
@@ -124,6 +132,7 @@ function Column({
                 task={t}
                 canEdit={canEdit}
                 writableLists={writableLists}
+                taskTypes={taskTypes}
               />
             ) : (
               <TaskContextMenu
@@ -133,9 +142,11 @@ function Column({
                   number: t.number,
                   title: t.title,
                   listId: t.listId,
+                  taskTypeId: t.taskType?.id ?? null,
                 }}
                 canEdit={false}
                 lists={writableLists}
+                taskTypes={taskTypes}
               >
                 <div>
                   <TaskCardContent
@@ -147,9 +158,11 @@ function Column({
                           number: t.number,
                           title: t.title,
                           listId: t.listId,
+                          taskTypeId: t.taskType?.id ?? null,
                         }}
                         canEdit={false}
                         lists={writableLists}
+                        taskTypes={taskTypes}
                       />
                     }
                   />
@@ -168,11 +181,13 @@ export function Board({
   tasks,
   canEdit,
   writableLists = [],
+  taskTypes = [],
 }: {
   statuses: BoardStatus[];
   tasks: BoardTask[];
   canEdit: boolean;
   writableLists?: WritableListOption[];
+  taskTypes?: TaskTypeMeta[];
 }) {
   const [activeId, setActiveId] = useState<string | null>(null);
   const [, startTransition] = useTransition();
@@ -217,6 +232,7 @@ export function Board({
             tasks={optimisticTasks.filter((t) => t.statusId === status.id)}
             canEdit={canEdit}
             writableLists={writableLists}
+            taskTypes={taskTypes}
           />
         ))}
       </div>

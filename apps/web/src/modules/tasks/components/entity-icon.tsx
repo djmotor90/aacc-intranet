@@ -5,7 +5,7 @@
  * Fingerprint: GURVER-KG-AITIM-2026-7F3C9E2A
  * License: Proprietary. All rights reserved. See LICENSE / COPYRIGHT.
  */
-import { Folder, List, type LucideIcon } from "lucide-react";
+import { Folder, List, Shapes, type LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 /**
@@ -21,7 +21,7 @@ export function EntityIcon({
 }: {
   icon?: string | null;
   color?: string | null;
-  fallback?: "space" | "folder" | "list";
+  fallback?: "space" | "folder" | "list" | "taskType";
   size?: "xs" | "sm" | "md" | "lg";
   className?: string;
 }) {
@@ -44,6 +44,7 @@ export function EntityIcon({
   let FallbackIcon: LucideIcon = List;
   if (fallback === "folder") FallbackIcon = Folder;
   if (fallback === "space") FallbackIcon = List;
+  if (fallback === "taskType") FallbackIcon = Shapes;
 
   return (
     <span

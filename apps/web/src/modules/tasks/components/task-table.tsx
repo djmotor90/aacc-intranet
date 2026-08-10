@@ -45,9 +45,10 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
-import type { TaskFilterCondition, TaskWithMeta } from "../queries";
+import type { TaskFilterCondition, TaskTypeMeta, TaskWithMeta } from "../queries";
 import { fetchTaskChildren, fetchTasksPage, saveListViewPrefs, saveTableColumnOrder } from "../actions";
 import { AssigneeAvatarStack, AssigneeSelect } from "./assignee-select";
+import { EntityIcon } from "./entity-icon";
 import {
   CustomFieldEditCell,
   PrioritySelectCell,
@@ -69,7 +70,7 @@ import { TagChips, TagPicker, type TagOption } from "./tag-picker";
 import type { WritableListOption } from "../queries";
 
 /** Compact solid chip for table display cells (matches board card fills). */
-function TableChip({
+export function TableChip({
   children,
   className,
   style,
@@ -94,12 +95,12 @@ function TableChip({
   );
 }
 
-interface StatusLike { id: string; name: string; color: string }
-interface FieldDefLike { id: string; key: string; label: string; type: string; options: unknown }
+export interface StatusLike { id: string; name: string; color: string }
+export interface FieldDefLike { id: string; key: string; label: string; type: string; options: unknown }
 
 const CALCULABLE_TYPES = new Set(["number", "date"]);
 
-function fieldOptionLabel(
+export function fieldOptionLabel(
   def: FieldDefLike,
   value: unknown,
   userNames: Map<string, string>,
@@ -133,7 +134,7 @@ function fieldOptionLabel(
   }
 }
 
-function renderFieldValue(
+export function renderFieldValue(
   def: FieldDefLike,
   value: unknown,
   userNames: Map<string, string>,
@@ -180,7 +181,7 @@ function renderFieldValue(
  * Absolute floor for resize — about one glyph + cell padding.
  * Default `width` is the first-paint size; `minWidth` is how narrow drag can go.
  */
-const COL_MIN = 28;
+export const COL_MIN = 28;
 
 const BASE_COLUMNS = [
   { id: "number",     label: "#",            width: 90,  minWidth: COL_MIN },
@@ -203,7 +204,7 @@ const HIDEABLE_BASE_COLS = BASE_COLUMNS.filter((c) => !ALWAYS_VISIBLE.has(c.id))
 /** Base columns hidden by default (auto-managed). */
 const DEFAULT_HIDDEN_COLS = ["created_at", "closed_at"];
 
-interface ColumnDef { id: string; label: string; width: number; minWidth: number }
+export interface ColumnDef { id: string; label: string; width: number; minWidth: number }
 
 // ─── column context menu ──────────────────────────────────────────────────────
 
@@ -242,7 +243,7 @@ const EXPANDER_COL_WIDTH = 28;
 /** Per-depth-level indent for nested subtask rows (px). */
 const INDENT_PER_DEPTH = 20;
 
-function fmtShortDate(value: string | Date | null | undefined): string {
+export function fmtShortDate(value: string | Date | null | undefined): string {
   if (!value) return "—";
   const d = value instanceof Date ? value : new Date(value);
   if (isNaN(d.getTime())) return String(value);
@@ -261,6 +262,7 @@ interface TaskRowProps {
   activeUsers: { id: string; displayName: string; photoKey: string | null }[];
   spaceTags: TagOption[];
   writableLists: WritableListOption[];
+  taskTypes: TaskTypeMeta[];
   onPatchTask: (taskId: string, patch: Partial<TaskWithMeta["task"]>) => void;
   onPatchCustomField: (taskId: string, defId: string, value: unknown) => void;
   /** Nesting depth for subtask rows — 0 for top-level tasks. */
@@ -283,6 +285,7 @@ const TaskRow = memo(function TaskRow({
   activeUsers,
   spaceTags,
   writableLists,
+  taskTypes,
   onPatchTask,
   onPatchCustomField,
   depth = 0,
@@ -320,9 +323,11 @@ const TaskRow = memo(function TaskRow({
                 number: task.number,
                 title: task.title,
                 listId: task.listId,
+                taskTypeId: item.taskType?.id ?? null,
               }}
               canEdit={canEdit}
               lists={writableLists}
+              taskTypes={taskTypes}
             >
               <button
                 type="button"
@@ -363,15 +368,26 @@ const TaskRow = memo(function TaskRow({
                 className="group/title flex min-w-0 items-center gap-0.5"
                 style={depth > 0 ? { paddingLeft: depth * INDENT_PER_DEPTH } : undefined}
               >
+                {item.taskType && (
+                  <EntityIcon
+                    icon={item.taskType.icon}
+                    color={item.taskType.color}
+                    fallback="taskType"
+                    size="sm"
+                    className="shrink-0"
+                  />
+                )}
                 <TaskContextMenu
                   task={{
                     id: task.id,
                     number: task.number,
                     title: task.title,
                     listId: task.listId,
+                    taskTypeId: item.taskType?.id ?? null,
                   }}
                   canEdit={canEdit}
                   lists={writableLists}
+                  taskTypes={taskTypes}
                 >
                   <Link
                     href={`/tasks/task/${task.number}`}
@@ -407,9 +423,11 @@ const TaskRow = memo(function TaskRow({
                       number: task.number,
                       title: task.title,
                       listId: task.listId,
+                      taskTypeId: item.taskType?.id ?? null,
                     }}
                     canEdit={canEdit}
                     lists={writableLists}
+                    taskTypes={taskTypes}
                     buttonClassName="size-6 shadow-none ring-0"
                   />
                 </div>
@@ -781,6 +799,7 @@ export function TaskTable({
   userNames,
   activeUsers,
   writableLists = [],
+  taskTypes = [],
   groupBy,
   listId,
   initialColumnOrder,
@@ -804,6 +823,8 @@ export function TaskTable({
   activeUsers: { id: string; displayName: string; photoKey: string | null }[];
   /** Lists the user can move/copy tasks into (context menu). */
   writableLists?: WritableListOption[];
+  /** Space's task types — powers the context menu's "Task Type" submenu. */
+  taskTypes?: TaskTypeMeta[];
   groupBy?: string;
   listId: string;
   initialColumnOrder?: string[];
@@ -1304,6 +1325,7 @@ export function TaskTable({
         activeUsers={activeUsers}
         spaceTags={spaceTags}
         writableLists={writableLists}
+        taskTypes={taskTypes}
         onPatchTask={opts.onPatchTask ?? patchTask}
         onPatchCustomField={opts.onPatchCustomField ?? patchCustomField}
         depth={opts.depth ?? 0}
@@ -1330,6 +1352,10 @@ export function TaskTable({
       if (effectiveGroupBy === "priority") {
         return { label: { urgent: "Urgent", high: "High", normal: "Normal", low: "Low" }[key] ?? key };
       }
+      if (effectiveGroupBy === "type") {
+        const t = taskTypes.find((x) => x.id === key);
+        return { label: t?.name ?? key, color: t?.color };
+      }
       if (effectiveGroupBy?.startsWith("cf_")) {
         const def = fieldDefs.find((d) => d.id === effectiveGroupBy.slice(3));
         if (!def) return { label: key };
@@ -1343,7 +1369,7 @@ export function TaskTable({
       }
       return { label: key };
     },
-    [effectiveGroupBy, statuses, fieldDefs, userNames],
+    [effectiveGroupBy, statuses, fieldDefs, userNames, taskTypes],
   );
 
   interface GroupSegment { key: string; label: string; color?: string; count: number; startOffset: number }

@@ -19,6 +19,28 @@ export const whatsNewFeed: WhatsNewFeed = {
   schemaVersion: 1,
   entries: [
     {
+      id: "2026-08-09-tasks-task-types",
+      date: "2026-08-09",
+      publishedAt: "2026-08-09T20:00:00.000Z",
+      kind: "new",
+      module: "tasks",
+      title: "Task Types, checklists, and a Project delivery timeline",
+      body: "Configure custom task types (with icons) per Space from Space settings → Task Types. Tasks now support checklists too, and any type with \"Delivery timeline\" turned on (e.g. Project) shows a completion bar on the task detail view, driven by subtask and checklist progress. Task Type is also available as a List view filter and \"Group by\" option once a space has at least one type.",
+      href: "/tasks",
+      tags: ["tasks", "task-types", "checklists", "projects"],
+    },
+    {
+      id: "2026-08-09-tasks-table-view",
+      date: "2026-08-09",
+      publishedAt: "2026-08-09T19:00:00.000Z",
+      kind: "new",
+      module: "tasks",
+      title: "New spreadsheet-style Table view",
+      body: "Add a Table view from a list's \"+ View\" menu for an Excel-like grid: click-drag or Shift-click to select a range of cells, copy/paste across cells (including into a larger selection), and drag the fill handle to copy a value down a column.",
+      href: "/tasks",
+      tags: ["tasks", "table", "spreadsheet", "views"],
+    },
+    {
       id: "2026-08-09-admin-ai-usage",
       date: "2026-08-09",
       publishedAt: "2026-08-09T18:00:00.000Z",

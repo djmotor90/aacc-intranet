@@ -25,8 +25,11 @@ import {
   tags,
   withDbRetry,
   taskAssignees,
+  taskChecklistItems,
+  taskChecklists,
   tasks,
   taskTags,
+  taskTypes,
   userGroupMemberships,
   users,
 } from "@aitim/db";
@@ -378,7 +381,7 @@ export const getListBySlug = cache(async (spaceId: string, slug: string) => {
   return list ?? null;
 });
 
-export type ListViewType = "table" | "board" | "form";
+export type ListViewType = "table" | "board" | "form" | "grid";
 
 export interface ListViewRow {
   id: string;
@@ -395,6 +398,7 @@ export interface ListViewRow {
 function normalizeViewType(type: string): ListViewType {
   if (type === "board") return "board";
   if (type === "form") return "form";
+  if (type === "grid") return "grid";
   return "table";
 }
 
@@ -628,6 +632,14 @@ export interface TaskTag {
   color: string;
 }
 
+export interface TaskTypeMeta {
+  id: string;
+  name: string;
+  icon: string | null;
+  color: string;
+  showDeliveryTimeline: boolean;
+}
+
 export interface TaskWithMeta {
   task: typeof tasks.$inferSelect;
   assignees: { id: string; displayName: string; photoKey: string | null }[];
@@ -636,13 +648,15 @@ export interface TaskWithMeta {
   hasAttachments: boolean;
   /** Non-archived, non-trashed direct children — drives the table's expand chevron. */
   subtaskCount: number;
+  taskType: TaskTypeMeta | null;
 }
 
 async function attachAssignees(taskRows: (typeof tasks.$inferSelect)[]): Promise<TaskWithMeta[]> {
   if (taskRows.length === 0) return [];
   const taskIds = taskRows.map((t) => t.id);
+  const taskTypeIds = [...new Set(taskRows.map((t) => t.taskTypeId).filter((id): id is string => !!id))];
 
-  const [assigneeRows, tagRows, attachmentRows, subtaskCountRows] = await Promise.all([
+  const [assigneeRows, tagRows, attachmentRows, subtaskCountRows, taskTypeRows] = await Promise.all([
     db
       .select({
         taskId: taskAssignees.taskId,
@@ -682,8 +696,21 @@ async function attachAssignees(taskRows: (typeof tasks.$inferSelect)[]): Promise
         ),
       )
       .groupBy(tasks.parentTaskId),
+    taskTypeIds.length === 0
+      ? Promise.resolve([])
+      : db
+          .select({
+            id: taskTypes.id,
+            name: taskTypes.name,
+            icon: taskTypes.icon,
+            color: taskTypes.color,
+            showDeliveryTimeline: taskTypes.showDeliveryTimeline,
+          })
+          .from(taskTypes)
+          .where(inArray(taskTypes.id, taskTypeIds)),
   ]);
 
+  const taskTypeById = new Map(taskTypeRows.map((r) => [r.id, r]));
   const assigneesByTask = new Map<string, TaskWithMeta["assignees"]>();
   for (const row of assigneeRows) {
     const list = assigneesByTask.get(row.taskId) ?? [];
@@ -708,6 +735,7 @@ async function attachAssignees(taskRows: (typeof tasks.$inferSelect)[]): Promise
     tags: tagsByTask.get(task.id) ?? [],
     hasAttachments: tasksWithAttachments.has(task.id),
     subtaskCount: subtaskCountByTask.get(task.id) ?? 0,
+    taskType: task.taskTypeId ? (taskTypeById.get(task.taskTypeId) ?? null) : null,
   }));
 }
 
@@ -728,6 +756,111 @@ export async function getTagsForTask(taskId: string): Promise<TaskTag[]> {
     .innerJoin(tags, eq(taskTags.tagId, tags.id))
     .where(eq(taskTags.taskId, taskId))
     .orderBy(asc(tags.name));
+}
+
+/** Active task types for a space (Task/Project/etc.), ordered for pickers/managers. */
+export const getTaskTypesForSpace = cache(async (spaceId: string): Promise<TaskTypeMeta[]> => {
+  const rows = await db
+    .select({
+      id: taskTypes.id,
+      name: taskTypes.name,
+      icon: taskTypes.icon,
+      color: taskTypes.color,
+      showDeliveryTimeline: taskTypes.showDeliveryTimeline,
+    })
+    .from(taskTypes)
+    .where(and(eq(taskTypes.spaceId, spaceId), eq(taskTypes.isArchived, false)))
+    .orderBy(asc(taskTypes.position), asc(taskTypes.createdAt));
+  return rows;
+});
+
+export interface ChecklistItemRow {
+  id: string;
+  title: string;
+  isChecked: boolean;
+}
+export interface ChecklistRow {
+  id: string;
+  title: string;
+  items: ChecklistItemRow[];
+}
+
+/** A task's checklists with nested items, in display order. */
+export async function getTaskChecklists(taskId: string): Promise<ChecklistRow[]> {
+  const [checklistRows, itemRows] = await Promise.all([
+    db
+      .select({ id: taskChecklists.id, title: taskChecklists.title })
+      .from(taskChecklists)
+      .where(eq(taskChecklists.taskId, taskId))
+      .orderBy(asc(taskChecklists.position), asc(taskChecklists.createdAt)),
+    db
+      .select({
+        id: taskChecklistItems.id,
+        checklistId: taskChecklistItems.checklistId,
+        title: taskChecklistItems.title,
+        isChecked: taskChecklistItems.isChecked,
+      })
+      .from(taskChecklistItems)
+      .innerJoin(taskChecklists, eq(taskChecklistItems.checklistId, taskChecklists.id))
+      .where(eq(taskChecklists.taskId, taskId))
+      .orderBy(asc(taskChecklistItems.position), asc(taskChecklistItems.createdAt)),
+  ]);
+
+  const itemsByChecklist = new Map<string, ChecklistItemRow[]>();
+  for (const row of itemRows) {
+    const list = itemsByChecklist.get(row.checklistId) ?? [];
+    list.push({ id: row.id, title: row.title, isChecked: row.isChecked });
+    itemsByChecklist.set(row.checklistId, list);
+  }
+  return checklistRows.map((c) => ({ ...c, items: itemsByChecklist.get(c.id) ?? [] }));
+}
+
+export interface TaskProgress {
+  subtasksDone: number;
+  subtasksTotal: number;
+  checklistDone: number;
+  checklistTotal: number;
+}
+
+/**
+ * Delivery-timeline progress for a Project-type task: completion across every
+ * descendant subtask (recursive, not just direct children) plus every checklist
+ * item on the task itself. Only called from the task detail page.
+ */
+export async function getTaskProgress(taskId: string): Promise<TaskProgress> {
+  const [subtaskResult, checklistRows] = await Promise.all([
+    db.execute<{ done: number; total: number }>(sql`
+      WITH RECURSIVE descendants AS (
+        SELECT id, status_id FROM tasks
+        WHERE parent_task_id = ${taskId} AND is_archived = false AND deleted_at IS NULL
+        UNION ALL
+        SELECT t.id, t.status_id FROM tasks t
+        INNER JOIN descendants d ON t.parent_task_id = d.id
+        WHERE t.is_archived = false AND t.deleted_at IS NULL
+      )
+      SELECT
+        count(*) FILTER (WHERE s.category IN ('done', 'cancelled'))::int AS done,
+        count(*)::int AS total
+      FROM descendants d
+      JOIN statuses s ON s.id = d.status_id
+    `),
+    db
+      .select({
+        done: sql<number>`count(*) FILTER (WHERE ${taskChecklistItems.isChecked})::int`,
+        total: sql<number>`count(*)::int`,
+      })
+      .from(taskChecklistItems)
+      .innerJoin(taskChecklists, eq(taskChecklistItems.checklistId, taskChecklists.id))
+      .where(eq(taskChecklists.taskId, taskId)),
+  ]);
+
+  const subtaskRow = subtaskResult.rows[0];
+  return {
+    subtasksDone: subtaskRow?.done ?? 0,
+    subtasksTotal: subtaskRow?.total ?? 0,
+    checklistDone: checklistRows[0]?.done ?? 0,
+    checklistTotal: checklistRows[0]?.total ?? 0,
+  };
 }
 
 export async function getTasksForList(listId: string): Promise<TaskWithMeta[]> {
@@ -773,6 +906,11 @@ function conditionSql(c: TaskFilterCondition, defsById: Map<string, FieldDefRow>
     return c.op === "is"
       ? sql`${tasks.priority} = ${c.value}`
       : sql`(${tasks.priority} IS NULL OR ${tasks.priority} != ${c.value})`;
+  }
+  if (c.field === "type") {
+    return c.op === "is"
+      ? sql`${tasks.taskTypeId} = ${c.value}`
+      : sql`(${tasks.taskTypeId} IS NULL OR ${tasks.taskTypeId} != ${c.value})`;
   }
   if (c.field === "assignee") {
     const exists = sql`EXISTS (SELECT 1 FROM ${taskAssignees} ta WHERE ta.task_id = ${tasks.id} AND ta.user_id = ${c.value})`;
@@ -882,6 +1020,11 @@ function orderSql(groupBy: string | undefined, sort: TaskSortSpec | null | undef
   } else if (groupBy === "priority") {
     parts.push(
       sql`CASE ${tasks.priority} WHEN 'urgent' THEN 0 WHEN 'high' THEN 1 WHEN 'normal' THEN 2 WHEN 'low' THEN 3 ELSE 4 END ASC`,
+    );
+  } else if (groupBy === "type") {
+    parts.push(
+      sql`(SELECT tt.position FROM ${taskTypes} tt WHERE tt.id = ${tasks.taskTypeId}) ASC NULLS LAST`,
+      sql`${tasks.taskTypeId} ASC`,
     );
   } else if (groupBy?.startsWith("cf_")) {
     const defId = groupBy.slice(3);
@@ -1025,6 +1168,16 @@ export async function getTasksPage(params: {
         .where(where)
         .groupBy(tasks.priority)
         .orderBy(sql`CASE ${tasks.priority} WHEN 'urgent' THEN 0 WHEN 'high' THEN 1 WHEN 'normal' THEN 2 WHEN 'low' THEN 3 ELSE 4 END ASC`);
+    } else if (groupBy === "type") {
+      grouped = await db
+        .select({ key: sql<string | null>`${tasks.taskTypeId}::text`, count: sql<number>`count(*)::int` })
+        .from(tasks)
+        .where(where)
+        .groupBy(tasks.taskTypeId)
+        .orderBy(
+          sql`(SELECT tt.position FROM ${taskTypes} tt WHERE tt.id = ${tasks.taskTypeId}) ASC NULLS LAST`,
+          sql`${tasks.taskTypeId} ASC`,
+        );
     } else if (groupBy.startsWith("cf_")) {
       // Same expression object/text for select, groupBy, and orderBy (see cfJsonTextExpr).
       const keyExpr = cfJsonTextExpr(groupBy.slice(3));

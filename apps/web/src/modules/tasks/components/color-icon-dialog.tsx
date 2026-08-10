@@ -27,7 +27,7 @@ import {
   EntityIcon,
 } from "./entity-icon";
 
-export type AppearanceKind = "space" | "folder" | "list";
+export type AppearanceKind = "space" | "folder" | "list" | "taskType";
 
 export function ColorIconDialog({
   open,
@@ -93,7 +93,8 @@ export function ColorIconDialog({
     setCustomEmoji("");
   }
 
-  const kindLabel = kind === "space" ? "Space" : kind === "folder" ? "Folder" : "List";
+  const kindLabel =
+    kind === "space" ? "Space" : kind === "folder" ? "Folder" : kind === "taskType" ? "Task Type" : "List";
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

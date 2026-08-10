@@ -11,7 +11,7 @@ import { useCallback, useRef, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { fetchTasksPage, saveListViewPrefs } from "../actions";
-import type { TaskFilterCondition, TaskWithMeta } from "../queries";
+import type { TaskFilterCondition, TaskTypeMeta, TaskWithMeta } from "../queries";
 import { FilterBar } from "./filter-bar";
 import { ShowClosedToggle } from "./show-closed-toggle";
 import { TaskTable } from "./task-table";
@@ -53,6 +53,7 @@ export function ListTasksShell({
   activeUsers,
   spaceTags = [],
   writableLists = [],
+  taskTypes = [],
   showClosed,
   canEdit,
   initialColumnOrder,
@@ -70,6 +71,7 @@ export function ListTasksShell({
   activeUsers: { id: string; displayName: string; photoKey: string | null }[];
   spaceTags?: TagOption[];
   writableLists?: WritableListOption[];
+  taskTypes?: TaskTypeMeta[];
   showClosed: boolean;
   canEdit: boolean;
   initialColumnOrder?: string[];
@@ -176,6 +178,7 @@ export function ListTasksShell({
           activeUsers={activeUsers}
           view={view}
           spaceTags={spaceTags}
+          taskTypes={taskTypes}
           viewId={viewId}
           groupBy={groupBy}
           onGroupByChange={applyGroupBy}
@@ -198,6 +201,7 @@ export function ListTasksShell({
         userNames={userNames}
         activeUsers={activeUsers}
         writableLists={writableLists}
+        taskTypes={taskTypes}
         groupBy={groupBy || undefined}
         listId={listId}
         initialColumnOrder={initialColumnOrder}

@@ -629,6 +629,7 @@ export function FilterBar({
   activeUsers,
   view,
   spaceTags = [],
+  taskTypes = [],
   viewId,
   groupBy = "",
   onGroupByChange,
@@ -639,6 +640,7 @@ export function FilterBar({
   activeUsers: { id: string; displayName: string }[];
   view: "board" | "table";
   spaceTags?: { id: string; name: string; color: string }[];
+  taskTypes?: { id: string; name: string }[];
   /** Active named list view — prefs are persisted onto it when set. */
   viewId?: string;
   /** Effective group-by used for the table (from URL or saved view). */
@@ -668,6 +670,16 @@ export function FilterBar({
       type: "assignee",
       options: userOptions,
     },
+    ...(taskTypes.length > 0
+      ? [
+          {
+            id: "type",
+            label: "Task Type",
+            type: "status" as FieldType, // same is / is_not operators as status
+            options: taskTypes.map((t) => ({ id: t.id, label: t.name })),
+          },
+        ]
+      : []),
     ...(spaceTags.length > 0
       ? [
           {
@@ -696,6 +708,7 @@ export function FilterBar({
     { value: "", label: "None" },
     { value: "status", label: "Status" },
     { value: "priority", label: "Priority" },
+    ...(taskTypes.length > 0 ? [{ value: "type", label: "Task Type" }] : []),
     ...fieldDefs
       .filter((d) => ["dropdown", "color", "checkbox", "user"].includes(d.type))
       .map((d) => ({ value: `cf_${d.id}`, label: d.label })),
