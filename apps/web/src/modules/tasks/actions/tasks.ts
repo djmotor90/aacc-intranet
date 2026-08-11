@@ -17,7 +17,7 @@ import {
   taskTags,
 } from "@aitim/db";
 import { valueSchemaFor, type CustomFieldDefinitionLike, type CustomFieldType } from "@aitim/shared";
-import { and, eq, isNotNull, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
@@ -206,6 +206,80 @@ export async function createTask(formData: FormData) {
     });
   }
   await pingListUpdate(listId);
+  revalidatePath(listPath(space.slug, list.slug));
+}
+
+const taskPosition = (index: number) => `m${index.toString().padStart(10, "0")}`;
+
+/** Move a top-level task immediately before or after another task in the same list. */
+export async function reorderTask(
+  taskId: string,
+  targetTaskId: string,
+  placement: "before" | "after",
+) {
+  const id = z.string().uuid().parse(taskId);
+  const targetId = z.string().uuid().parse(targetTaskId);
+  const parsedPlacement = z.enum(["before", "after"]).parse(placement);
+  if (id === targetId) return;
+
+  const { task, list, space } = await requireTask(id);
+  const { task: target } = await requireTask(targetId);
+  if (task.listId !== target.listId || task.parentTaskId || target.parentTaskId) {
+    throw new Error("Tasks must be top-level tasks in the same list to be reordered");
+  }
+  if (task.deletedAt || target.deletedAt || task.isArchived || target.isArchived) {
+    throw new Error("Archived or deleted tasks cannot be reordered");
+  }
+
+  const user = await requireUser();
+  const { assertPermission } = await import("@/lib/permissions");
+  await assertPermission(user, "edit_tasks");
+  await assertListRole(list.id, "member");
+
+  await db.transaction(async (tx) => {
+    // Serialize reorders within one list so simultaneous drops cannot interleave.
+    await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${list.id}))`);
+    const siblings = await tx
+      .select({ id: tasks.id, position: tasks.position })
+      .from(tasks)
+      .where(
+        and(
+          eq(tasks.listId, list.id),
+          isNull(tasks.parentTaskId),
+          eq(tasks.isArchived, false),
+          isNull(tasks.deletedAt),
+        ),
+      )
+      .orderBy(asc(tasks.position), desc(tasks.createdAt), asc(tasks.id));
+
+    const sourceIndex = siblings.findIndex((row) => row.id === id);
+    if (sourceIndex < 0) throw new Error("Task is not available for reordering");
+    const normalized = siblings.every((row, index) => row.position === taskPosition(index));
+    const ordered = siblings.filter((row) => row.id !== id);
+    const targetIndex = ordered.findIndex((row) => row.id === targetId);
+    if (targetIndex < 0) throw new Error("Target task is not available for reordering");
+    const insertAt = targetIndex + (parsedPlacement === "after" ? 1 : 0);
+    ordered.splice(insertAt, 0, { id, position: task.position });
+
+    // Legacy lists may contain duplicate/unpadded keys. Normalize once; later
+    // nearby moves only update the affected range.
+    const changedFrom = normalized ? Math.min(sourceIndex, insertAt) : 0;
+    const changedTo = normalized ? Math.max(sourceIndex, insertAt) : ordered.length - 1;
+    const changed = ordered.slice(changedFrom, changedTo + 1);
+    const positionCases = changed.map((row, offset) =>
+      sql`when ${tasks.id} = ${row.id} then ${taskPosition(changedFrom + offset)}`,
+    );
+    if (positionCases.length > 0) {
+      await tx
+        .update(tasks)
+        .set({
+          position: sql`case ${sql.join(positionCases, sql.raw(" "))} else ${tasks.position} end`,
+        })
+        .where(inArray(tasks.id, changed.map((row) => row.id)));
+    }
+  });
+
+  await pingListUpdate(list.id);
   revalidatePath(listPath(space.slug, list.slug));
 }
 

@@ -70,13 +70,6 @@ export function WhatsNewButton({ isAdmin = false }: { isAdmin?: boolean }) {
     });
   }, [seen, unseenCount]);
 
-  const dialogEntries = mode === "unseen" ? unseen : allEntries;
-  // If user opens while caught up, fall back to full history so the dialog isn't empty.
-  const displayEntries =
-    mode === "unseen" && unseen.length === 0 ? allEntries : dialogEntries;
-  const displayMode: "unseen" | "history" =
-    mode === "unseen" && unseen.length === 0 ? "history" : mode;
-
   const onAcknowledge = useCallback(() => {
     // Acknowledge through the newest visible entry so history stays available.
     const cursor =
@@ -124,8 +117,10 @@ export function WhatsNewButton({ isAdmin = false }: { isAdmin?: boolean }) {
       <WhatsNewDialog
         open={open}
         onOpenChange={setOpen}
-        entries={displayEntries}
-        mode={displayMode}
+        unseenEntries={unseen}
+        historyEntries={allEntries}
+        mode={mode}
+        onModeChange={setMode}
         onAcknowledge={onAcknowledge}
       />
     </>

@@ -8,7 +8,7 @@
 "use client";
 
 import Link from "next/link";
-import { Megaphone } from "lucide-react";
+import { History, Megaphone, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -27,23 +27,29 @@ import { WhatsNewKindBadge } from "./whats-new-kind-badge";
 export function WhatsNewDialog({
   open,
   onOpenChange,
-  entries,
+  unseenEntries,
+  historyEntries,
   mode,
+  onModeChange,
   onAcknowledge,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  /** Entries to list (unseen-only or full history). */
-  entries: WhatsNewEntry[];
+  /** Updates newer than the viewer's acknowledged cursor. */
+  unseenEntries: WhatsNewEntry[];
+  /** Complete curated product history visible to this viewer. */
+  historyEntries: WhatsNewEntry[];
   /** "unseen" = "New since your last visit"; "history" = full feed. */
   mode: "unseen" | "history";
+  onModeChange: (mode: "unseen" | "history") => void;
   onAcknowledge: () => void;
 }) {
+  const entries = mode === "unseen" ? unseenEntries : historyEntries;
   const groups = groupWhatsNewByDate(entries);
   const empty = entries.length === 0;
 
-  function handleGotIt() {
-    onAcknowledge();
+  function handleFooterAction() {
+    if (mode === "unseen") onAcknowledge();
     onOpenChange(false);
   }
 
@@ -52,7 +58,7 @@ export function WhatsNewDialog({
       <DialogContent
         showCloseButton
         className={cn(
-          "flex max-h-[min(85vh,40rem)] w-full max-w-[calc(100%-2rem)] flex-col gap-0 overflow-hidden p-0 sm:max-w-lg",
+          "flex max-h-[min(88vh,46rem)] w-full max-w-[calc(100%-2rem)] flex-col gap-0 overflow-hidden p-0 sm:max-w-xl",
         )}
       >
         <div className="flex items-center gap-2.5 border-b px-5 py-4">
@@ -64,9 +70,54 @@ export function WhatsNewDialog({
               What&apos;s New
             </DialogTitle>
             <DialogDescription className="sr-only">
-              Product updates and improvements since your last visit.
+              Browse new product updates or the complete AACC Hub product history.
             </DialogDescription>
           </div>
+        </div>
+
+        <div className="flex items-center gap-1.5 border-b bg-muted/20 px-5 py-2.5" role="tablist" aria-label="What's New views">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={mode === "unseen"}
+            onClick={() => onModeChange("unseen")}
+            className={cn(
+              "inline-flex h-8 items-center gap-1.5 rounded-full px-3 text-xs font-semibold transition-colors",
+              mode === "unseen"
+                ? "bg-primary text-primary-foreground shadow-sm"
+                : "text-muted-foreground hover:bg-muted hover:text-foreground",
+            )}
+          >
+            <Sparkles className="size-3.5" aria-hidden />
+            New
+            <span className={cn(
+              "rounded-full px-1.5 py-0.5 text-[10px] leading-none",
+              mode === "unseen" ? "bg-primary-foreground/20" : "bg-muted",
+            )}>
+              {unseenEntries.length}
+            </span>
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={mode === "history"}
+            onClick={() => onModeChange("history")}
+            className={cn(
+              "inline-flex h-8 items-center gap-1.5 rounded-full px-3 text-xs font-semibold transition-colors",
+              mode === "history"
+                ? "bg-primary text-primary-foreground shadow-sm"
+                : "text-muted-foreground hover:bg-muted hover:text-foreground",
+            )}
+          >
+            <History className="size-3.5" aria-hidden />
+            Full history
+            <span className={cn(
+              "rounded-full px-1.5 py-0.5 text-[10px] leading-none",
+              mode === "history" ? "bg-primary-foreground/20" : "bg-muted",
+            )}>
+              {historyEntries.length}
+            </span>
+          </button>
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
@@ -81,11 +132,9 @@ export function WhatsNewDialog({
             </div>
           ) : (
             <div className="space-y-6">
-              {mode === "unseen" && (
-                <p className="text-[11px] font-semibold uppercase tracking-wider text-primary">
-                  New since your last visit
-                </p>
-              )}
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-primary">
+                {mode === "unseen" ? "New since your last visit" : "Complete product history"}
+              </p>
               {groups.map((group) => (
                 <section key={group.date} className="relative pl-4">
                   <div
@@ -126,14 +175,19 @@ export function WhatsNewDialog({
           )}
         </div>
 
-        <div className="flex items-center justify-end border-t bg-muted/30 px-5 py-3">
+        <div className="flex items-center justify-between gap-3 border-t bg-muted/30 px-5 py-3">
+          <span className="text-xs text-muted-foreground">
+            {mode === "history"
+              ? `${historyEntries.length} update${historyEntries.length === 1 ? "" : "s"}`
+              : `${unseenEntries.length} unread update${unseenEntries.length === 1 ? "" : "s"}`}
+          </span>
           <Button
             type="button"
             variant="outline"
             className="rounded-full px-5"
-            onClick={handleGotIt}
+            onClick={handleFooterAction}
           >
-            Got it
+            {mode === "unseen" ? "Got it" : "Close"}
           </Button>
         </div>
       </DialogContent>

@@ -548,7 +548,7 @@ export function TextFieldQuickActions({
   }
 
   return (
-    <div className="group/custom-field flex min-w-0 items-center gap-0.5 rounded px-1 py-0.5 hover:bg-muted">
+    <div className="group/custom-field relative flex min-w-0 items-center rounded px-1 py-0.5 hover:bg-muted">
       {onActivate ? (
         <button
           type="button"
@@ -564,7 +564,7 @@ export function TextFieldQuickActions({
         <span className="min-w-0 flex-1 truncate py-0.5 text-left text-sm">{display}</span>
       )}
       {textValue && (
-        <span className="flex shrink-0 items-center opacity-0 transition-opacity group-hover/custom-field:opacity-100 group-focus-within/custom-field:opacity-100">
+        <span className="absolute right-0.5 top-1/2 flex -translate-y-1/2 items-center rounded bg-muted opacity-0 shadow-[-6px_0_8px_var(--muted)] transition-opacity group-hover/custom-field:opacity-100 group-focus-within/custom-field:opacity-100">
           <button
             type="button"
             title="Copy value"

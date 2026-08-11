@@ -9,7 +9,7 @@
  */
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ChevronRight, Columns3, ListChecks, Paperclip, Pencil, Tag } from "lucide-react";
+import { ChevronRight, Columns3, GripVertical, ListChecks, Paperclip, Pencil, Tag } from "lucide-react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import {
   type CSSProperties,
@@ -46,7 +46,13 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 import type { TaskFilterCondition, TaskTypeMeta, TaskWithMeta } from "../queries";
-import { fetchTaskChildren, fetchTasksPage, saveListViewPrefs, saveTableColumnOrder } from "../actions";
+import {
+  fetchTaskChildren,
+  fetchTasksPage,
+  reorderTask,
+  saveListViewPrefs,
+  saveTableColumnOrder,
+} from "../actions";
 import { AssigneeAvatarStack, AssigneeSelect } from "./assignee-select";
 import { EntityIcon } from "./entity-icon";
 import {
@@ -248,8 +254,8 @@ const CELL_BTN =
 const ROW_H = 37;
 const HEADER_H = 42;
 
-/** Fixed leading gutter for the subtask expand/collapse chevron — not reorderable/hideable. */
-const EXPANDER_COL_WIDTH = 28;
+/** Fixed leading gutter for the reorder handle and subtask expand/collapse chevron. */
+const EXPANDER_COL_WIDTH = 48;
 /** Per-depth-level indent for nested subtask rows (px). */
 const INDENT_PER_DEPTH = 20;
 
@@ -281,6 +287,14 @@ interface TaskRowProps {
   subtaskCount: number;
   expanded: boolean;
   onToggleExpand: () => void;
+  reorderEnabled?: boolean;
+  reorderGroupKey?: string | null;
+  isDragging?: boolean;
+  dropPlacement?: "before" | "after" | null;
+  onRowDragStart?: (event: DragEvent<HTMLElement>, taskId: string, groupKey: string | null) => void;
+  onRowDragOver?: (event: DragEvent<HTMLTableRowElement>, taskId: string, groupKey: string | null) => void;
+  onRowDrop?: (event: DragEvent<HTMLTableRowElement>, taskId: string, groupKey: string | null) => void;
+  onRowDragEnd?: () => void;
 }
 
 const TaskRow = memo(function TaskRow({
@@ -302,6 +316,14 @@ const TaskRow = memo(function TaskRow({
   subtaskCount,
   expanded,
   onToggleExpand,
+  reorderEnabled = false,
+  reorderGroupKey = null,
+  isDragging = false,
+  dropPlacement = null,
+  onRowDragStart,
+  onRowDragOver,
+  onRowDrop,
+  onRowDragEnd,
 }: TaskRowProps) {
   const task = item.task;
   const assignees = item.assignees;
@@ -373,7 +395,7 @@ const TaskRow = memo(function TaskRow({
               />
             ) : (
               <div
-                className="group/title flex min-w-0 items-center gap-0.5"
+                className="group/title relative flex min-w-0 items-center gap-0.5"
                 style={depth > 0 ? { paddingLeft: depth * INDENT_PER_DEPTH } : undefined}
               >
                 <TaskStatusPicker
@@ -406,7 +428,7 @@ const TaskRow = memo(function TaskRow({
                 >
                   <Link
                     href={`/tasks/task/${task.number}`}
-                    className="min-w-0 truncate font-medium hover:underline"
+                    className="min-w-0 flex-1 truncate font-medium hover:underline"
                   >
                     {task.title}
                   </Link>
@@ -429,9 +451,7 @@ const TaskRow = memo(function TaskRow({
                     {subtaskCount}
                   </span>
                 )}
-                <span className="min-w-0 flex-1" aria-hidden />
-
-                <div className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover/title:opacity-100 focus-within:opacity-100">
+                <div className="absolute right-0 top-1/2 flex -translate-y-1/2 items-center gap-0.5 rounded-md bg-background/95 pl-1 opacity-0 shadow-[-6px_0_8px_var(--background)] transition-opacity group-hover/title:opacity-100 focus-within:opacity-100">
                   <TaskActionsMenu
                     task={{
                       id: task.id,
@@ -788,21 +808,49 @@ const TaskRow = memo(function TaskRow({
     // content-visibility: browser can skip off-buffer paint work for overscanned rows.
     <TableRow
       data-index={vIndex}
-      className="h-[37px] transition-none hover:bg-muted/40"
+      onDragOver={
+        reorderEnabled
+          ? (event) => onRowDragOver?.(event, task.id, reorderGroupKey)
+          : undefined
+      }
+      onDrop={
+        reorderEnabled ? (event) => onRowDrop?.(event, task.id, reorderGroupKey) : undefined
+      }
+      className={cn(
+        "group/task-row h-[37px] transition-none hover:bg-muted/40",
+        isDragging && "opacity-40",
+        dropPlacement === "before" && "[&>td]:border-t-2 [&>td]:border-t-primary",
+        dropPlacement === "after" && "[&>td]:border-b-2 [&>td]:border-b-primary",
+      )}
       style={{ contentVisibility: "auto", containIntrinsicSize: `auto ${ROW_H}px` }}
     >
       <TableCell className="p-0 text-center">
-        {subtaskCount > 0 && (
-          <button
-            type="button"
-            onClick={onToggleExpand}
-            aria-label={expanded ? "Collapse subtasks" : "Expand subtasks"}
-            aria-expanded={expanded}
-            className="flex size-6 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
-          >
-            <ChevronRight className={cn("size-3.5 transition-transform", expanded && "rotate-90")} />
-          </button>
-        )}
+        <div className="flex h-full items-center justify-center">
+          {reorderEnabled && (
+            <button
+              type="button"
+              draggable
+              title="Drag to reorder task"
+              aria-label={`Reorder ${task.title}`}
+              onDragStart={(event) => onRowDragStart?.(event, task.id, reorderGroupKey)}
+              onDragEnd={onRowDragEnd}
+              className="flex size-5 cursor-grab items-center justify-center rounded text-muted-foreground/40 opacity-40 hover:bg-muted hover:text-foreground group-hover/task-row:opacity-100 active:cursor-grabbing focus-visible:opacity-100"
+            >
+              <GripVertical className="size-3.5" />
+            </button>
+          )}
+          {subtaskCount > 0 && (
+            <button
+              type="button"
+              onClick={onToggleExpand}
+              aria-label={expanded ? "Collapse subtasks" : "Expand subtasks"}
+              aria-expanded={expanded}
+              className="flex size-5 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
+            >
+              <ChevronRight className={cn("size-3.5 transition-transform", expanded && "rotate-90")} />
+            </button>
+          )}
+        </div>
       </TableCell>
       {orderedColumns.map((col) => renderCell(col.id))}
     </TableRow>
@@ -866,6 +914,15 @@ export function TaskTable({
   const statusById = useMemo(() => new Map(statuses.map((s) => [s.id, s])), [statuses]);
   const router = useRouter();
   const [, startTransition] = useTransition();
+  const [draggedTask, setDraggedTask] = useState<{
+    taskId: string;
+    groupKey: string | null;
+  } | null>(null);
+  const [dropTarget, setDropTarget] = useState<{
+    taskId: string;
+    placement: "before" | "after";
+  } | null>(null);
+  const reorderSnapshot = useRef<Map<number, TaskWithMeta> | null>(null);
 
   // ── sparse row cache keyed by absolute offset ─────────────────────────────
   // The scrollbar reserves height for ALL rows up front; unloaded offsets render
@@ -904,6 +961,83 @@ export function TaskTable({
       });
     },
     [patchRows],
+  );
+
+  const moveLoadedTask = useCallback(
+    (sourceId: string, targetId: string, placement: "before" | "after") => {
+      setRowsByOffset((prev) => {
+        reorderSnapshot.current = new Map(prev);
+        const entries = [...prev.entries()].sort((a, b) => a[0] - b[0]);
+        const sourceIndex = entries.findIndex(([, item]) => item.task.id === sourceId);
+        if (sourceIndex < 0) return prev;
+        const [source] = entries.splice(sourceIndex, 1);
+        const targetIndex = entries.findIndex(([, item]) => item.task.id === targetId);
+        if (targetIndex < 0) return prev;
+        entries.splice(targetIndex + (placement === "after" ? 1 : 0), 0, source);
+        const offsets = [...prev.keys()].sort((a, b) => a - b);
+        const next = new Map<number, TaskWithMeta>();
+        entries.forEach(([, item], index) => next.set(offsets[index], item));
+        return next;
+      });
+    },
+    [],
+  );
+
+  const handleRowDragStart = useCallback(
+    (event: DragEvent<HTMLElement>, taskId: string, groupKey: string | null) => {
+      event.dataTransfer.effectAllowed = "move";
+      event.dataTransfer.setData("text/plain", taskId);
+      setDraggedTask({ taskId, groupKey });
+      setDropTarget(null);
+    },
+    [],
+  );
+
+  const handleRowDragOver = useCallback(
+    (event: DragEvent<HTMLTableRowElement>, taskId: string, groupKey: string | null) => {
+      if (!draggedTask || draggedTask.taskId === taskId || draggedTask.groupKey !== groupKey) return;
+      event.preventDefault();
+      event.dataTransfer.dropEffect = "move";
+      const bounds = event.currentTarget.getBoundingClientRect();
+      const placement = event.clientY < bounds.top + bounds.height / 2 ? "before" : "after";
+      setDropTarget((current) =>
+        current?.taskId === taskId && current.placement === placement
+          ? current
+          : { taskId, placement },
+      );
+    },
+    [draggedTask],
+  );
+
+  const clearRowDrag = useCallback(() => {
+    setDraggedTask(null);
+    setDropTarget(null);
+  }, []);
+
+  const handleRowDrop = useCallback(
+    (event: DragEvent<HTMLTableRowElement>, targetId: string, groupKey: string | null) => {
+      event.preventDefault();
+      const sourceId = draggedTask?.taskId ?? event.dataTransfer.getData("text/plain");
+      const placement = dropTarget?.taskId === targetId ? dropTarget.placement : "before";
+      if (!sourceId || sourceId === targetId || draggedTask?.groupKey !== groupKey) {
+        clearRowDrag();
+        return;
+      }
+      moveLoadedTask(sourceId, targetId, placement);
+      clearRowDrag();
+      startTransition(async () => {
+        try {
+          await reorderTask(sourceId, targetId, placement);
+          reorderSnapshot.current = null;
+          router.refresh();
+        } catch {
+          if (reorderSnapshot.current) setRowsByOffset(reorderSnapshot.current);
+          reorderSnapshot.current = null;
+          toast.error("Could not reorder task");
+        }
+      });
+    },
+    [clearRowDrag, draggedTask, dropTarget, moveLoadedTask, router, startTransition],
   );
 
   // ── inline subtask expansion ──────────────────────────────────────────────
@@ -1331,6 +1465,7 @@ export function TaskTable({
     item: TaskWithMeta,
     opts: {
       depth?: number;
+      reorderGroupKey?: string | null;
       onPatchTask?: (taskId: string, patch: Partial<TaskWithMeta["task"]>) => void;
       onPatchCustomField?: (taskId: string, defId: string, value: unknown) => void;
     } = {},
@@ -1356,6 +1491,14 @@ export function TaskTable({
         subtaskCount={item.subtaskCount}
         expanded={expandedTaskIds.has(item.task.id)}
         onToggleExpand={() => toggleExpand(item.task.id)}
+        reorderEnabled={canEdit && !sort && (opts.depth ?? 0) === 0}
+        reorderGroupKey={opts.reorderGroupKey ?? null}
+        isDragging={draggedTask?.taskId === item.task.id}
+        dropPlacement={dropTarget?.taskId === item.task.id ? dropTarget.placement : null}
+        onRowDragStart={handleRowDragStart}
+        onRowDragOver={handleRowDragOver}
+        onRowDrop={handleRowDrop}
+        onRowDragEnd={clearRowDrag}
       />
     );
   }
@@ -1823,7 +1966,14 @@ export function TaskTable({
                 : [];
               return (
                 <Fragment key={item.task.id}>
-                  {renderTaskRow(vRow.index, item)}
+                  {renderTaskRow(vRow.index, item, {
+                    reorderGroupKey:
+                      groupSegments?.find(
+                        (segment) =>
+                          entry.offset >= segment.startOffset &&
+                          entry.offset < segment.startOffset + segment.count,
+                      )?.key ?? null,
+                  })}
                   {descendants.map((d) => {
                     if (d.kind !== "row") {
                       return (

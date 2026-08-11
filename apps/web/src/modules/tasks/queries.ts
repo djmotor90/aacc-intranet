@@ -1009,30 +1009,56 @@ function cfJsonTextExpr(defId: string) {
   return sql.raw(`("tasks"."custom_fields"->>'${safe}')`);
 }
 
-/** ORDER BY that puts grouped rows together (group key first), then stable list order. */
-function orderSql(groupBy: string | undefined, sort: TaskSortSpec | null | undefined, defsById: Map<string, FieldDefRow>) {
-  const parts: ReturnType<typeof sql>[] = [];
+/** Case-insensitive A–Z ordering by the label users actually see for a group. */
+function groupOrderParts(groupBy: string | undefined, defsById: Map<string, FieldDefRow>) {
   if (groupBy === "status") {
-    parts.push(
-      sql`(SELECT s.position FROM ${statuses} s WHERE s.id = ${tasks.statusId}) ASC NULLS LAST`,
-      sql`${tasks.statusId} ASC`,
-    );
-  } else if (groupBy === "priority") {
-    parts.push(
-      sql`CASE ${tasks.priority} WHEN 'urgent' THEN 0 WHEN 'high' THEN 1 WHEN 'normal' THEN 2 WHEN 'low' THEN 3 ELSE 4 END ASC`,
-    );
-  } else if (groupBy === "type") {
-    parts.push(
-      sql`(SELECT tt.position FROM ${taskTypes} tt WHERE tt.id = ${tasks.taskTypeId}) ASC NULLS LAST`,
-      sql`${tasks.taskTypeId} ASC`,
-    );
-  } else if (groupBy?.startsWith("cf_")) {
-    const defId = groupBy.slice(3);
-    // Use a literal JSON key (UUID-validated) so SELECT/GROUP BY/ORDER BY are
-    // identical SQL text. Bound params ($1 vs $2) make Postgres treat them as
-    // different expressions and fail GROUP BY.
-    parts.push(sql`${cfJsonTextExpr(defId)} ASC NULLS LAST`);
+    return [
+      sql`coalesce((SELECT lower(s.name) FROM ${statuses} s WHERE s.id = ${tasks.statusId}), lower(${tasks.statusId}::text)) ASC NULLS LAST`,
+      sql`${tasks.statusId} ASC NULLS LAST`,
+    ];
   }
+  if (groupBy === "priority") {
+    return [sql`lower(${tasks.priority}::text) ASC NULLS LAST`];
+  }
+  if (groupBy === "type") {
+    return [
+      sql`coalesce((SELECT lower(tt.name) FROM ${taskTypes} tt WHERE tt.id = ${tasks.taskTypeId}), lower(${tasks.taskTypeId}::text)) ASC NULLS LAST`,
+      sql`${tasks.taskTypeId} ASC NULLS LAST`,
+    ];
+  }
+  if (groupBy?.startsWith("cf_")) {
+    const defId = groupBy.slice(3);
+    const keyExpr = cfJsonTextExpr(defId);
+    const def = defsById.get(defId);
+    if (def?.type === "dropdown" || def?.type === "color") {
+      const options = (def.options ?? []) as { id?: unknown; label?: unknown }[];
+      const cases = options
+        .filter((option): option is { id: string; label: string } =>
+          typeof option.id === "string" && typeof option.label === "string",
+        )
+        .map((option) => sql`WHEN ${option.id} THEN ${option.label}`);
+      if (cases.length > 0) {
+        const labelExpr = sql`CASE ${keyExpr} ${sql.join(cases, sql.raw(" "))} ELSE ${keyExpr} END`;
+        return [sql`lower(${labelExpr}) ASC NULLS LAST`, sql`${keyExpr} ASC NULLS LAST`];
+      }
+    }
+    if (def?.type === "checkbox") {
+      const labelExpr = sql`CASE ${keyExpr} WHEN 'true' THEN 'Yes' WHEN 'false' THEN 'No' ELSE ${keyExpr} END`;
+      return [sql`lower(${labelExpr}) ASC NULLS LAST`, sql`${keyExpr} ASC NULLS LAST`];
+    }
+    if (def?.type === "user") {
+      const firstUserId = sql`CASE WHEN left(${keyExpr}, 1) = '[' THEN (${keyExpr})::jsonb->>0 ELSE ${keyExpr} END`;
+      const labelExpr = sql`coalesce((SELECT lower(u.display_name) FROM ${users} u WHERE u.id::text = ${firstUserId} LIMIT 1), lower(${keyExpr}))`;
+      return [sql`${labelExpr} ASC NULLS LAST`, sql`${keyExpr} ASC NULLS LAST`];
+    }
+    return [sql`lower(${keyExpr}) ASC NULLS LAST`, sql`${keyExpr} ASC NULLS LAST`];
+  }
+  return [];
+}
+
+/** ORDER BY that puts A–Z grouped rows together, then applies stable row ordering. */
+function orderSql(groupBy: string | undefined, sort: TaskSortSpec | null | undefined, defsById: Map<string, FieldDefRow>) {
+  const parts: ReturnType<typeof sql>[] = [...groupOrderParts(groupBy, defsById)];
   if (sort) {
     const asc = sort.dir === "asc";
     const def = defsById.get(sort.fieldId);
@@ -1150,8 +1176,8 @@ export async function getTasksPage(params: {
 
   let groupCounts: TaskPage["groupCounts"] = null;
   if (groupBy) {
-    // Grouped by the RAW column (so ORDER BY subqueries may reference it), with an
-    // ordering identical to orderSql's group ordering — the client uses this to
+    // Grouped by the raw key, with the same displayed-label A–Z ordering used by
+    // orderSql — the client uses this to
     // compute every group's absolute row offset without loading the rows.
     let grouped: { key: string | null; count: number }[];
     if (groupBy === "status") {
@@ -1160,33 +1186,81 @@ export async function getTasksPage(params: {
         .from(tasks)
         .where(where)
         .groupBy(tasks.statusId)
-        .orderBy(sql`(SELECT s.position FROM ${statuses} s WHERE s.id = ${tasks.statusId}) ASC NULLS LAST`, sql`${tasks.statusId} ASC`);
+        .orderBy(...groupOrderParts(groupBy, defsById));
     } else if (groupBy === "priority") {
       grouped = await db
         .select({ key: sql<string | null>`${tasks.priority}::text`, count: sql<number>`count(*)::int` })
         .from(tasks)
         .where(where)
         .groupBy(tasks.priority)
-        .orderBy(sql`CASE ${tasks.priority} WHEN 'urgent' THEN 0 WHEN 'high' THEN 1 WHEN 'normal' THEN 2 WHEN 'low' THEN 3 ELSE 4 END ASC`);
+        .orderBy(...groupOrderParts(groupBy, defsById));
     } else if (groupBy === "type") {
       grouped = await db
         .select({ key: sql<string | null>`${tasks.taskTypeId}::text`, count: sql<number>`count(*)::int` })
         .from(tasks)
         .where(where)
         .groupBy(tasks.taskTypeId)
-        .orderBy(
-          sql`(SELECT tt.position FROM ${taskTypes} tt WHERE tt.id = ${tasks.taskTypeId}) ASC NULLS LAST`,
-          sql`${tasks.taskTypeId} ASC`,
-        );
+        .orderBy(...groupOrderParts(groupBy, defsById));
     } else if (groupBy.startsWith("cf_")) {
       // Same expression object/text for select, groupBy, and orderBy (see cfJsonTextExpr).
-      const keyExpr = cfJsonTextExpr(groupBy.slice(3));
+      const defId = groupBy.slice(3);
+      const keyExpr = cfJsonTextExpr(defId);
+      const def = defsById.get(defId);
       grouped = await db
         .select({ key: sql<string | null>`${keyExpr}`, count: sql<number>`count(*)::int` })
         .from(tasks)
         .where(where)
-        .groupBy(keyExpr)
-        .orderBy(sql`${keyExpr} ASC NULLS LAST`);
+        .groupBy(keyExpr);
+      if (def?.type === "user") {
+        const firstUserId = (key: string | null): string | null => {
+          if (!key) return null;
+          if (!key.startsWith("[")) return key;
+          try {
+            const parsed = JSON.parse(key) as unknown;
+            return Array.isArray(parsed) && typeof parsed[0] === "string" ? parsed[0] : null;
+          } catch {
+            return null;
+          }
+        };
+        const ids = [...new Set(grouped.map((g) => firstUserId(g.key)).filter((id): id is string => !!id))];
+        const people = ids.length
+          ? await db
+              .select({ id: users.id, name: users.displayName })
+              .from(users)
+              .where(inArray(users.id, ids))
+          : [];
+        const names = new Map(people.map((person) => [person.id, person.name]));
+        grouped.sort((a, b) => {
+          if (a.key == null) return b.key == null ? 0 : 1;
+          if (b.key == null) return -1;
+          const aLabel = names.get(firstUserId(a.key) ?? "") ?? a.key;
+          const bLabel = names.get(firstUserId(b.key) ?? "") ?? b.key;
+          return (
+            aLabel.localeCompare(bLabel, undefined, { sensitivity: "base" }) ||
+            a.key.localeCompare(b.key)
+          );
+        });
+      } else {
+        const labelForKey = (key: string | null): string => {
+          if (key == null) return "";
+          if (def?.type === "checkbox") return key === "true" ? "Yes" : key === "false" ? "No" : key;
+          if (def?.type === "dropdown" || def?.type === "color") {
+            const options = (def.options ?? []) as { id?: unknown; label?: unknown }[];
+            const option = options.find((item) => item.id === key);
+            return typeof option?.label === "string" ? option.label : key;
+          }
+          return key;
+        };
+        grouped.sort((a, b) => {
+          if (a.key == null) return b.key == null ? 0 : 1;
+          if (b.key == null) return -1;
+          return (
+            labelForKey(a.key).localeCompare(labelForKey(b.key), undefined, {
+              sensitivity: "base",
+            }) || a.key.localeCompare(b.key)
+          );
+        });
+      }
     } else {
       grouped = [{ key: null, count: total }];
     }

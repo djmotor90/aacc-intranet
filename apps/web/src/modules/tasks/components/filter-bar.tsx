@@ -704,14 +704,17 @@ export function FilterBar({
   ];
 
   // group by options (only discrete-value fields make sense)
-  const groupByOptions: GroupByOption[] = [
-    { value: "", label: "None" },
+  const alphabeticalGroupByOptions: GroupByOption[] = [
     { value: "status", label: "Status" },
     { value: "priority", label: "Priority" },
     ...(taskTypes.length > 0 ? [{ value: "type", label: "Task Type" }] : []),
     ...fieldDefs
       .filter((d) => ["dropdown", "color", "checkbox", "user"].includes(d.type))
       .map((d) => ({ value: `cf_${d.id}`, label: d.label })),
+  ].sort((a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: "base" }));
+  const groupByOptions: GroupByOption[] = [
+    { value: "", label: "None" },
+    ...alphabeticalGroupByOptions,
   ];
 
   return (
