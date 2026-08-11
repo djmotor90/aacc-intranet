@@ -81,8 +81,8 @@ export async function getAdminUsersData(): Promise<{
   const roleById = new Map(permissionRolesList.map((r) => [r.id, r]));
   const memberRoleId = permissionRolesList.find((r) => r.slug === "member")?.id ?? null;
 
-  // Only intranet-eligible people: Entra access-group members, protected admins,
-  // and temporary ClickUp import placeholders — not every tenant account.
+  // Only Hub-eligible people: Entra access-group members, protected admins,
+  // and inactive legacy imports retained for historical assignments.
   const { directoryAdminWhere } = await import("@/lib/directory-users");
   const where = await directoryAdminWhere();
   const rows = await db.select().from(users).where(where).orderBy(asc(users.displayName));
@@ -253,7 +253,7 @@ export async function getAdminAuditLogs(params?: {
  */
 export async function getAdminTrashData(): Promise<{
   items: {
-    kind: "space" | "folder" | "list" | "task";
+    kind: "space" | "folder" | "list" | "task" | "custom_field";
     id: string;
     name: string;
     deletedAt: string;

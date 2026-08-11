@@ -44,7 +44,7 @@ if (
    
   console.error(
     "\n[FATAL] AUTH_URL is not set. In production, AUTH_URL must be the public\n" +
-      "        canonical URL of the app (e.g. https://intranet.apps.aitim.ai).\n" +
+      "        canonical URL of the app (e.g. https://aacc-hub.example.edu).\n" +
       "        Without it, OAuth callbacks use the wrong host and sign-in fails.\n",
   );
   throw new Error("AUTH_URL is required in production. See docs/coolify.md.");

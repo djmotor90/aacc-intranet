@@ -73,7 +73,7 @@ function TagChip({
 }
 
 /**
- * ClickUp-style multi-tag picker: chips on the task, popover to toggle existing
+ * Multi-tag picker: chips on the task and a popover to toggle existing
  * space tags, and "Create …" when the search text does not match any tag.
  *
  * `iconOnly` renders a small tag-icon toggle (for the table title cell) that

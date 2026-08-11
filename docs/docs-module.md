@@ -1,6 +1,6 @@
 # Docs module
 
-Page-first knowledge base (better ClickUp Docs model). Product plan: research + phases in the session plan; this file is the **implementation map**.
+Page-first knowledge base for AACC Hub. Product plan: research + phases in the session plan; this file is the **implementation map**.
 
 ## Model
 
@@ -38,7 +38,7 @@ Page-first knowledge base (better ClickUp Docs model). Product plan: research + 
 - `modules/docs` must not import `modules/tasks`
 - Task page **App Router** composes `LinkedPagesPanel` from docs
 
-## All Docs hub (ClickUp + Drive-style)
+## All Docs hub
 
 - Sidebar: **Docs** is a single nav item (no global page tree)
 - `/docs` = **All Docs** hub with **folders** (Drive-style) + docs table

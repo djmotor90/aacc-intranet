@@ -32,7 +32,7 @@ const COLLAPSED_WIDTH = 56;
 const COLLAPSE_SNAP = 88;
 /** Smallest expanded width before snap. */
 const MIN_EXPANDED = 160;
-/** Cap width so the work area always has room (ClickUp-like). */
+/** Cap width so the work area always has room. */
 const MAX_FRACTION = 0.3;
 const MAX_PX_CAP = 420;
 
@@ -197,7 +197,7 @@ export function AppShell({
               "font-semibold tracking-tight",
               collapsed ? "text-base" : "w-full",
             )}
-            title="AACC Operations Hub"
+            title="AACC Hub"
           >
             {collapsed ? (
               <span className="flex size-8 items-center justify-center rounded-md bg-primary text-sm font-bold text-primary-foreground">
@@ -216,7 +216,7 @@ export function AppShell({
                   />
                 </span>
                 <span className="text-[10px] font-bold uppercase tracking-[0.24em] text-primary">
-                  Operations Hub
+                  AACC Hub
                 </span>
               </span>
             )}

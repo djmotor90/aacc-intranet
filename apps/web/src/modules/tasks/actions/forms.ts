@@ -104,7 +104,7 @@ async function uniqueFormSlug(base: string): Promise<string> {
 }
 
 /**
- * Create a Form view on a list (ClickUp-style: + View → Form).
+ * Create a Form view on a list (+ View → Form).
  * Also creates the linked `public_forms` row used for share + submit.
  */
 export async function createFormView(params: {
@@ -215,7 +215,7 @@ export async function createFormOnList(params: {
 }
 
 /**
- * Ensure the list has a Files custom field and return its id (ClickUp-style).
+ * Ensure the list has a Files custom field and return its id.
  * Used when adding a file question from the form builder.
  */
 export async function ensureListFileCustomField(params: {
@@ -236,6 +236,7 @@ export async function ensureListFileCustomField(params: {
         eq(customFieldDefinitions.listId, listId),
         eq(customFieldDefinitions.type, "file"),
         eq(customFieldDefinitions.isArchived, false),
+        isNull(customFieldDefinitions.deletedAt),
       ),
     )
     .orderBy(asc(customFieldDefinitions.position));
@@ -504,6 +505,7 @@ export async function updateFormFields(formId: string, fields: unknown) {
         and(
           eq(customFieldDefinitions.listId, form.listId),
           inArray(customFieldDefinitions.id, customIds),
+          isNull(customFieldDefinitions.deletedAt),
         ),
       );
     if (defs.length !== new Set(customIds).size) {
@@ -550,7 +552,7 @@ export type FormUploadFile = {
   mimeType: string;
   buffer: Buffer;
   /**
-   * Form question id when uploaded against a file field (ClickUp-style).
+   * Form question id when uploaded against a file field.
    * Null/undefined = form-level “allow attachments” bucket (task root files).
    */
   fieldId?: string | null;
@@ -592,7 +594,7 @@ export async function submitPublicForm(params: {
   const defs = await db
     .select()
     .from(customFieldDefinitions)
-    .where(eq(customFieldDefinitions.listId, list.id));
+    .where(and(eq(customFieldDefinitions.listId, list.id), isNull(customFieldDefinitions.deletedAt)));
   const defById = new Map(defs.map((d) => [d.id, d]));
 
   let title = "Form submission";
@@ -894,7 +896,7 @@ export async function submitPublicForm(params: {
     }
 
     try {
-      // Field-mapped file custom fields (ClickUp-style).
+      // Field-mapped file custom fields.
       for (const field of activeFields) {
         if (field.type !== "file" || field.mapTo.kind !== "custom_field") continue;
         const uploads = filesByField.get(field.id) ?? [];

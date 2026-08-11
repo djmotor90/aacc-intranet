@@ -51,9 +51,11 @@ import { AssigneeAvatarStack, AssigneeSelect } from "./assignee-select";
 import { EntityIcon } from "./entity-icon";
 import {
   CustomFieldEditCell,
+  isTextFieldType,
   PrioritySelectCell,
   StatusSelectCell,
   TaskDateCell,
+  TextFieldQuickActions,
   TitleEditCell,
 } from "./editable-cells";
 import {
@@ -62,6 +64,7 @@ import {
   PRIORITY_LABELS,
 } from "./task-card";
 import { TaskActionsMenu, TaskContextMenu } from "./task-context-menu";
+import { TaskStatusPicker } from "./task-status-circle";
 import {
   TaskTableColumnMenu,
   type TaskTableColumnMenuState,
@@ -95,7 +98,12 @@ export function TableChip({
   );
 }
 
-export interface StatusLike { id: string; name: string; color: string }
+export interface StatusLike {
+  id: string;
+  name: string;
+  color: string;
+  category?: string;
+}
 export interface FieldDefLike { id: string; key: string; label: string; type: string; options: unknown }
 
 const CALCULABLE_TYPES = new Set(["number", "date"]);
@@ -140,7 +148,7 @@ export function renderFieldValue(
   userNames: Map<string, string>,
 ): ReactNode {
   if (value === null || value === undefined || value === "") return "—";
-  if (def.type === "color") {
+  if (def.type === "color" || def.type === "dropdown") {
     const options = (def.options ?? []) as { id: string; label: string; color?: string }[];
     const o = options.find((opt) => opt.id === value);
     if (!o) return String(value);
@@ -149,10 +157,12 @@ export function renderFieldValue(
         className="inline-flex items-center gap-1.5"
         title={o.label || o.color || undefined}
       >
-        <span
-          className="size-3.5 shrink-0 rounded-full border border-border shadow-sm"
-          style={{ backgroundColor: o.color ?? "#94a3b8" }}
-        />
+        {o.color && (
+          <span
+            className="size-3.5 shrink-0 rounded-full border border-border shadow-sm"
+            style={{ backgroundColor: o.color }}
+          />
+        )}
         {o.label ? <span className="truncate">{o.label}</span> : null}
       </span>
     );
@@ -346,8 +356,6 @@ const TaskRow = memo(function TaskRow({
         const iconBtn = cn(
           "relative flex size-6 shrink-0 items-center justify-center rounded-md",
           "text-muted-foreground transition-opacity hover:bg-muted hover:text-foreground",
-          // Always show when task already has tags (dots); otherwise only on hover.
-          "opacity-0 group-hover/title:opacity-100 focus-visible:opacity-100",
         );
         return (
           <TableCell key={colId} className="min-w-0 overflow-visible">
@@ -368,6 +376,13 @@ const TaskRow = memo(function TaskRow({
                 className="group/title flex min-w-0 items-center gap-0.5"
                 style={depth > 0 ? { paddingLeft: depth * INDENT_PER_DEPTH } : undefined}
               >
+                <TaskStatusPicker
+                  taskId={task.id}
+                  statusId={task.statusId}
+                  statuses={statuses}
+                  canEdit={canEdit}
+                  onSaved={(next) => onPatchTask(task.id, { statusId: next })}
+                />
                 {item.taskType && (
                   <EntityIcon
                     icon={item.taskType.icon}
@@ -430,10 +445,8 @@ const TaskRow = memo(function TaskRow({
                     taskTypes={taskTypes}
                     buttonClassName="size-6 shadow-none ring-0"
                   />
-                </div>
-
-                {canEdit && (
-                  <div className="flex shrink-0 items-center gap-0.5">
+                  {canEdit && (
+                    <>
                     {editingTags ? (
                       <TagPicker
                         taskId={task.id}
@@ -497,8 +510,9 @@ const TaskRow = memo(function TaskRow({
                     >
                       <Pencil className="size-3.5" />
                     </button>
-                  </div>
-                )}
+                    </>
+                  )}
+                </div>
               </div>
             )}
           </TableCell>
@@ -669,7 +683,7 @@ const TaskRow = memo(function TaskRow({
         );
 
       case "assignees":
-        // Always show ClickUp-style avatar stack; picker opens from the stack itself.
+        // Always show the avatar stack; the picker opens from the stack itself.
         return (
           <TableCell key={colId} className="p-0.5" onClick={(e) => e.stopPropagation()}>
             {canEdit ? (
@@ -743,7 +757,17 @@ const TaskRow = memo(function TaskRow({
 
           return (
             <TableCell key={colId} className="p-0.5">
-              {canEdit ? (
+              {isTextFieldType(def.type) ? (
+                <TextFieldQuickActions
+                  taskId={task.id}
+                  defId={defId}
+                  value={cf[defId]}
+                  display={renderFieldValue(def, cf[defId], userNames)}
+                  canEdit={canEdit}
+                  onActivate={canEdit ? () => openEdit(colId) : undefined}
+                  onSaved={(next) => onPatchCustomField(task.id, defId, next)}
+                />
+              ) : canEdit ? (
                 <button type="button" onClick={() => openEdit(colId)} className={CELL_BTN}>
                   {renderFieldValue(def, cf[defId], userNames)}
                 </button>
@@ -843,7 +867,7 @@ export function TaskTable({
   const router = useRouter();
   const [, startTransition] = useTransition();
 
-  // ── sparse row cache keyed by absolute offset (ClickUp/Airtable model) ─────
+  // ── sparse row cache keyed by absolute offset ─────────────────────────────
   // The scrollbar reserves height for ALL rows up front; unloaded offsets render
   // as skeletons and fill in as pages arrive. Fetched rows stay cached, so
   // scrolling back up never refetches and the layout never shifts.
@@ -882,7 +906,7 @@ export function TaskTable({
     [patchRows],
   );
 
-  // ── inline subtask expansion (ClickUp-style) ──────────────────────────────
+  // ── inline subtask expansion ──────────────────────────────────────────────
   // Keyed by task id (not row offset) so it works uniformly for top-level
   // tasks and nested subtasks alike. Children stay cached after collapsing —
   // re-expanding is instant. Reset alongside rowsByOffset whenever the
@@ -1362,7 +1386,7 @@ export function TaskTable({
         if (def.type === "checkbox") return { label: key === "true" ? "Yes" : "No" };
         const options = (def.options ?? []) as { id: string; label: string; color?: string }[];
         const opt = options.find((o) => o.id === key);
-        if (def.type === "color" && opt) {
+        if ((def.type === "color" || def.type === "dropdown") && opt) {
           return { label: opt.label, color: opt.color };
         }
         return { label: fieldOptionLabel(def, key, userNames) };

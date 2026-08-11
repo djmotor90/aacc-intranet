@@ -196,7 +196,7 @@ export const syncState = pgTable("sync_state", {
 });
 
 /**
- * Enterprise audit trail (ClickUp-style).
+ * Enterprise audit trail.
  * Separate from task `activity_log` (in-app feed). Append-only for compliance review.
  *
  * Categories: user | task | fields | hierarchy | agents | other
@@ -205,7 +205,7 @@ export const auditLogs = pgTable(
   "audit_logs",
   {
     id: bigserial("id", { mode: "number" }).primaryKey(),
-    /** ClickUp-style top-level filter bucket */
+    /** Top-level audit filter bucket. */
     category: text("category").notNull(),
     /** Stable machine key e.g. USER_LOGIN, TASK_CREATED */
     eventType: text("event_type").notNull(),

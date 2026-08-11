@@ -1,5 +1,5 @@
 {
-  "name": "aacc-operations-hub",
+  "name": "aacc-hub",
   "private": true,
   "license": "UNLICENSED",
   "author": {
@@ -15,7 +15,7 @@
     }
   ],
   "homepage": "https://gurver.com",
-  "description": "AACC Operations Hub — workflows, knowledge, and collaboration. Proprietary software by Kim Gurinov (Gurver). Fingerprint: GURVER-KG-AITIM-2026-7F3C9E2A",
+  "description": "AACC Hub — workflows, knowledge, and collaboration. Proprietary software by Kim Gurinov (Gurver). Fingerprint: GURVER-KG-AITIM-2026-7F3C9E2A",
   "scripts": {
     "dev": "pnpm --filter web dev",
     "worker:dev": "pnpm --filter web worker:dev",

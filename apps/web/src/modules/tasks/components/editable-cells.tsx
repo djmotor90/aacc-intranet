@@ -7,7 +7,7 @@
  * Fingerprint: GURVER-KG-AITIM-2026-7F3C9E2A
  * License: Proprietary. All rights reserved. See LICENSE / COPYRIGHT.
  */
-import { Pencil } from "lucide-react";
+import { Copy, Pencil, X } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useRef, useState, useTransition, type ReactNode } from "react";
 import { toast } from "sonner";
@@ -86,12 +86,12 @@ function LazyPicker({
           {display}
         </button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent className="max-h-72">
+      <DropdownMenuContent className="max-h-64 w-auto min-w-36 max-w-64 p-1">
         {clearable && (
           <DropdownMenuCheckboxItem
             checked={selectedId === null}
             onCheckedChange={() => onSelect(null)}
-            className="text-muted-foreground"
+            className="min-h-6 rounded-md py-0.5 pr-7 pl-2 text-xs leading-tight text-muted-foreground [&_svg]:size-3.5"
           >
             —
           </DropdownMenuCheckboxItem>
@@ -101,9 +101,10 @@ function LazyPicker({
             key={o.id}
             checked={o.id === selectedId}
             onCheckedChange={() => onSelect(o.id)}
+            className="min-h-6 gap-1.5 rounded-md py-0.5 pr-7 pl-2 text-xs leading-tight [&_svg]:size-3.5"
           >
-            {o.color && <span className="mr-1.5 size-2.5 shrink-0 rounded-full" style={{ backgroundColor: o.color }} />}
-            {o.label}
+            {o.color && <span className="size-2 shrink-0 rounded-full" style={{ backgroundColor: o.color }} />}
+            <span className="truncate">{o.label}</span>
           </DropdownMenuCheckboxItem>
         ))}
       </DropdownMenuContent>
@@ -425,25 +426,69 @@ export function TextEditCell({
   const [, startTransition] = useTransition();
   const inputRef = useRef<HTMLInputElement>(null);
 
-  function commit() {
+  function commitValue(next: string) {
     setEditing(false);
-    if (draft === value) return;
-    startTransition(() => runSave(async () => onCommit(draft)));
+    if (next === value) return;
+    startTransition(() => runSave(async () => onCommit(next)));
+  }
+
+  function commit() {
+    commitValue(draft);
+  }
+
+  async function copyValue() {
+    if (!value) return;
+    try {
+      await navigator.clipboard.writeText(value);
+      toast.success("Field value copied");
+    } catch {
+      toast.error("Could not copy field value");
+    }
   }
 
   if (!editing) {
     return (
-      <button
-        type="button"
-        onClick={(e) => {
-          e.stopPropagation();
-          setDraft(value);
-          setEditing(true);
-        }}
-        className="block w-full truncate rounded px-1.5 py-1 text-left text-sm hover:bg-muted"
-      >
-        {value || <span className="text-muted-foreground">—</span>}
-      </button>
+      <div className="group/custom-field flex min-w-0 items-center gap-0.5 rounded px-1 py-0.5 hover:bg-muted">
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            setDraft(value);
+            setEditing(true);
+          }}
+          className="min-w-0 flex-1 truncate py-0.5 text-left text-sm"
+        >
+          {value || <span className="text-muted-foreground">—</span>}
+        </button>
+        {value && (
+          <span className="flex shrink-0 items-center opacity-0 transition-opacity group-hover/custom-field:opacity-100 group-focus-within/custom-field:opacity-100">
+            <button
+              type="button"
+              title="Copy value"
+              aria-label="Copy value"
+              onClick={(e) => {
+                e.stopPropagation();
+                void copyValue();
+              }}
+              className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-background hover:text-foreground"
+            >
+              <Copy className="size-3.5" />
+            </button>
+            <button
+              type="button"
+              title="Clear value"
+              aria-label="Clear value"
+              onClick={(e) => {
+                e.stopPropagation();
+                commitValue("");
+              }}
+              className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-background hover:text-destructive"
+            >
+              <X className="size-3.5" />
+            </button>
+          </span>
+        )}
+      </div>
     );
   }
 
@@ -463,6 +508,97 @@ export function TextEditCell({
       className="h-7 w-full rounded-md border bg-background px-1.5 text-sm ring-1 ring-ring"
     />
   );
+}
+
+/** Text-like custom fields get lightweight actions without entering edit mode. */
+export function TextFieldQuickActions({
+  taskId,
+  defId,
+  value,
+  display,
+  canEdit,
+  onActivate,
+  onSaved,
+}: {
+  taskId: string;
+  defId: string;
+  value: unknown;
+  display: ReactNode;
+  canEdit: boolean;
+  onActivate?: () => void;
+  onSaved?: (value: unknown) => void;
+}) {
+  const [, startTransition] = useTransition();
+  const textValue = value === null || value === undefined || value === "" ? "" : String(value);
+
+  function copyValue() {
+    if (!textValue) return;
+    startTransition(() =>
+      runSave(async () => {
+        await navigator.clipboard.writeText(textValue);
+        toast.success("Field value copied");
+      }),
+    );
+  }
+
+  function clearValue() {
+    if (!canEdit || !textValue) return;
+    onSaved?.(undefined);
+    startTransition(() => runSave(() => updateTaskCustomField(taskId, defId, undefined)));
+  }
+
+  return (
+    <div className="group/custom-field flex min-w-0 items-center gap-0.5 rounded px-1 py-0.5 hover:bg-muted">
+      {onActivate ? (
+        <button
+          type="button"
+          onClick={(event) => {
+            event.stopPropagation();
+            onActivate();
+          }}
+          className="min-w-0 flex-1 truncate py-0.5 text-left text-sm"
+        >
+          {display}
+        </button>
+      ) : (
+        <span className="min-w-0 flex-1 truncate py-0.5 text-left text-sm">{display}</span>
+      )}
+      {textValue && (
+        <span className="flex shrink-0 items-center opacity-0 transition-opacity group-hover/custom-field:opacity-100 group-focus-within/custom-field:opacity-100">
+          <button
+            type="button"
+            title="Copy value"
+            aria-label="Copy value"
+            onClick={(event) => {
+              event.stopPropagation();
+              copyValue();
+            }}
+            className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-background hover:text-foreground"
+          >
+            <Copy className="size-3.5" />
+          </button>
+          {canEdit && (
+            <button
+              type="button"
+              title="Clear value"
+              aria-label="Clear value"
+              onClick={(event) => {
+                event.stopPropagation();
+                clearValue();
+              }}
+              className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-background hover:text-destructive"
+            >
+              <X className="size-3.5" />
+            </button>
+          )}
+        </span>
+      )}
+    </div>
+  );
+}
+
+export function isTextFieldType(type: string) {
+  return type === "text" || type === "textarea" || type === "number" || type === "url" || type === "email" || type === "phone";
 }
 
 // ─── checkbox ───────────────────────────────────────────────────────────────────

@@ -35,7 +35,7 @@ import {
   uniqueListSlug,
 } from "./shared";
 
-/** Default list name when a space is created (ClickUp-style starter list). */
+/** Default list name when a workspace is created. */
 const DEFAULT_LIST_NAME = "List";
 
 async function uniqueValue(column: typeof spaces.slug | typeof spaces.taskPrefix, base: string) {
@@ -309,7 +309,7 @@ const appearanceColorSchema = z
     return t.slice(0, 20);
   });
 
-/** ClickUp-style Color & Icon for spaces, folders, and lists. */
+/** Color and icon settings for workspaces, folders, and lists. */
 export async function setEntityAppearance(params: {
   kind: "space" | "folder" | "list";
   id: string;

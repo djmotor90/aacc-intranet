@@ -34,12 +34,12 @@ async function main() {
     .returning();
 
   // Dev user (stands in for an Entra-synced user locally)
-  let [admin] = await db.select().from(users).where(eq(users.email, "dev@aitim.local"));
+  let [admin] = await db.select().from(users).where(eq(users.email, "dev@aacc.local"));
   if (!admin) {
     [admin] = await db
       .insert(users)
       .values({
-        email: "dev@aitim.local",
+        email: "dev@aacc.local",
         displayName: "Dev Admin",
         jobTitle: "Developer",
         department: "IT",

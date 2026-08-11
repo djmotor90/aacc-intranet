@@ -102,7 +102,7 @@ function dueUrgency(dueDate: string | null): { overdue: boolean; dueSoon: boolea
 
 export function TaskCardContent({
   task,
-  /** Optional ⋯ menu (ClickUp-style) rendered top-right. */
+  /** Optional ⋯ menu rendered at the top right. */
   menu,
 }: {
   task: TaskCardData;

@@ -33,7 +33,8 @@ import {
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { forwardRef, useEffect, useMemo, useState, useTransition } from "react";
-import { moveFolder, moveList } from "@/modules/tasks/actions";
+import { toast } from "sonner";
+import { moveFolder, moveList, reorderList } from "@/modules/tasks/actions";
 import { EntityIcon } from "@/modules/tasks/components/entity-icon";
 import { SpaceNavContextMenu, TasksRootContextMenu } from "@/modules/tasks/components/nav-context-menus";
 import {
@@ -176,6 +177,53 @@ function isSelfOrDescendant(
   return false;
 }
 
+function findListLocation(taskNavTree: TaskNavTreeItem[], listId: string) {
+  for (const space of taskNavTree) {
+    if (space.lists.some((list) => list.id === listId)) return { spaceId: space.id, folderId: null as string | null };
+    function walk(nodes: FolderNavNode[]): { spaceId: string; folderId: string } | null {
+      for (const folder of nodes) {
+        if (folder.lists.some((list) => list.id === listId)) return { spaceId: space.id, folderId: folder.id };
+        const nested = walk(folder.subfolders);
+        if (nested) return nested;
+      }
+      return null;
+    }
+    const found = walk(space.folders);
+    if (found) return found;
+  }
+  return null;
+}
+
+type DropPlacement = "before" | "after";
+
+function reorderListInTree(
+  tree: TaskNavTreeItem[],
+  listId: string,
+  targetListId: string,
+  placement: DropPlacement,
+) {
+  const next = structuredClone(tree);
+  const containers: ListNavNode[][] = [];
+  function collectFolders(nodes: FolderNavNode[]) {
+    for (const folder of nodes) {
+      containers.push(folder.lists);
+      collectFolders(folder.subfolders);
+    }
+  }
+  for (const space of next) {
+    containers.push(space.lists);
+    collectFolders(space.folders);
+  }
+  const source = containers.find((items) => items.some((item) => item.id === listId));
+  const target = containers.find((items) => items.some((item) => item.id === targetListId));
+  if (!source || !target) return tree;
+  const sourceIndex = source.findIndex((item) => item.id === listId);
+  const [moved] = source.splice(sourceIndex, 1);
+  const targetIndex = target.findIndex((item) => item.id === targetListId);
+  target.splice(targetIndex + (placement === "after" ? 1 : 0), 0, moved);
+  return next;
+}
+
 export function SidebarNav({
   items,
   taskNavTree = [],
@@ -191,14 +239,20 @@ export function SidebarNav({
   const pathname = usePathname();
   const [, startTransition] = useTransition();
   const [activeLabel, setActiveLabel] = useState<string | null>(null);
+  const [visibleTaskNavTree, setVisibleTaskNavTree] = useState(taskNavTree);
+  const [previousTaskNavTree, setPreviousTaskNavTree] = useState(taskNavTree);
+  if (previousTaskNavTree !== taskNavTree) {
+    setPreviousTaskNavTree(taskNavTree);
+    setVisibleTaskNavTree(taskNavTree);
+  }
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
-  const folderIndex = useMemo(() => buildFolderIndex(taskNavTree), [taskNavTree]);
+  const folderIndex = useMemo(() => buildFolderIndex(visibleTaskNavTree), [visibleTaskNavTree]);
   const { isExpanded, toggle, expand } = useNavCollapse();
 
   // When navigating to a list, open its parent space/folders so the active item is visible.
   // Depend only on pathname so a tree data refresh does not undo a manual collapse.
   useEffect(() => {
-    for (const key of ancestorKeysForPath(taskNavTree, pathname)) {
+    for (const key of ancestorKeysForPath(visibleTaskNavTree, pathname)) {
       expand(key);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional: only react to navigation
@@ -206,7 +260,7 @@ export function SidebarNav({
 
   function findLabel(id: string): string | null {
     const [, type, entityId] = id.split(":");
-    for (const space of taskNavTree) {
+    for (const space of visibleTaskNavTree) {
       if (type === "list") {
         const found = space.lists.find((l) => l.id === entityId);
         if (found) return found.name;
@@ -242,6 +296,36 @@ export function SidebarNav({
     const [, activeType, activeEntityId] = activeId.split(":");
     const [, overType, overEntityId] = overId.split(":");
 
+    if (activeType === "list" && overType === "list") {
+      if (activeEntityId !== overEntityId) {
+        const source = findListLocation(visibleTaskNavTree, activeEntityId);
+        const target = findListLocation(visibleTaskNavTree, overEntityId);
+        if (source && target) {
+          const draggedRect = active.rect.current.translated;
+          const placement: DropPlacement =
+            draggedRect && draggedRect.top + draggedRect.height / 2 > over.rect.top + over.rect.height / 2
+              ? "after"
+              : "before";
+          setVisibleTaskNavTree((current) =>
+            reorderListInTree(current, activeEntityId, overEntityId, placement),
+          );
+          startTransition(async () => {
+            try {
+              if (source.spaceId !== target.spaceId || source.folderId !== target.folderId) {
+                await moveList(activeEntityId, target.spaceId, target.folderId, overEntityId, placement);
+              } else {
+                await reorderList(activeEntityId, overEntityId, placement);
+              }
+            } catch (error) {
+              setVisibleTaskNavTree(taskNavTree);
+              toast.error(error instanceof Error ? error.message : "Could not reorder list");
+            }
+          });
+        }
+      }
+      return;
+    }
+
     const targetFolderId = overType === "folder" ? overEntityId : null;
     const targetSpaceId =
       overType === "space" ? overEntityId : targetFolderId ? folderIndex.get(targetFolderId)?.spaceId : undefined;
@@ -268,7 +352,7 @@ export function SidebarNav({
           const Icon = ICONS[item.icon];
           const isWorkspaceApp = Boolean(item.moduleId);
           const moduleSpaces = isWorkspaceApp
-            ? taskNavTree.filter((s) => s.moduleId === item.moduleId)
+            ? visibleTaskNavTree.filter((s) => s.moduleId === item.moduleId)
             : [];
 
           const onModuleHome =
@@ -450,7 +534,7 @@ export function SidebarNav({
                         </div>
 
                         {spaceExpanded && hasChildren && (
-                          <div className="ml-3 flex flex-col gap-0.5 border-l border-border pl-1.5">
+                          <div className="ml-5 flex flex-col gap-0.5 border-l border-[#007582]/20 pl-2.5">
                             {space.folders.map((f) => (
                               <FolderRow
                                 key={f.id}

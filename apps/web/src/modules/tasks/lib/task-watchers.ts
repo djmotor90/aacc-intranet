@@ -9,7 +9,7 @@ import { db, taskAssignees, taskFollowers } from "@aitim/db";
 import { eq } from "drizzle-orm";
 
 /**
- * Assignees + explicit followers of a task (ClickUp-style watchers).
+ * Assignees and explicit followers of a task.
  * Used for status / assignee / comment fan-out.
  */
 export async function getTaskWatcherIds(taskId: string): Promise<string[]> {

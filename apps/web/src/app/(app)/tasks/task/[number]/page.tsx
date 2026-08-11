@@ -325,7 +325,7 @@ export default async function TaskDetailPage(props: { params: Promise<{ number: 
             className="text-lg font-semibold"
           />
 
-          {/* Tags sit under the title like ClickUp (also available as a layout field). */}
+          {/* Tags sit under the title and are also available as a layout field. */}
           <div className="flex flex-col gap-1.5">
             <FieldLabel fieldId="tags">Tags</FieldLabel>
             <TagPicker

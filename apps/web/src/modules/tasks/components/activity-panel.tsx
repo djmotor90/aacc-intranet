@@ -370,7 +370,7 @@ export function ActivityPanel({
   currentUserId: string;
   currentUserName: string;
   currentUserPhotoKey: string | null;
-  /** Current followers of this task (ClickUp-style bell). */
+  /** Current followers shown in the task notification menu. */
   followers: TaskFollowerRow[];
   /** Whether the viewer can add/remove *other* people's follow status (mirrors task edit access). */
   canManageFollowers?: boolean;

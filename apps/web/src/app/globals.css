@@ -9,7 +9,7 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 
-/* ── TipTap / ClickUp-style rich text ─────────────────────────── */
+/* ── AACC Hub TipTap rich text ───────────────────────────────── */
 .ProseMirror {
   outline: none;
   word-break: break-word;
@@ -249,7 +249,7 @@
   outline: none !important;
   box-shadow: none;
 }
-/* ClickUp-style file chips */
+/* Compact file chips */
 .ProseMirror .aitim-file-attachment,
 .aitim-editor .aitim-file-attachment {
   display: block;
@@ -520,7 +520,7 @@ span.aitim-badge--strong-grey { background: #868e96 !important; color: #fff !imp
   font-weight: 600;
 }
 
-/* ── ClickUp-style 6-dot block grip (first-press drag) ─────────── */
+/* ── Six-dot block grip (first-press drag) ────────────────────── */
 .aitim-block-grip {
   display: flex;
   align-items: center;

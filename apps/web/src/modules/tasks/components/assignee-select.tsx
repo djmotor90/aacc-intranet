@@ -36,7 +36,7 @@ const SIZE = {
 } as const;
 
 /**
- * Overlapping circular avatars (ClickUp-style). Used as the closed state of
+ * Overlapping circular avatars used as the closed state of
  * the assignee picker and as read-only display in the table.
  */
 export function AssigneeAvatarStack({

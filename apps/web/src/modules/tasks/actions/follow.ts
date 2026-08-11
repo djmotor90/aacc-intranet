@@ -62,7 +62,7 @@ export async function toggleTaskFollow(taskId: string): Promise<{ following: boo
 }
 
 /**
- * Explicit-state follow (ClickUp bell popover's Follow/Unfollow rows —
+ * Explicit-state follow for the task notification menu —
  * idempotent, unlike the "..." menu's toggle).
  */
 export async function setTaskFollowing(

@@ -20,7 +20,7 @@ export default async function DirectoryPage(props: {
   const { q } = await props.searchParams;
   const query = q?.toLowerCase().trim() ?? "";
 
-  // Entra access-group members (+ protected admins) and ClickUp placeholders only.
+  // Entra access-group members, protected admins, and legacy imports only.
   const eligible = await directoryPickerWhere();
   const allUsers = await db
     .select()

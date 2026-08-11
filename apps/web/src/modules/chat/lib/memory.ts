@@ -328,6 +328,7 @@ export async function recordRecentMemory(_input: {
   userText: string;
   agentText: string;
 }): Promise<void> {
+  void _input;
   // Intentionally empty — conversation continuity uses context_summary + short window.
 }
 

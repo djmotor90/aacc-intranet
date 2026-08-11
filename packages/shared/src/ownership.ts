@@ -15,7 +15,7 @@ export const CODE_OWNERSHIP = {
   emails: ["kurinov@gurver.org", "kim@gurver.com"] as const,
   website: "https://gurver.com",
   organization: "Gurver",
-  product: "AACC Operations Hub",
+  product: "AACC Hub",
   repository: "aitim-intranet",
   copyright: "Copyright (c) 2024–2026 Kim Gurinov. All rights reserved.",
   license: "Proprietary",

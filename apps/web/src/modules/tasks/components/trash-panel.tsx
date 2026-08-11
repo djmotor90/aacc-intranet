@@ -7,7 +7,7 @@
  * Fingerprint: GURVER-KG-AITIM-2026-7F3C9E2A
  * License: Proprietary. All rights reserved. See LICENSE / COPYRIGHT.
  */
-import { Building2, Folder, List, ListTodo, RotateCcw, Search, Trash2 } from "lucide-react";
+import { Building2, Folder, List, ListTodo, RotateCcw, Search, SlidersHorizontal, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useMemo, useState, useTransition } from "react";
 import { toast } from "sonner";
@@ -19,10 +19,12 @@ import {
   purgeList,
   purgeSpace,
   purgeTaskById,
+  purgeFieldDefinition,
   restoreFolder,
   restoreList,
   restoreSpace,
   restoreTaskById,
+  restoreFieldDefinition,
 } from "../actions";
 import { TRASH_RETENTION_DAYS, type TrashItem } from "../lib/trash";
 
@@ -36,6 +38,8 @@ function kindIcon(kind: TrashItem["kind"]) {
       return <List className="size-4 shrink-0 text-muted-foreground" />;
     case "task":
       return <ListTodo className="size-4 shrink-0 text-muted-foreground" />;
+    case "custom_field":
+      return <SlidersHorizontal className="size-4 shrink-0 text-muted-foreground" />;
   }
 }
 
@@ -49,6 +53,8 @@ function kindLabel(kind: TrashItem["kind"]) {
       return "List";
     case "task":
       return "Task";
+    case "custom_field":
+      return "Custom field";
   }
 }
 
@@ -133,7 +139,8 @@ export function TrashPanel({
         if (item.kind === "space") await restoreSpace(item.id);
         else if (item.kind === "folder") await restoreFolder(item.id);
         else if (item.kind === "list") await restoreList(item.id);
-        else await restoreTaskById(item.id);
+        else if (item.kind === "task") await restoreTaskById(item.id);
+        else await restoreFieldDefinition(item.id);
         removeLocal(item.id);
         toast.success(`Restored “${item.name}”`);
         router.refresh();
@@ -153,6 +160,8 @@ export function TrashPanel({
             ? " and removes all nested content"
             : item.kind === "task"
               ? " and removes its subtasks, comments, and attachments"
+              : item.kind === "custom_field"
+                ? " and removes its saved values from every task"
               : ""
         }.`,
       )
@@ -165,7 +174,8 @@ export function TrashPanel({
         if (item.kind === "space") await purgeSpace(item.id);
         else if (item.kind === "folder") await purgeFolder(item.id);
         else if (item.kind === "list") await purgeList(item.id);
-        else await purgeTaskById(item.id);
+        else if (item.kind === "task") await purgeTaskById(item.id);
+        else await purgeFieldDefinition(item.id);
         removeLocal(item.id);
         toast.success(`Permanently deleted “${item.name}”`);
         router.refresh();
@@ -213,6 +223,7 @@ export function TrashPanel({
           <option value="folder">Folders</option>
           <option value="list">Lists</option>
           <option value="task">Tasks</option>
+          <option value="custom_field">Custom fields</option>
         </select>
         <select
           value={spaceId}
@@ -252,7 +263,7 @@ export function TrashPanel({
           <Trash2 className="mx-auto mb-3 size-8 text-muted-foreground/60" />
           <p className="text-sm font-medium">Trash is empty</p>
           <p className="mt-1 text-sm text-muted-foreground">
-            Deleted spaces, folders, lists, and tasks appear here so you can restore them.
+            Deleted spaces, folders, lists, tasks, and custom fields appear here so you can restore them.
           </p>
         </div>
       ) : filtered.length === 0 ? (

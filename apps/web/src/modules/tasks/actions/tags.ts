@@ -91,7 +91,7 @@ export async function toggleTaskTag(taskId: string, tagId: string) {
 
 /**
  * Create a new space tag (or reuse an existing one with the same name,
- * case-insensitive) and attach it to the task — same flow as ClickUp's
+ * case-insensitive) and attach it to the task in one operation.
  * "type a name → Create" action in the tag picker.
  */
 export async function createAndAddTag(

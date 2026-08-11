@@ -1,5 +1,5 @@
 # ─────────────────────────────────────────────────────────────────────────────
-# AACC Operations Hub — multi-stage build
+# AACC Hub — multi-stage build
 # One image, two run modes (set via CMD override in Coolify):
 #   web:    ./entrypoint.sh          → runs migrations then Next.js standalone
 #   worker: node dist/worker.js      → pg-boss background consumers

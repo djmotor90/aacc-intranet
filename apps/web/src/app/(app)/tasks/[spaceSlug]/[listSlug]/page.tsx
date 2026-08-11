@@ -71,7 +71,7 @@ export default async function ListPage(props: {
   const canEdit = role === "owner" || role === "member";
   const isSpaceOwner = (await getSpaceRole(user.id, space.id, user.platformRole)) === "owner";
 
-  // Named views (ClickUp-style). Seed List + Board if the list has none yet.
+  // Seed List and Board named views if the list has none yet.
   const views = await ensureListViews(list.id);
   if (views.length === 0) notFound();
 
@@ -267,7 +267,7 @@ export default async function ListPage(props: {
           </div>
         </div>
 
-        {/* View tabs sit under the list name (ClickUp-style) */}
+        {/* View tabs sit under the list name. */}
         <Suspense fallback={<Skeleton className="h-8 w-64" />}>
           <ListViewTabs
             listId={list.id}

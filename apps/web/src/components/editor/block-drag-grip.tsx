@@ -102,7 +102,7 @@ function findTopLevelBlock(
 }
 
 /**
- * ClickUp-style 6-dot grip. Works for every top-level block (text, heading,
+ * Six-dot drag grip for every top-level block (text, heading,
  * list, image, table, file, code, quote). First mousedown starts the drag.
  */
 export function BlockDragGrip({

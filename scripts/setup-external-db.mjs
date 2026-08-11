@@ -12,7 +12,7 @@ import { fileURLToPath } from "node:url";
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
 const requireFromDb = createRequire(resolve(root, "packages/db/package.json"));
-const appDatabase = process.argv[2] ?? "aitim_intranet";
+const appDatabase = process.argv[2] ?? "aacc_hub";
 
 function quoteIdentifier(value) {
   return `"${value.replaceAll('"', '""')}"`;

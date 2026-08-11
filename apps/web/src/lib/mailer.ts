@@ -45,7 +45,7 @@ export async function sendMail(mail: Mail): Promise<void> {
     secure: false,
   });
   await transporter.sendMail({
-    from: process.env.GRAPH_SENDER_UPN || "intranet@aitim.local",
+    from: process.env.GRAPH_SENDER_UPN || "aacc-hub@localhost",
     to: mail.to,
     subject: mail.subject,
     html: mail.html,

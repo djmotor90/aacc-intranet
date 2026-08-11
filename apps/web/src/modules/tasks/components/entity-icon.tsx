@@ -83,7 +83,7 @@ export const APPEARANCE_COLORS = [
   "#84cc16",
 ] as const;
 
-/** Curated emoji set similar to ClickUp’s Color & Icon picker. */
+/** Curated emoji set for the AACC Hub color and icon picker. */
 export const APPEARANCE_EMOJIS = [
   "🚀",
   "⭐",

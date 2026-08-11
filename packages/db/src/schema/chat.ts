@@ -40,7 +40,7 @@ export const chatConversationKind = pgEnum("chat_conversation_kind", [
 /**
  * Super Agents — first-class AI teammates (not Entra users).
  *
- * Dual models (ClickUp-style cost split):
+ * Dual models balance setup quality and everyday operating cost:
  * - buildModel: stronger model used when drafting/refining instructions
  * - chatModel / model: cheaper default for day-to-day DM replies
  *
@@ -85,7 +85,7 @@ export const agents = pgTable(
 );
 
 /**
- * Who can use / manage a Super Agent (ClickUp-style sharing).
+ * Who can use or manage an AACC Hub Super Agent.
  * - owner: full control (usually creator)
  * - admin: edit instructions, knowledge, members, write tools
  * - member: chat / interact only

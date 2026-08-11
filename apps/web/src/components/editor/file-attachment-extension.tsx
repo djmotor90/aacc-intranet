@@ -33,7 +33,7 @@ function formatSize(bytes: number | null | undefined): string {
 }
 
 /**
- * ClickUp-style file chip: paperclip + name + size, links to download URL.
+ * Compact file chip: paperclip + name + size, linked to its download URL.
  */
 export const FileAttachment = Node.create({
   name: "fileAttachment",

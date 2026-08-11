@@ -8,7 +8,7 @@
 import { ImageResponse } from "next/og";
 
 export const runtime = "edge";
-export const alt = "AACC Operations Hub";
+export const alt = "AACC Hub";
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 
@@ -78,7 +78,7 @@ export default function OpenGraphImage() {
           }}
         >
           <div style={{ fontSize: 72, fontWeight: 800, letterSpacing: -1.5, lineHeight: 1.05 }}>
-            AACC Operations Hub
+            AACC Hub
           </div>
           <div style={{ fontSize: 32, fontWeight: 500, opacity: 0.88, maxWidth: 900 }}>
             Workflows, knowledge, and collaboration in one shared workspace

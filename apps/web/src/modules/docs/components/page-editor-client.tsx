@@ -562,7 +562,7 @@ export function PageEditorClient({
   // Side rails (pages + styles) stay fixed for the full height of main.
   return (
     <div className="-mx-6 -mt-6 -mb-6 flex h-[calc(100svh-3.5rem)] overflow-hidden bg-background">
-      {/* ClickUp-style left pages rail (desktop) — collapsible for writing space */}
+      {/* Collapsible left pages rail (desktop) preserves writing space. */}
       {outline && isDesktop && !styles.focusPage && pagesRailOpen && (
         <div className="hidden h-full min-h-0 w-[15.5rem] shrink-0 border-r lg:flex lg:flex-col">
           <DocPageOutline
@@ -899,7 +899,7 @@ export function PageEditorClient({
         </div>
       )}
 
-      {/* Document scrollport + floating ClickUp-style outline card */}
+      {/* Document scrollport and floating outline card. */}
       <div className="relative flex min-h-0 flex-1 overflow-hidden">
         <div
           ref={documentScrollRef}
@@ -934,7 +934,7 @@ export function PageEditorClient({
           </div>
         )}
 
-        {/* Secondary actions (ClickUp page toolbar) */}
+        {/* Secondary page actions. */}
         {!styles.focusPage && (
           <div className="mb-4 flex flex-wrap items-center gap-0.5">
             <MetaChip

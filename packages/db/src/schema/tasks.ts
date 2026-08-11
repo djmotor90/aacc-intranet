@@ -126,7 +126,7 @@ export const folders = pgTable(
     name: text("name").notNull(),
     slug: text("slug").notNull(),
     position: text("position").notNull().default("a0"),
-    /** Emoji or short icon key (ClickUp-style Color & Icon). */
+    /** Emoji or short icon key used by the workspace icon picker. */
     icon: text("icon"),
     color: text("color"),
     isArchived: boolean("is_archived").notNull().default(false),
@@ -179,7 +179,7 @@ export const lists = pgTable(
     slug: text("slug").notNull(),
     description: text("description"),
     position: text("position").notNull().default("a0"),
-    /** Emoji or short icon key (ClickUp-style Color & Icon). */
+    /** Emoji or short icon key used by the workspace icon picker. */
     icon: text("icon"),
     color: text("color"),
     defaultStatusId: uuid("default_status_id"),
@@ -240,7 +240,7 @@ export const listMembers = pgTable(
 );
 
 /**
- * Named views on a list (ClickUp-style): each has its own type (table/board),
+ * Named views on a list: each has its own type (table/board),
  * filters, group-by, closed-task visibility, and optional column order.
  */
 export const listViews = pgTable(
@@ -345,7 +345,7 @@ export const taskAssignees = pgTable(
 );
 
 /**
- * ClickUp-style task watchers. Assignees auto-follow on assign; anyone with
+ * Task watchers. Assignees auto-follow on assign; anyone with
  * list access can also follow for status / assignee / comment updates without
  * being on the task.
  */
@@ -369,7 +369,7 @@ export const taskFollowers = pgTable(
 );
 
 /**
- * Space-scoped tags (ClickUp-style): reusable colored labels shared across all
+ * Workspace-scoped tags: reusable colored labels shared across all
  * lists in a space. Tasks attach tags via `task_tags`.
  */
 export const tags = pgTable(
@@ -410,7 +410,7 @@ export const taskTags = pgTable(
 );
 
 /**
- * Space-scoped task types (Task/Project/Bug/etc., ClickUp-style) — shared across every
+ * Workspace-scoped task types (Task/Project/Bug/etc.) — shared across every
  * list in the space, same scoping as `tags`. `showDeliveryTimeline` gates the
  * subtask/checklist-completion progress bar on the task detail view.
  */
@@ -482,9 +482,13 @@ export const customFieldDefinitions = pgTable(
     isRequired: boolean("is_required").notNull().default(false),
     position: text("position").notNull().default("a0"),
     isArchived: boolean("is_archived").notNull().default(false),
+    deletedAt: timestamp("deleted_at", { withTimezone: true }),
     ...timestamps,
   },
-  (t) => [uniqueIndex("custom_field_defs_list_key_idx").on(t.listId, t.key)],
+  (t) => [
+    uniqueIndex("custom_field_defs_list_key_idx").on(t.listId, t.key),
+    index("custom_field_defs_deleted_at_idx").on(t.deletedAt),
+  ],
 );
 
 export const comments = pgTable(
@@ -600,7 +604,7 @@ export const notifications = pgTable(
     payload: jsonb("payload"),
     readAt: timestamp("read_at", { withTimezone: true }),
     /**
-     * Soft-dismiss from inbox (ClickUp-style Clear). Cleared notifications
+     * Soft-dismiss from inbox. Cleared notifications
      * no longer appear in the bell / notifications page.
      */
     clearedAt: timestamp("cleared_at", { withTimezone: true }),

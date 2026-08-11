@@ -5,7 +5,7 @@
  * Fingerprint: GURVER-KG-AITIM-2026-7F3C9E2A
  * License: Proprietary. All rights reserved. See LICENSE / COPYRIGHT.
  *
- * Structured mention tokens for Super Agent instructions (ClickUp-style @ refs).
+ * Structured mention tokens for Super Agent instructions.
  *
  * Prefix when typing (before the query):
  *   @      → user (default) / all types when empty query
@@ -119,7 +119,7 @@ export function mentionsToPlainContext(text: string): string {
   });
 }
 
-/** Short display label for a chip (ClickUp-style). */
+/** Short display label for a mention chip. */
 export function mentionChipLabel(type: AgentMentionType, label: string): string {
   switch (type) {
     case "task":

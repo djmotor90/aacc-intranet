@@ -9,7 +9,7 @@ import type { ModuleManifest } from "../types";
 
 export const shellManifest: ModuleManifest = {
   slug: "shell",
-  name: "Operations Hub",
+  name: "AACC Hub",
   basePath: "/",
   navItems: [
     { label: "Directory", href: "/directory", icon: "users" },

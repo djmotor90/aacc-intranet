@@ -337,7 +337,7 @@ export function SpaceNavContextMenu({
           <DialogHeader>
             <DialogTitle>New Form</DialogTitle>
             <DialogDescription>
-              Submissions create tasks in the list you choose (ClickUp-style).
+              Submissions create tasks in the AACC Hub list you choose.
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={submitNewForm} className="flex flex-col gap-3">

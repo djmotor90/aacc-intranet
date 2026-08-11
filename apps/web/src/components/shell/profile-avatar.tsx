@@ -21,7 +21,7 @@ import { cn } from "@/lib/utils";
 
 /**
  * Avatar that shows a hover card with “View profile”, opening the right-side
- * public profile sheet (ClickUp-style).
+ * public AACC Hub profile sheet.
  */
 export function ProfileAvatar({
   userId,

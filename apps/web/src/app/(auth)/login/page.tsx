@@ -15,9 +15,9 @@ import { auth, signIn } from "@/lib/auth";
 
 export const metadata: Metadata = {
   title: "Sign in",
-  description: "Sign in to AACC Operations Hub with your work account",
+  description: "Sign in to AACC Hub with your work account",
   openGraph: {
-    title: "AACC Operations Hub",
+    title: "AACC Hub",
     description: "A shared workspace for AACC workflows, knowledge, and collaboration.",
   },
 };
@@ -53,7 +53,7 @@ export default async function LoginPage() {
               priority
             />
           </div>
-          <p className="text-xs font-bold uppercase tracking-[0.28em] text-primary">Operations Hub</p>
+          <p className="text-xs font-bold uppercase tracking-[0.28em] text-primary">AACC Hub</p>
           <CardTitle className="mt-1 text-2xl">Welcome back</CardTitle>
           <CardDescription>
             {entraEnabled
@@ -116,7 +116,7 @@ export default async function LoginPage() {
 
           {!entraEnabled && !localAuthEnabled && (
             <p role="alert" className="rounded-md border border-brand-orange/30 bg-brand-orange/10 p-3 text-center text-sm text-foreground">
-              No sign-in method is configured. Contact your Operations Hub administrator.
+              No sign-in method is configured. Contact your AACC Hub administrator.
             </p>
           )}
         </CardContent>

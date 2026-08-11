@@ -7,7 +7,7 @@
  */
 import type { JSONContent } from "@tiptap/react";
 
-/** Structured task chip list embedded in agent messages (ClickUp-style). */
+/** Structured task chip list embedded in agent messages. */
 export type TaskListEmbed = {
   type: "task_list";
   items: {

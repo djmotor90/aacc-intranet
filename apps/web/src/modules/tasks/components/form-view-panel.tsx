@@ -478,7 +478,7 @@ export function FormViewPanel({
     setSelectedId(field.id);
   }
 
-  /** ClickUp-style: ensure a Files CF exists on the list, then add form question. */
+  /** Ensure a Files custom field exists on the list, then add the form question. */
   function addFileQuestion() {
     startTransition(async () => {
       try {
@@ -1145,7 +1145,7 @@ export function FormViewPanel({
                   <span className="min-w-0">
                     <span className="block truncate font-medium">File upload</span>
                     <span className="block text-[10px] text-muted-foreground">
-                      Maps to a Files custom field (like ClickUp)
+                      Maps to a Files custom field in AACC Hub
                     </span>
                   </span>
                   <Plus className="ml-auto size-3.5 shrink-0 text-muted-foreground" />
@@ -1686,7 +1686,7 @@ export function FormViewPanel({
                           saveTheme({ showBranding: e.target.checked })
                         }
                       />
-                      Show “Powered by AITIM” footer
+                      Show “Powered by AACC Hub” footer
                     </label>
                     {canEdit && (
                       <Button

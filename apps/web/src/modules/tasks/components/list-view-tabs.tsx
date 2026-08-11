@@ -274,7 +274,7 @@ function SortableViewTab({
 }
 
 /**
- * ClickUp-style named view tabs: switch, create, rename, delete, and drag to reorder.
+ * Named view tabs support switching, creation, rename, deletion, and drag-to-reorder.
  */
 export function ListViewTabs({
   listId,

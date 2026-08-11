@@ -31,7 +31,7 @@ export default async function HomePage() {
         <div className="absolute inset-y-0 left-0 w-1.5 bg-brand-orange" />
         <div className="absolute -right-16 -top-24 size-72 rounded-full border-[44px] border-white/5" />
         <p className="relative mb-2 text-xs font-bold uppercase tracking-[0.24em] text-brand-aqua">
-          AACC Operations Hub
+          AACC Hub
         </p>
         <h1 className="relative text-3xl font-semibold tracking-tight sm:text-4xl">
           Welcome, {user.name?.split(" ")[0]}

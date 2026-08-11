@@ -26,6 +26,16 @@ import { and, asc, eq, inArray, ne, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
+/** Fixed-width keys keep text sorting correct beyond 9 siblings. */
+export function orderedSidebarPosition(index: number) {
+  return `m${index.toString().padStart(10, "0")}`;
+}
+
+/** New items sort after normalized/reordered items without renumbering siblings. */
+export function appendedSidebarPosition() {
+  return `z${Date.now().toString().padStart(16, "0")}-${crypto.randomUUID()}`;
+}
+
 export function slugify(name: string): string {
   return (
     name

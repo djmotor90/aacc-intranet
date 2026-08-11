@@ -8,7 +8,7 @@
 "use client";
 
 /**
- * Pages rail — modern tree DnD (Notion-style):
+ * Pages rail — nested document tree with drag-and-drop:
  * - Top of row    → reorder before (same indent)
  * - Middle of row → nest as subpage (indented ghost)
  * - Bottom of row → reorder after; on the last child, drag left / lower
@@ -251,7 +251,7 @@ function afterCandidates(
 
 function pickByIndent(candidates: DropIntent[], clientX: number, listLeft: number): DropIntent {
   if (candidates.length === 1) return candidates[0]!;
-  // Prefer the candidate whose indent is closest to the pointer X (Notion-style).
+  // Prefer the candidate whose indent is closest to the pointer X.
   let best = candidates[0]!;
   let bestDist = Infinity;
   for (const c of candidates) {

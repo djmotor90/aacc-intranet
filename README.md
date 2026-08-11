@@ -1,4 +1,4 @@
-# AACC Operations Hub
+# AACC Hub
 
 > **Proprietary software** — Copyright © 2024–2026 **Kim Gurinov** (Gurver).  
 > All rights reserved. See [`LICENSE`](./LICENSE), [`COPYRIGHT`](./COPYRIGHT), and [`NOTICE`](./NOTICE).  

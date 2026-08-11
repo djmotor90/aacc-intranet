@@ -66,7 +66,7 @@ function main() {
     PRIMARY_DOMAIN: domain,
     DATABASE_URL:
       process.env.DATABASE_URL ||
-      `postgres://aitim:CHANGE_ME@localhost:5432/${client.database?.name || "aitim_intranet"}`,
+      `postgres://aacc_hub:CHANGE_ME@localhost:5432/${client.database?.name || "aacc_hub"}`,
     AUTH_SECRET: genSecrets ? secret() : process.env.AUTH_SECRET || "CHANGE_ME_openssl_rand_base64_32",
     ENTRA_TENANT_ID: client.auth?.entraTenantId || "",
     ENTRA_WEB_CLIENT_ID: client.auth?.webAppClientId || "",

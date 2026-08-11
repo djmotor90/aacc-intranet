@@ -1,6 +1,6 @@
-# AACC Operations Hub visual identity
+# AACC Hub visual identity
 
-The Operations Hub follows Anne Arundel Community College's current digital visual language while keeping the interface practical for dense operational work.
+AACC Hub follows Anne Arundel Community College's current digital visual language while keeping the interface practical for dense operational work.
 
 ## Research basis
 

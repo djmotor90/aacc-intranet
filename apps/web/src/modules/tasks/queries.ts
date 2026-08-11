@@ -604,7 +604,7 @@ async function loadFieldDefinitions(listId: string, includeArchived: boolean) {
   const rows = await db
     .select()
     .from(customFieldDefinitions)
-    .where(eq(customFieldDefinitions.listId, listId))
+    .where(and(eq(customFieldDefinitions.listId, listId), isNull(customFieldDefinitions.deletedAt)))
     .orderBy(asc(customFieldDefinitions.position), asc(customFieldDefinitions.createdAt));
   return includeArchived ? rows : rows.filter((r) => !r.isArchived);
 }
@@ -1109,7 +1109,7 @@ export async function getTasksPage(params: {
   offset: number;
   /**
    * When false (default), tasks whose status category is `done` or `cancelled`
-   * are excluded — matching ClickUp's "closed tasks are hidden" list behavior.
+   * are excluded from the default open-task list.
    * Pass true (e.g. URL `closed=1`) to include them.
    */
   showClosed?: boolean;
@@ -1120,7 +1120,7 @@ export async function getTasksPage(params: {
   const defs = await getFieldDefinitions(listId, true);
   const defsById = new Map(defs.map((d) => [d.id, d]));
 
-  // Closed = status categories done | cancelled (ClickUp "Closed" group).
+  // Closed = status categories done or cancelled.
   const openOnlySql = showClosed
     ? sql`true`
     : sql`EXISTS (
@@ -1341,7 +1341,7 @@ export async function getTaskActivity(taskId: string, limit = 50) {
 /**
  * Users available for assignees, sharing, mentions, etc.
  * Only Entra platform-access group members (+ protected admins) and temporary
- * ClickUp import placeholders — not the full tenant directory.
+ * legacy imported accounts — not the full tenant directory.
  */
 export const getActiveUsers = cache(async () => {
   const { listPickerUsers } = await import("@/lib/directory-users");
@@ -1644,7 +1644,7 @@ export { TRASH_RETENTION_DAYS } from "./lib/trash";
 import type { TrashItem } from "./lib/trash";
 
 /**
- * Trashed spaces / folders / lists.
+ * Trashed spaces / folders / lists / tasks / custom fields.
  * - Default: items the user can manage (space Admin / Super Admin via getSpaceRole).
  * - `scope: "all"`: every trashed item (Super Admin / platform admin only — caller must gate).
  *
@@ -1656,7 +1656,7 @@ export async function getTrashItemsForUser(
   opts?: { scope?: "managed" | "all" },
 ): Promise<TrashItem[]> {
   const scope = opts?.scope ?? "managed";
-  const [spaceRows, folderRows, listRows, taskRows] = await Promise.all([
+  const [spaceRows, folderRows, listRows, taskRows, fieldRows] = await Promise.all([
     db
       .select({
         id: spaces.id,
@@ -1716,6 +1716,23 @@ export async function getTrashItemsForUser(
       .innerJoin(lists, eq(tasks.listId, lists.id))
       .innerJoin(spaces, eq(lists.spaceId, spaces.id))
       .where(isNotNull(tasks.deletedAt)),
+    db
+      .select({
+        id: customFieldDefinitions.id,
+        name: customFieldDefinitions.label,
+        deletedAt: customFieldDefinitions.deletedAt,
+        listId: lists.id,
+        listName: lists.name,
+        listDeletedAt: lists.deletedAt,
+        spaceId: lists.spaceId,
+        spaceName: spaces.name,
+        spaceSlug: spaces.slug,
+        spaceDeletedAt: spaces.deletedAt,
+      })
+      .from(customFieldDefinitions)
+      .innerJoin(lists, eq(customFieldDefinitions.listId, lists.id))
+      .innerJoin(spaces, eq(lists.spaceId, spaces.id))
+      .where(isNotNull(customFieldDefinitions.deletedAt)),
   ]);
 
   const spaceIds = [
@@ -1724,6 +1741,7 @@ export async function getTrashItemsForUser(
       ...folderRows.map((f) => f.spaceId),
       ...listRows.map((l) => l.spaceId),
       ...taskRows.map((t) => t.spaceId),
+      ...fieldRows.map((f) => f.spaceId),
     ]),
   ];
 
@@ -1812,6 +1830,21 @@ export async function getTrashItemsForUser(
       listId: t.listId,
       listSlug: t.listSlug,
       taskNumber: t.number,
+    });
+  }
+
+  for (const f of fieldRows) {
+    if (!canManage.has(f.spaceId) || !f.deletedAt || f.spaceDeletedAt || f.listDeletedAt) continue;
+    items.push({
+      kind: "custom_field",
+      id: f.id,
+      name: f.name,
+      deletedAt: f.deletedAt,
+      spaceId: f.spaceId,
+      spaceName: f.spaceName,
+      spaceSlug: f.spaceSlug,
+      parentName: f.listName,
+      listId: f.listId,
     });
   }
 

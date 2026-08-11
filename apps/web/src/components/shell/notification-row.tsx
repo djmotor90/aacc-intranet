@@ -69,7 +69,7 @@ export function NotificationRow({
   /** Called when the main row is activated (mark read + navigate). */
   onOpen?: (item: InboxNotification) => void;
   onToggleRead?: (item: InboxNotification) => void;
-  /** Dismiss this notification from the inbox (ClickUp-style Clear). */
+  /** Dismiss this notification from the inbox. */
   onClear?: (item: InboxNotification) => void;
   /** After a successful quick reply from the inbox. */
   onReplySent?: (item: InboxNotification) => void;

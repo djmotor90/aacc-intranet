@@ -9,7 +9,7 @@ import { auditLogs, db, users } from "@aitim/db";
 import { desc, eq, and, sql, type SQL } from "drizzle-orm";
 import { headers } from "next/headers";
 
-/** ClickUp-style audit categories (tabs). */
+/** Audit categories used by the settings tabs. */
 export const AUDIT_CATEGORIES = [
   "user",
   "task",

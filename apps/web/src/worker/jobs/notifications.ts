@@ -104,7 +104,7 @@ export async function sendNotificationEmail(notificationId: string): Promise<str
       ${detail ? `<p style="margin:0 0 12px;color:#15515a">${escapeHtml(detail)}</p>` : ""}
       <p style="margin:16px 0 0">
         <a href="${taskLink}" style="display:inline-block;background:#007582;color:#fff;text-decoration:none;padding:8px 14px;border-radius:8px;font-size:14px">
-          Open in AACC Operations Hub
+          Open in AACC Hub
         </a>
       </p>
       <p style="margin:16px 0 0;font-size:12px;color:#94a3b8">
@@ -115,7 +115,7 @@ export async function sendNotificationEmail(notificationId: string): Promise<str
 
   await sendMail({
     to: recipient.email,
-    subject: `[AACC Operations Hub] ${title}${task ? ` · ${task.number}` : ""}`,
+    subject: `[AACC Hub] ${title}${task ? ` · ${task.number}` : ""}`,
     html,
   });
   await db
@@ -224,7 +224,7 @@ export async function runHourlyEmailDigest(): Promise<string> {
     const count = eligible.length;
     const html = `
       <div style="font-family:system-ui,-apple-system,sans-serif;max-width:560px;line-height:1.45;color:#173438;border-top:4px solid #007582;padding-top:20px">
-        <h2 style="margin:0 0 4px;font-size:18px">Your AACC Operations Hub digest</h2>
+        <h2 style="margin:0 0 4px;font-size:18px">Your AACC Hub digest</h2>
         <p style="margin:0 0 16px;color:#53686b;font-size:14px">
           ${count} update${count === 1 ? "" : "s"} since the last digest.
         </p>
@@ -243,7 +243,7 @@ export async function runHourlyEmailDigest(): Promise<string> {
     try {
       await sendMail({
         to: recipient.email,
-        subject: `[AACC Operations Hub] Hourly digest · ${count} update${count === 1 ? "" : "s"}`,
+        subject: `[AACC Hub] Hourly digest · ${count} update${count === 1 ? "" : "s"}`,
         html,
       });
       const ids = eligible.map((n) => n.id);

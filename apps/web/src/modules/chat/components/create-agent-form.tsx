@@ -99,7 +99,7 @@ export function CreateAgentForm({ xaiConfigured }: { xaiConfigured: boolean }) {
         </p>
         <h1 className="mt-1 text-2xl font-semibold tracking-tight">Create Super Agent</h1>
         <p className="mt-2 text-sm text-muted-foreground">
-          Describe what it should do — like ClickUp. We&apos;ll turn that into instructions you can
+          Describe what it should do in AACC Hub. We&apos;ll turn that into instructions you can
           edit anytime.
         </p>
       </div>

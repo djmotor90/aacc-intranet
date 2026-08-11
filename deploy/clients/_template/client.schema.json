@@ -1,6 +1,6 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "title": "AITIM client config",
+  "title": "AACC Hub client config",
   "type": "object",
   "required": ["clientId", "displayName", "slug", "primaryDomain", "database", "admin"],
   "properties": {

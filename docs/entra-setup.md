@@ -2,7 +2,7 @@
 
 The intranet needs **two app registrations** in your Entra tenant (portal.azure.com → Entra ID → App registrations).
 
-## 1. `aitim-intranet-web` — interactive SSO
+## 1. `aacc-hub-web` — interactive SSO
 
 - **Supported account types:** Accounts in this organizational directory only (single tenant)
 - **Platform:** Web
@@ -24,7 +24,7 @@ AUTH_MICROSOFT_ENTRA_ID_ISSUER=https://login.microsoftonline.com/<Directory (ten
 ENTRA_TENANT_ID=<Directory (tenant) ID>
 ```
 
-## 2. `aitim-intranet-daemon` — background worker (client credentials)
+## 2. `aacc-hub-daemon` — background worker (client credentials)
 
 - **Supported account types:** single tenant
 - **No redirect URIs**
@@ -61,6 +61,6 @@ Test-ApplicationAccessPolicy -AppId <DAEMON_CLIENT_ID> -Identity intranet@<your-
 
 ## 3. Admin group mapping
 
-Create (or pick) an Entra security group for intranet admins, e.g. `AITIM-Intranet-Admins`.
+Create (or pick) an Entra security group for Hub admins, e.g. `AACC-Hub-Admins`.
 After first sign-in, map it under **Admin → Group role mappings** in the app
 (target: platform role `admin`). Until then, the seeded/protected admin flag controls access.

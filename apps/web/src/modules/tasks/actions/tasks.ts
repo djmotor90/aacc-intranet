@@ -191,7 +191,7 @@ export async function createTask(formData: FormData) {
     createdTaskNumber = number;
   });
 
-  // Assignees auto-follow (ClickUp); creator can follow manually if desired.
+  // Assignees auto-follow; the creator can follow manually if desired.
   if (createdTaskId && assigneeIds.length > 0) {
     await ensureTaskFollowers(createdTaskId, assigneeIds, "assigned");
   }
@@ -552,7 +552,7 @@ export async function toggleAssignee(formData: FormData) {
     }
   });
   if (existing.length === 0) {
-    // Auto-follow when assigned (ClickUp).
+    // Auto-follow when assigned.
     await ensureTaskFollowers(taskId, [userId], "assigned");
     await notifyUsers({
       recipientIds: [userId],

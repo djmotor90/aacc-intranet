@@ -52,7 +52,7 @@ export const CORE_FIELDS: CoreField[] = [
 ];
 
 /** IDs of core fields shown in the default layout (excludes readonly/auto-managed fields).
- *  Tags are rendered under the title (ClickUp-style) and can also be placed via the layout builder. */
+ * Tags render under the title and can also be placed via the layout builder. */
 const DEFAULT_FIELD_IDS = ["status", "priority", "due_date", "start_date", "assignees", "description"];
 
 /** Build the default layout used when none has been configured yet. */

@@ -7,7 +7,7 @@
  * Fingerprint: GURVER-KG-AITIM-2026-7F3C9E2A
  * License: Proprietary. All rights reserved. See LICENSE / COPYRIGHT.
  */
-import { customFieldDefinitions, db, lists, tasks } from "@aitim/db";
+import { customFieldDefinitions, db, lists, publicForms, tasks } from "@aitim/db";
 import { and, eq, isNotNull, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
@@ -15,7 +15,7 @@ import { assertSpaceRole, requireUser } from "@/lib/rbac";
 import { logActivity } from "../lib/activity";
 import { CUSTOM_FIELD_LABEL_POSITION_VALUES } from "../lib/custom-field-presentation";
 import { invalidateListMetaCache } from "../queries";
-import { listPath, requireList, slugify } from "./shared";
+import { listPath, requireList, revalidateTrashAndTasks, slugify } from "./shared";
 
 const fieldTypeSchema = z.enum([
   "text",
@@ -147,6 +147,7 @@ export async function archiveFieldDefinition(formData: FormData) {
     .from(customFieldDefinitions)
     .where(eq(customFieldDefinitions.id, fieldId));
   if (!field) return;
+  if (field.deletedAt) throw new Error("Custom field is already in Trash");
   const { list, space } = await requireList(field.listId);
   const user = await requireUser();
   await assertSpaceRole(space.id, "owner");
@@ -165,6 +166,116 @@ export async function archiveFieldDefinition(formData: FormData) {
     });
   });
   revalidatePath(`${listPath(space.slug, list.slug)}/settings`);
+}
+
+/** Move a custom field to Trash while preserving its definition and task values. */
+export async function trashFieldDefinition(formData: FormData) {
+  const fieldId = z.string().uuid().parse(formData.get("fieldId"));
+  const [field] = await db
+    .select()
+    .from(customFieldDefinitions)
+    .where(eq(customFieldDefinitions.id, fieldId));
+  if (!field) return;
+  if (field.deletedAt) throw new Error("Custom field is already in Trash");
+
+  const { list, space } = await requireList(field.listId);
+  const user = await requireUser();
+  const { assertPermission } = await import("@/lib/permissions");
+  await assertPermission(user, "manage_custom_fields");
+  await assertSpaceRole(space.id, "owner");
+
+  const forms = await db
+    .select({ title: publicForms.title, fields: publicForms.fields })
+    .from(publicForms)
+    .where(eq(publicForms.listId, list.id));
+  const formsUsingField = forms.filter((form) =>
+    Array.isArray(form.fields) &&
+    form.fields.some((item) => {
+      if (!item || typeof item !== "object") return false;
+      const mapTo = (item as { mapTo?: unknown }).mapTo;
+      return Boolean(
+        mapTo &&
+        typeof mapTo === "object" &&
+        (mapTo as { kind?: unknown }).kind === "custom_field" &&
+        (mapTo as { definitionId?: unknown }).definitionId === fieldId,
+      );
+    }),
+  );
+  if (formsUsingField.length > 0) {
+    const names = formsUsingField.slice(0, 3).map((form) => `“${form.title}”`).join(", ");
+    throw new Error(
+      `Remove this field from ${names}${formsUsingField.length > 3 ? " and other forms" : ""} before moving it to Trash.`,
+    );
+  }
+
+  await db.transaction(async (tx) => {
+    await tx
+      .update(customFieldDefinitions)
+      .set({ deletedAt: new Date() })
+      .where(eq(customFieldDefinitions.id, fieldId));
+    await logActivity(tx, {
+      spaceId: space.id,
+      actorId: user.id,
+      verb: "field.deleted",
+      payload: { label: field.label, type: field.type, listName: list.name },
+    });
+  });
+
+  invalidateListMetaCache(list.id);
+  revalidateTrashAndTasks(space.slug);
+}
+
+/** Restore a custom field from Trash and make it active again. */
+export async function restoreFieldDefinition(fieldId: string) {
+  const id = z.string().uuid().parse(fieldId);
+  const [field] = await db.select().from(customFieldDefinitions).where(eq(customFieldDefinitions.id, id));
+  if (!field?.deletedAt) throw new Error("Custom field is not in Trash");
+  const { list, space } = await requireList(field.listId);
+  const user = await requireUser();
+  const { assertCanManageTrash } = await import("@/lib/permissions");
+  await assertCanManageTrash(user, space.id);
+
+  await db.transaction(async (tx) => {
+    await tx
+      .update(customFieldDefinitions)
+      .set({ deletedAt: null, isArchived: false, updatedAt: new Date() })
+      .where(eq(customFieldDefinitions.id, id));
+    await logActivity(tx, {
+      spaceId: space.id,
+      actorId: user.id,
+      verb: "field.restored",
+      payload: { label: field.label, type: field.type, listName: list.name },
+    });
+  });
+  invalidateListMetaCache(list.id);
+  revalidateTrashAndTasks(space.slug);
+}
+
+/** Permanently remove a custom field from Trash and purge its task values. */
+export async function purgeFieldDefinition(fieldId: string) {
+  const id = z.string().uuid().parse(fieldId);
+  const [field] = await db.select().from(customFieldDefinitions).where(eq(customFieldDefinitions.id, id));
+  if (!field?.deletedAt) throw new Error("Move the custom field to Trash before permanently deleting it");
+  const { list, space } = await requireList(field.listId);
+  const user = await requireUser();
+  const { assertCanManageTrash } = await import("@/lib/permissions");
+  await assertCanManageTrash(user, space.id);
+
+  await db.transaction(async (tx) => {
+    await tx
+      .update(tasks)
+      .set({ customFields: sql`${tasks.customFields} - ${id}` })
+      .where(eq(tasks.listId, list.id));
+    await tx.delete(customFieldDefinitions).where(eq(customFieldDefinitions.id, id));
+    await logActivity(tx, {
+      spaceId: space.id,
+      actorId: user.id,
+      verb: "field.purged",
+      payload: { label: field.label, type: field.type, listName: list.name },
+    });
+  });
+  invalidateListMetaCache(list.id);
+  revalidateTrashAndTasks(space.slug);
 }
 
 const fieldOptionSchema = z.object({
@@ -210,7 +321,7 @@ export async function updateFieldDefinition(params: {
     .select()
     .from(customFieldDefinitions)
     .where(eq(customFieldDefinitions.id, fieldId));
-  if (!field || field.isArchived) throw new Error("Field not found");
+  if (!field || field.isArchived || field.deletedAt) throw new Error("Field not found");
 
   const { list, space } = await requireList(field.listId);
   const user = await requireUser();
@@ -290,7 +401,7 @@ export async function setFieldRequired(params: { fieldId: string; isRequired: bo
     .select()
     .from(customFieldDefinitions)
     .where(eq(customFieldDefinitions.id, fieldId));
-  if (!field || field.isArchived) throw new Error("Field not found");
+  if (!field || field.isArchived || field.deletedAt) throw new Error("Field not found");
   const { list, space } = await requireList(field.listId);
   await assertSpaceRole(space.id, "owner");
 

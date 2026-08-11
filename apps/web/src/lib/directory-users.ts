@@ -13,18 +13,18 @@ import { and, asc, eq, exists, isNull, or, sql, type SQL } from "drizzle-orm";
  *
  * 1. Protected (break-glass) admins
  * 2. Members of any Entra group mapped to a platform_role (intranet access)
- * 3. ClickUp import placeholders (no Entra id, name ends with " (ClickUp)") — temporary
+ * 3. Legacy imported users (inactive accounts without an Entra id)
  *
  * Full-tenant Entra delta sync may create many users; only the above should be
  * visible in the product. When no platform_role mappings exist yet (fresh / local
  * dev), fall back to active users so the app stays usable.
  */
 
-/** ClickUp import placeholders created by import scripts. */
-export function isClickUpPlaceholderSql(): SQL {
+/** Inactive imported users retained so historical assignments remain readable. */
+export function isLegacyImportedUserSql(): SQL {
   return and(
     isNull(users.entraObjectId),
-    sql`${users.displayName} like '%(ClickUp)'`,
+    eq(users.isActive, false),
   )!;
 }
 
@@ -55,7 +55,7 @@ export async function hasPlatformRoleMappings(): Promise<boolean> {
 
 /**
  * Eligibility for pickers (assignees, sharing add-user lists).
- * Active access-group members + protected admins + ClickUp placeholders.
+ * Active access-group members + protected admins + legacy imported users.
  */
 export async function directoryPickerWhere(): Promise<SQL> {
   const gated = await hasPlatformRoleMappings();
@@ -65,7 +65,7 @@ export async function directoryPickerWhere(): Promise<SQL> {
   }
   return or(
     eq(users.isProtectedAdmin, true),
-    isClickUpPlaceholderSql(),
+    isLegacyImportedUserSql(),
     and(eq(users.isActive, true), isPlatformAccessMemberSql()),
   )!;
 }
@@ -82,7 +82,7 @@ export async function directoryAdminWhere(): Promise<SQL> {
   }
   return or(
     eq(users.isProtectedAdmin, true),
-    isClickUpPlaceholderSql(),
+    isLegacyImportedUserSql(),
     isPlatformAccessMemberSql(),
   )!;
 }

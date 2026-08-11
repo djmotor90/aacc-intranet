@@ -29,7 +29,7 @@ export default async function ChatPage() {
         <span className="text-5xl">💬</span>
         <h2 className="text-lg font-semibold">Super Agents</h2>
         <p className="max-w-md text-sm text-muted-foreground">
-          Pick an agent on the left to open a private chat — same idea as ClickUp Super Agents.
+          Pick an agent on the left to open a private AACC Hub conversation.
           They can surface overdue work and keep you moving.
         </p>
       </div>

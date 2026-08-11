@@ -258,7 +258,7 @@ export async function createListView(params: {
   return { id: created.id };
 }
 
-/** Rename a named view (ClickUp double-click / edit). */
+/** Rename a named view by double-clicking or choosing Edit. */
 export async function renameListView(viewId: string, name: string) {
   "use server";
   const parsed = z.string().min(1).max(60).parse(name.trim());

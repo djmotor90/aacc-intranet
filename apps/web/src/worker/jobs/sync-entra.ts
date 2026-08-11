@@ -226,7 +226,7 @@ async function recomputePlatformRoles() {
  *
  * Only runs when at least one platform_role mapping exists — prevents
  * accidentally deactivating everyone on a fresh install with no mappings yet.
- * Never touches ClickUp import placeholders or protected admins.
+ * Never touches legacy imported accounts or protected admins.
  */
 async function deactivateNonMembers() {
   const result = await db.execute<{ count: string }>(sql`

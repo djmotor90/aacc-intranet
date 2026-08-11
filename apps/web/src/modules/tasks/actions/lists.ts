@@ -14,6 +14,7 @@ import { z } from "zod";
 import { assertSpaceRole, requireUser } from "@/lib/rbac";
 import { logActivity } from "../lib/activity";
 import {
+  appendedSidebarPosition,
   listPath,
   purgeListHard,
   requireFolder,
@@ -44,7 +45,7 @@ export async function createList(formData: FormData) {
   await db.transaction(async (tx) => {
     const [list] = await tx
       .insert(lists)
-      .values({ spaceId, folderId, name, slug })
+      .values({ spaceId, folderId, name, slug, position: appendedSidebarPosition() })
       .returning();
     await seedDefaultStatuses(tx, list.id);
     await logActivity(tx, {

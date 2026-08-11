@@ -21,7 +21,7 @@ import { cn } from "@/lib/utils";
 import { saveListViewPrefs } from "../actions";
 
 /**
- * ClickUp-style control: closed tasks (status category done/cancelled) are
+ * Closed-task control: tasks in done/cancelled status categories are
  * hidden by default. Toggle sets URL `closed=1` so the server re-queries.
  * When a named view is active, the preference is also saved on that view.
  */

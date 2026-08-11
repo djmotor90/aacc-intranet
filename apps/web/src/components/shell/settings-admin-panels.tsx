@@ -96,10 +96,7 @@ export function SettingsAdminUsersPanel() {
           </p>
           {users.length > 0 && (
             <p className="mt-1 text-xs text-muted-foreground">
-              {users.filter((u) => u.isActive && !u.displayName.includes("(ClickUp)")).length}{" "}
-              active Entra ·{" "}
-              {users.filter((u) => u.displayName.includes("(ClickUp)")).length} import placeholders ·{" "}
-              {users.length} total shown
+              {users.filter((u) => u.isActive).length} active · {users.length} total shown
             </p>
           )}
         </div>
@@ -138,7 +135,6 @@ export function SettingsAdminUsersPanel() {
           </TableHeader>
           <TableBody>
             {users.map((u) => {
-              const isClickUp = u.displayName.includes("(ClickUp)");
               const busy = busyUserId === u.id || pending;
               const isSuper =
                 u.isProtectedAdmin || u.platformRole === "admin" || u.roleLocked;
@@ -220,7 +216,7 @@ export function SettingsAdminUsersPanel() {
                       </div>
                     ) : (
                       <span className="text-xs text-muted-foreground">
-                        {isClickUp ? "—" : "Not in a mapped group"}
+                        Not in a mapped group
                       </span>
                     )}
                   </TableCell>

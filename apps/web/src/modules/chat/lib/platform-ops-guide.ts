@@ -21,10 +21,10 @@ export function buildPlatformOpsGuide(opts: {
   const canDocsSearch = tools.has("docs.search") || canDocsUpdate;
   const canConvSearch = tools.has("conversation.search");
 
-  return `## Platform map (AACC Operations Hub)
+  return `## Platform map (AACC Hub)
 This intranet has first-class apps:
 - **Home** — landing.
-- **Tasks** — ClickUp-style spaces → folders/lists → tasks (numbers like CEWD-12). Statuses, assignees, due dates, custom fields.
+- **Tasks** — AACC Hub workspaces → folders/lists → tasks (numbers like CEWD-12). Statuses, assignees, due dates, and custom fields.
 - **Docs** — TipTap rich pages (wiki-style). Folders organize pages. Bodies are TipTap JSON + plain-text preview.
 - **Directory** — people directory (Entra-synced when configured).
 - **Notifications** — in-app alerts.

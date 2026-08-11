@@ -117,7 +117,7 @@ function PeopleFieldSelect({
   );
 }
 
-/** ClickUp-style label picker: a compact trigger showing selected chips, with a
+/** Compact label picker showing selected chips, with a
  * checklist popover — never renders the full option list inline. Selections are
  * mirrored into hidden inputs so the enclosing form still submits `name` as a
  * repeated field (same contract as a native `<select multiple>`). */

@@ -11,6 +11,7 @@ import { useDraggable, useDroppable } from "@dnd-kit/core";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { memo } from "react";
 import { cn } from "@/lib/utils";
 import { EntityIcon } from "./entity-icon";
 import { FolderNavContextMenu, ListNavContextMenu } from "./nav-context-menus";
@@ -35,7 +36,7 @@ export function folderContainsPath(
   return node.subfolders.some((sub) => folderContainsPath(sub, spaceSlug, pathname));
 }
 
-export function ListRow({
+function ListRowImpl({
   list,
   spaceSlug,
   canManage,
@@ -48,6 +49,8 @@ export function ListRow({
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: `drag:list:${list.id}`,
   });
+  const { setNodeRef: setDropRef, isOver } = useDroppable({ id: `drop:list:${list.id}` });
+  const setRefs = useCombinedRef(setNodeRef, setDropRef);
   const listHref = `/tasks/${spaceSlug}/${list.slug}`;
   const listActive = pathname === listHref || pathname.startsWith(`${listHref}/`);
 
@@ -62,13 +65,14 @@ export function ListRow({
       canManage={canManage}
     >
       <Link
-        ref={setNodeRef}
+        ref={setRefs}
         href={listHref}
         {...attributes}
         {...listeners}
         className={cn(
           "flex items-center gap-1.5 rounded-md px-2 py-1 text-xs transition-colors",
           isDragging && "opacity-40",
+          isOver && "bg-muted ring-2 ring-primary/30",
           listActive
             ? "bg-muted font-medium text-foreground"
             : "text-muted-foreground hover:bg-muted hover:text-foreground",
@@ -81,7 +85,9 @@ export function ListRow({
   );
 }
 
-export function FolderRow({
+export const ListRow = memo(ListRowImpl);
+
+function FolderRowImpl({
   node,
   spaceId,
   spaceSlug,
@@ -168,7 +174,7 @@ export function FolderRow({
       </div>
 
       {expanded && hasChildren && (
-        <div className="ml-3 flex flex-col gap-0.5 border-l border-border pl-1.5">
+        <div className="ml-4 flex flex-col gap-0.5 border-l border-[#007582]/20 pl-2.5">
           {node.subfolders.map((sub) => (
             <FolderRow
               key={sub.id}
@@ -191,3 +197,5 @@ export function FolderRow({
     </div>
   );
 }
+
+export const FolderRow = FolderRowImpl;

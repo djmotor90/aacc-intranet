@@ -1,5 +1,5 @@
 -- Proprietary — Copyright (c) 2024–2026 Kim Gurinov (Gurver). Fingerprint: GURVER-KG-AITIM-2026-7F3C9E2A
--- ClickUp-style Chat: Super Agents + conversations + messages (Phase 1 agent DMs).
+-- AACC Hub Chat: Super Agents + conversations + messages (Phase 1 agent DMs).
 
 DO $$ BEGIN
   CREATE TYPE "public"."chat_conversation_kind" AS ENUM('agent_dm', 'channel', 'dm', 'group');

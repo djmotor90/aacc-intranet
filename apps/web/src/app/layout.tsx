@@ -27,7 +27,7 @@ const siteUrl =
   process.env.APP_BASE_URL?.replace(/\/$/, "") ||
   "http://localhost:3000";
 
-const siteTitle = "AACC Operations Hub";
+const siteTitle = "AACC Hub";
 const siteDescription =
   "A shared workspace for AACC workflows, knowledge, and collaboration.";
 

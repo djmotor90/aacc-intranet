@@ -77,7 +77,7 @@ export function ChatShell({
         {/*
           Match app shell math: brand is h-28, top bar is h-14 —
           this rail header is also h-14 so its border-b lines up with the
-          brand’s orange rule under “Operations Hub”.
+          brand’s orange rule under “AACC Hub”.
         */}
         <div
           className={cn(

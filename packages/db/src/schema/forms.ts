@@ -35,7 +35,7 @@ export const publicForms = pgTable(
       .notNull()
       .references(() => lists.id),
     /**
-     * Optional link to a Form list-view tab (ClickUp-style Form view).
+     * Optional link to a Form list-view tab.
      * When the view is deleted, the form row is removed in app code.
      */
     listViewId: uuid("list_view_id"),

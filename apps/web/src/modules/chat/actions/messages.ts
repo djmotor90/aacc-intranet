@@ -40,7 +40,7 @@ export async function sendChatMessage(input: {
     return { ok: false, error: "Not a member of this conversation" };
   }
 
-  let doc = input.doc ? normalizeImageAttachments(input.doc) : undefined;
+  const doc = input.doc ? normalizeImageAttachments(input.doc) : undefined;
   let text = (input.text ?? "").trim();
   if (doc) {
     if (isDocEmpty(doc)) return { ok: false, error: "Write something first" };

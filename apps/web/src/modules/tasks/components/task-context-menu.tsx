@@ -519,7 +519,7 @@ export function TaskContextMenu({
 }
 
 /**
- * ClickUp-style ⋯ control — opens the same actions as a dropdown (top-right of cards).
+ * Compact ⋯ control that opens the card actions dropdown.
  */
 export function TaskActionsMenu({
   task,
@@ -558,7 +558,7 @@ export function TaskActionsMenu({
         <button
           type="button"
           className={cn(
-            // Plain ⋯ — no border / chip chrome (ClickUp-style)
+            // Plain ⋯ with no border or chip chrome.
             "inline-flex size-7 items-center justify-center rounded-lg",
             "text-muted-foreground hover:text-brand-teal-deep dark:hover:text-brand-teal",
             "hover:bg-brand-aqua/70 dark:hover:bg-brand-aqua/15",

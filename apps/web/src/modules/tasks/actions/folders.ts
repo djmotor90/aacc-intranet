@@ -8,13 +8,15 @@
  * License: Proprietary. All rights reserved. See LICENSE / COPYRIGHT.
  */
 import { db, folderMembers, folders, lists, spaces, users } from "@aitim/db";
-import { and, eq, inArray, isNull, ne } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull, ne, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { assertSpaceRole, requireUser } from "@/lib/rbac";
 import { logActivity } from "../lib/activity";
 import { getActiveUsers, getFolderMembers } from "../queries";
 import {
+  appendedSidebarPosition,
+  orderedSidebarPosition,
   purgeListHard,
   requireFolder,
   requireList,
@@ -352,8 +354,14 @@ export async function getFolderSharingData(folderId: string) {
   return { members, addableUsers: activeUsers.filter((u) => !memberUserIds.has(u.id)) };
 }
 
-/** Move a list into another folder (or to a space's top level) and/or another space entirely. */
-export async function moveList(listId: string, targetSpaceId: string, targetFolderId: string | null) {
+/** Move a list into another folder/space, optionally beside a specific target list. */
+export async function moveList(
+  listId: string,
+  targetSpaceId: string,
+  targetFolderId: string | null,
+  targetListId?: string,
+  placement: "before" | "after" = "after",
+) {
   "use server";
   const { list, space: sourceSpace } = await requireList(listId);
   await assertSpaceRole(sourceSpace.id, "owner");
@@ -366,17 +374,30 @@ export async function moveList(listId: string, targetSpaceId: string, targetFold
     if (targetFolder.spaceId !== targetSpaceId) throw new Error("Folder does not belong to target space");
   }
 
+  let relativeOrder: { id: string }[] | null = null;
+  if (targetListId) {
+    const [targetList] = await db.select().from(lists).where(eq(lists.id, targetListId));
+    if (!targetList || targetList.spaceId !== targetSpaceId || targetList.folderId !== targetFolderId) {
+      throw new Error("Target list does not belong to the destination");
+    }
+    const siblings = await db
+      .select({ id: lists.id })
+      .from(lists)
+      .where(
+        and(
+          eq(lists.spaceId, targetSpaceId),
+          targetFolderId ? eq(lists.folderId, targetFolderId) : isNull(lists.folderId),
+        ),
+      )
+      .orderBy(asc(lists.position), asc(lists.createdAt));
+    relativeOrder = siblings.filter((sibling) => sibling.id !== listId);
+    const targetIndex = relativeOrder.findIndex((sibling) => sibling.id === targetListId);
+    if (targetIndex < 0) throw new Error("Target list not found among destination lists");
+    relativeOrder.splice(targetIndex + (placement === "after" ? 1 : 0), 0, { id: listId });
+  }
+
   const crossSpace = targetSpaceId !== sourceSpace.id;
   const slug = crossSpace ? await uniqueListSlug(targetSpaceId, list.slug, listId) : list.slug;
-  const siblingCount = await db
-    .select({ id: lists.id })
-    .from(lists)
-    .where(
-      and(
-        eq(lists.spaceId, targetSpaceId),
-        targetFolderId ? eq(lists.folderId, targetFolderId) : isNull(lists.folderId),
-      ),
-    );
   const actor = await requireUser();
 
   await db.transaction(async (tx) => {
@@ -386,9 +407,18 @@ export async function moveList(listId: string, targetSpaceId: string, targetFold
         spaceId: targetSpaceId,
         folderId: targetFolderId,
         slug,
-        position: `a${siblingCount.length}`,
+        position: appendedSidebarPosition(),
       })
       .where(eq(lists.id, listId));
+    if (relativeOrder) {
+      const positionCases = relativeOrder.map(
+        (sibling, index) => sql`when ${lists.id} = ${sibling.id} then ${orderedSidebarPosition(index)}`,
+      );
+      await tx
+        .update(lists)
+        .set({ position: sql`case ${sql.join(positionCases, sql.raw(" "))} else ${lists.position} end` })
+        .where(inArray(lists.id, relativeOrder.map((sibling) => sibling.id)));
+    }
     await logActivity(tx, {
       spaceId: targetSpaceId,
       actorId: actor.id,
@@ -398,6 +428,35 @@ export async function moveList(listId: string, targetSpaceId: string, targetFold
   });
   revalidatePath(`/tasks/${sourceSpace.slug}`);
   revalidatePath(`/tasks/${targetSpace.slug}`);
+}
+
+/** Reorder a list immediately before or after another list in the same folder/space. */
+export async function reorderList(listId: string, targetListId: string, placement: "before" | "after") {
+  "use server";
+  const { list, space } = await requireList(listId);
+  const [target] = await db.select().from(lists).where(eq(lists.id, targetListId));
+  if (!target || target.spaceId !== list.spaceId || target.folderId !== list.folderId) {
+    throw new Error("Lists must share the same folder to be reordered");
+  }
+  await assertSpaceRole(space.id, "owner");
+  const siblings = await db
+    .select({ id: lists.id })
+    .from(lists)
+    .where(and(eq(lists.spaceId, list.spaceId), list.folderId ? eq(lists.folderId, list.folderId) : isNull(lists.folderId)))
+    .orderBy(asc(lists.position), asc(lists.createdAt));
+  const ordered = siblings.filter((s) => s.id !== listId);
+  const targetIndex = ordered.findIndex((s) => s.id === targetListId);
+  if (targetIndex < 0) throw new Error("Target list not found among siblings");
+  const insertAt = targetIndex + (placement === "after" ? 1 : 0);
+  ordered.splice(insertAt, 0, { id: listId });
+  const positionCases = ordered.map(
+    (sibling, index) => sql`when ${lists.id} = ${sibling.id} then ${orderedSidebarPosition(index)}`,
+  );
+  await db
+    .update(lists)
+    .set({ position: sql`case ${sql.join(positionCases, sql.raw(" "))} else ${lists.position} end` })
+    .where(inArray(lists.id, ordered.map((sibling) => sibling.id)));
+  revalidatePath(`/tasks/${space.slug}`);
 }
 
 /** Move a folder (and its whole subtree of subfolders/lists) into another folder, space root, or space. */

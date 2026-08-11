@@ -6,7 +6,7 @@
  * License: Proprietary. All rights reserved. See LICENSE / COPYRIGHT.
  */
 
-/** ClickUp-style page presentation prefs (client-persisted for now). */
+/** Page presentation preferences (client-persisted for now). */
 export type DocFontStyle = "system" | "serif" | "mono";
 export type DocFontSize = "small" | "default" | "large";
 export type DocPageWidth = "default" | "full";

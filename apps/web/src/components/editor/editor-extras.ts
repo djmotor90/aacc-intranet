@@ -8,7 +8,7 @@
  * License: Proprietary. All rights reserved. See LICENSE / COPYRIGHT.
  */
 /**
- * Extra TipTap nodes/marks for ClickUp-like slash commands:
+ * Extra TipTap nodes and marks used by AACC Hub slash commands:
  * banners, badges, toggles, columns, buttons, pull quotes, TOC helper.
  */
 

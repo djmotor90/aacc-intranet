@@ -25,7 +25,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
-import { archiveFieldDefinition, updateFieldDefinition } from "../actions";
+import { archiveFieldDefinition, trashFieldDefinition, updateFieldDefinition } from "../actions";
 import {
   CUSTOM_FIELD_LABEL_POSITIONS,
   normalizeCustomFieldLabelPosition,
@@ -426,6 +426,7 @@ export function FieldDefinitionsManager({
   const router = useRouter();
   const [editing, setEditing] = useState<FieldDefRow | null>(null);
   const [pendingArchive, startArchive] = useTransition();
+  const [pendingTrash, startTrash] = useTransition();
 
   function archive(fieldId: string) {
     if (!window.confirm("Archive this field? It will be hidden from forms but historical values stay readable.")) {
@@ -440,6 +441,25 @@ export function FieldDefinitionsManager({
         router.refresh();
       } catch (e) {
         toast.error(e instanceof Error ? e.message : "Failed to archive");
+      }
+    });
+  }
+
+  function moveToTrash(field: FieldDefRow) {
+    if (!window.confirm(
+      `Move “${field.label}” to Trash? Its saved task values will be preserved and the field can be restored for 30 days.`,
+    )) {
+      return;
+    }
+    startTrash(async () => {
+      try {
+        const fd = new FormData();
+        fd.set("fieldId", field.id);
+        await trashFieldDefinition(fd);
+        toast.success("Custom field moved to Trash");
+        router.refresh();
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : "Failed to move custom field to Trash");
       }
     });
   }
@@ -512,8 +532,21 @@ export function FieldDefinitionsManager({
                   size="sm"
                   disabled={pendingArchive}
                   onClick={() => archive(f.id)}
+                  title="Hide this field while keeping its saved values"
                 >
                   Archive
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="text-destructive hover:text-destructive"
+                  disabled={pendingTrash}
+                  onClick={() => moveToTrash(f)}
+                  title="Move this field to Trash while keeping its task values"
+                >
+                  <Trash2 className="size-3.5" />
+                  Delete
                 </Button>
               </div>
             </li>
@@ -534,6 +567,17 @@ export function FieldDefinitionsManager({
                 <Badge variant="outline" className="text-[10px]">
                   {TYPE_LABELS[f.type] ?? f.type}
                 </Badge>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="ml-auto h-7 text-destructive hover:text-destructive"
+                  disabled={pendingTrash}
+                  onClick={() => moveToTrash(f)}
+                >
+                  <Trash2 className="size-3.5" />
+                  Move to Trash
+                </Button>
               </li>
             ))}
           </ul>

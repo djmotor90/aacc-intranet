@@ -33,7 +33,7 @@ export const FORM_FIELD_TYPES = [
   "checkbox",
   "url",
   "phone",
-  /** Maps to a list custom field of type `file` (ClickUp-style). */
+  /** Maps to a list custom field of type `file`. */
   "file",
   /** Static section title — not submitted, display only. */
   "heading",
@@ -58,7 +58,7 @@ export interface FormFieldOption {
   label: string;
 }
 
-/** ClickUp-style show/hide rule for a question. */
+/** Conditional show/hide rule for a question. */
 export const FORM_CONDITION_OPS = [
   "eq",
   "neq",

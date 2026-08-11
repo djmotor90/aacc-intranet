@@ -124,7 +124,7 @@ function lastSeenLabel(lastSignedInAt: Date | null): string {
   return `Last seen ${days}d ago`;
 }
 
-/** Public (intranet-visible) profile for a user — ClickUp-style profile panel. */
+/** Public AACC Hub profile for a user. */
 export async function getPublicUserProfile(userId: string): Promise<PublicUserProfile> {
   await requireUser();
   const id = z.string().uuid().parse(userId);

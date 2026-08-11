@@ -326,7 +326,7 @@ export function EditAgentForm({
 
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-col gap-0 pb-16">
-      {/* Header — ClickUp-style profile */}
+      {/* AACC Hub agent profile header. */}
       <div className="border-b bg-gradient-to-b from-muted/40 to-background px-6 pb-5 pt-6">
         <div className="flex flex-wrap items-start gap-4">
           <div className="flex size-16 shrink-0 items-center justify-center rounded-full bg-background text-4xl shadow-sm ring-2 ring-border">
@@ -719,7 +719,7 @@ export function EditAgentForm({
           <section className="space-y-4 rounded-2xl border bg-card p-5 shadow-sm">
             <h2 className="text-sm font-semibold">Skills / tools</h2>
             <p className="text-xs text-muted-foreground">
-              What actions can this agent take? (ClickUp “Skills” equivalent)
+              What actions can this agent take in AACC Hub?
             </p>
             <ul className="space-y-2">
               {TOOL_CATALOG.map((t) => (

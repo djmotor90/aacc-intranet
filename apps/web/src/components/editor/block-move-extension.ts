@@ -11,7 +11,7 @@ import { Extension, type Editor } from "@tiptap/core";
 import { NodeSelection } from "@tiptap/pm/state";
 
 /**
- * ClickUp-like block reordering:
+ * Keyboard-accessible block reordering:
  * - Alt/Option + ↑ / ↓ moves the selected block (image, table, file chip, etc.)
  * Works when the node is selected (clicked) or when the cursor is inside a block
  * that can be lifted as a whole (tables, etc.).

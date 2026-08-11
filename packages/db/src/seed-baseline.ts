@@ -205,7 +205,7 @@ async function main() {
     );
   }
 
-  // Super Agents (ClickUp-style AI teammates for Chat)
+  // AACC Hub Super Agents for Chat
   const seedAgents: {
     slug: string;
     displayName: string;

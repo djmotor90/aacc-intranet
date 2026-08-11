@@ -203,7 +203,7 @@ export async function expandAgentBrief(
     messages: [
       {
         role: "system",
-        content: `You design Super Agents for a workplace intranet (tasks + docs), similar to ClickUp Super Agents.
+        content: `You design Super Agents for AACC Hub, a workplace operations platform with tasks and Docs.
 Return ONLY valid JSON (no markdown fences) with keys:
 {
   "displayName": string (short human name like "Deadline Dale" or "Doc Daisy"),

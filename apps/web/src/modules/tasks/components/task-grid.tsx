@@ -52,12 +52,15 @@ import { AssigneeAvatarStack, AssigneeSelect } from "./assignee-select";
 import { EntityIcon } from "./entity-icon";
 import {
   CustomFieldEditCell,
+  isTextFieldType,
   PrioritySelectCell,
   StatusSelectCell,
   TaskDateCell,
+  TextFieldQuickActions,
   TitleEditCell,
 } from "./editable-cells";
 import { PRIORITY_CARD_STYLES, PRIORITY_LABELS } from "./task-card";
+import { TaskStatusPicker } from "./task-status-circle";
 import {
   COL_MIN,
   fieldOptionLabel,
@@ -1041,21 +1044,30 @@ function GridRow({
                 onSaved={(next) => { onPatchTask(task.id, { title: next }); onStopEdit(); }}
               />
             ) : (
-              <Link
-                href={`/tasks/task/${task.number}`}
-                className="flex min-w-0 items-center gap-1.5 truncate px-1.5 py-1 font-medium hover:underline"
-              >
-                {item.taskType && (
-                  <EntityIcon
-                    icon={item.taskType.icon}
-                    color={item.taskType.color}
-                    fallback="taskType"
-                    size="sm"
-                    className="shrink-0"
-                  />
-                )}
-                <span className="min-w-0 truncate">{task.title}</span>
-              </Link>
+              <div className="flex min-w-0 items-center gap-0.5 px-1 py-0.5">
+                <TaskStatusPicker
+                  taskId={task.id}
+                  statusId={task.statusId}
+                  statuses={statuses}
+                  canEdit={canEdit}
+                  onSaved={(next) => onPatchTask(task.id, { statusId: next })}
+                />
+                <Link
+                  href={`/tasks/task/${task.number}`}
+                  className="flex min-w-0 flex-1 items-center gap-1.5 truncate py-0.5 font-medium hover:underline"
+                >
+                  {item.taskType && (
+                    <EntityIcon
+                      icon={item.taskType.icon}
+                      color={item.taskType.color}
+                      fallback="taskType"
+                      size="sm"
+                      className="shrink-0"
+                    />
+                  )}
+                  <span className="min-w-0 truncate">{task.title}</span>
+                </Link>
+              </div>
             )}
           </TableCell>
         );
@@ -1186,7 +1198,22 @@ function GridRow({
             </TableCell>
           );
         }
-        return <TableCell key={col.id} {...cellProps} className={cn(cellProps.className, "truncate")}>{renderFieldValue(def, cf[defId], userNames)}</TableCell>;
+        const display = renderFieldValue(def, cf[defId], userNames);
+        if (isTextFieldType(def.type)) {
+          return (
+            <TableCell key={col.id} {...cellProps}>
+              <TextFieldQuickActions
+                taskId={task.id}
+                defId={defId}
+                value={cf[defId]}
+                display={display}
+                canEdit={canEdit}
+                onSaved={(next) => onPatchCustomField(task.id, defId, next)}
+              />
+            </TableCell>
+          );
+        }
+        return <TableCell key={col.id} {...cellProps} className={cn(cellProps.className, "truncate")}>{display}</TableCell>;
       }
     }
   }

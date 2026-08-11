@@ -358,6 +358,13 @@
       "when": 1787900000000,
       "tag": "0050_shocking_patch",
       "breakpoints": true
+    },
+    {
+      "idx": 51,
+      "version": "7",
+      "when": 1788000000000,
+      "tag": "0051_familiar_oracle",
+      "breakpoints": true
     }
   ]
 }

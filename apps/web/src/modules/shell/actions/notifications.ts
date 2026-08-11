@@ -207,7 +207,7 @@ export async function getNotificationsInbox(params?: {
       : null;
   const search = params?.search?.trim() ?? "";
 
-  // Cleared notifications stay out of the inbox (ClickUp-style dismiss).
+  // Cleared notifications stay out of the inbox.
   const conditions = [
     eq(notifications.recipientId, user.id),
     isNull(notifications.clearedAt),

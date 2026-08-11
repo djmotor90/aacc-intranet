@@ -91,7 +91,7 @@ export const docFolders = pgTable(
 
 /**
  * First-class knowledge page.
- * - `docId` groups equal peer pages into one Doc (ClickUp-style container).
+ * - `docId` groups peer pages into one AACC Hub Doc.
  * - `parentPageId` null = top-level page in that doc (all equally important).
  * - Nested subpages set parentPageId to another page in the same doc.
  * - `folderId` places the whole doc in a hub folder (Drive-style); shared across docId.

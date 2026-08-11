@@ -13,7 +13,7 @@ import {
   chatMessages,
   db,
 } from "@aitim/db";
-import { and, eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import { hasXaiKey, xaiChatCompletion, type XaiChatMessage } from "@/lib/xai";
 import { encodeMentionToken, injectDocMentionTokens } from "@/modules/chat/lib/agent-mentions";
 import {
@@ -69,6 +69,41 @@ export type AgentRunPayload = {
 function toolsInclude(tools: unknown, name: string): boolean {
   if (!Array.isArray(tools)) return false;
   return tools.some((t) => t === name || t === name.replace("tasks.", ""));
+}
+
+function simpleSocialReply(agentName: string, triggerText: string): ChatMessageBody | null {
+  const normalized = triggerText.trim().toLowerCase().replace(/[!.?]+$/g, "").trim();
+  if (/^(hi|hello|hey|good morning|good afternoon|good evening|how are you)$/.test(normalized)) {
+    return agentReplyBody(`Hi! I'm ${agentName}. How can I help?`);
+  }
+  if (/^(thanks|thank you|thank you very much|got it|okay|ok)$/.test(normalized)) {
+    return agentReplyBody("You're welcome! Let me know what you need next.");
+  }
+  if (
+    /^(i am|i'm|im|i’m) (good|great|fine|okay|ok|doing good|doing well|all good)$/.test(
+      normalized,
+    ) ||
+    /^(doing good|doing well|all good|pretty good|not bad|no thanks|nothing|nothing right now|maybe later)$/.test(
+      normalized,
+    )
+  ) {
+    return agentReplyBody("Glad to hear it! I'm here whenever you need me.");
+  }
+  return null;
+}
+
+function docContainsImage(node: unknown): boolean {
+  if (!node || typeof node !== "object") return false;
+  const value = node as { type?: unknown; content?: unknown[]; doc?: unknown };
+  if (value.type === "image") return true;
+  if (value.doc && docContainsImage(value.doc)) return true;
+  return Array.isArray(value.content) && value.content.some(docContainsImage);
+}
+
+function asksAboutVisuals(text: string): boolean {
+  return /\b(image|images|screenshot|screenshots|picture|pictures|photo|photos|diagram|visual|figure|chart)\b|\bwhat (?:is|are) (?:this|these)\b/i.test(
+    text,
+  );
 }
 
 async function buildStubReply(
@@ -192,7 +227,12 @@ async function buildXaiReply(
     if (knowledge) {
       contextBlocks.push(`Knowledge base (linked Docs):\n${knowledge}`);
     }
-    knowledgeImages = await loadAgentKnowledgeImages(agent.id);
+    // Linked Docs may contain many screenshots. Only attach them when the
+    // current request is actually visual; otherwise vision can overwhelm a
+    // short text question and make the model describe an unrelated image.
+    if (asksAboutVisuals(triggerText)) {
+      knowledgeImages = await loadAgentKnowledgeImages(agent.id);
+    }
     if (knowledgeImages.length) {
       contextBlocks.push(
         `Knowledge base images: ${knowledgeImages.length} screenshot(s)/image(s) from linked docs are attached below as vision input — ` +
@@ -425,8 +465,17 @@ export async function runAgentJob(payload: AgentRunPayload): Promise<string> {
   const [trigger] = await db
     .select()
     .from(chatMessages)
-    .where(eq(chatMessages.id, triggerMessageId))
+    .where(
+      and(
+        eq(chatMessages.id, triggerMessageId),
+        eq(chatMessages.conversationId, conversationId),
+        eq(chatMessages.authorUserId, userId),
+        isNull(chatMessages.authorAgentId),
+        isNull(chatMessages.deletedAt),
+      ),
+    )
     .limit(1);
+  if (!trigger) return "invalid trigger message";
   const triggerText =
     trigger && typeof trigger.body === "object" && trigger.body && "text" in trigger.body
       ? String((trigger.body as { text?: string }).text ?? "")
@@ -454,26 +503,33 @@ export async function runAgentJob(payload: AgentRunPayload): Promise<string> {
   const canXai = runtime === "xai" && hasXaiKey();
 
   let body: ChatMessageBody;
-  try {
-    if (canXai) {
-      body = await buildXaiReply(
-        agentWithTools,
-        userId,
-        conversationId,
-        triggerText,
-        canWrite,
-        triggerDoc,
-      );
-    } else {
+  const socialReply = docContainsImage(triggerDoc)
+    ? null
+    : simpleSocialReply(agent.displayName, triggerText);
+  if (socialReply) {
+    body = socialReply;
+  } else {
+    try {
+      if (canXai) {
+        body = await buildXaiReply(
+          agentWithTools,
+          userId,
+          conversationId,
+          triggerText,
+          canWrite,
+          triggerDoc,
+        );
+      } else {
+        body = await buildStubReply(agentWithTools, userId, triggerText, canWrite);
+      }
+    } catch (err) {
+      console.error("[agent-run] LLM failed, falling back to stub", err);
       body = await buildStubReply(agentWithTools, userId, triggerText, canWrite);
+      body = agentReplyBody(
+        `${body.text}\n\n_Note: live model unavailable — used offline reply._`,
+        body.embeds,
+      );
     }
-  } catch (err) {
-    console.error("[agent-run] LLM failed, falling back to stub", err);
-    body = await buildStubReply(agentWithTools, userId, triggerText, canWrite);
-    body = agentReplyBody(
-      `${body.text}\n\n_Note: live model unavailable — used offline reply._`,
-      body.embeds,
-    );
   }
 
   const [row] = await db

@@ -64,7 +64,7 @@ function loadWidth(): number {
 }
 
 /**
- * ClickUp-like task layout:
+ * AACC Hub task detail layout:
  *  ┌─ toolbar (breadcrumb full width ··· ⋯ far right) ─────────────┐
  *  ├─ main content ──────────────────────┬─ Activity panel ─────────┤
  *  └─────────────────────────────────────┴──────────────────────────┘
@@ -161,7 +161,7 @@ export function TaskDetailShell({
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      {/* Full-width top bar (ClickUp: path left · actions right) */}
+      {/* Full-width top bar: path left, actions right. */}
       {toolbar != null && (
         <div className="flex shrink-0 items-center gap-2 border-b border-border/70 pb-2.5 pr-1">
           <div className="min-w-0 flex-1">{toolbar}</div>
@@ -222,7 +222,7 @@ export function TaskDetailShell({
               className="flex h-full flex-col pl-4 pr-1"
               style={{ width: open ? width : DEFAULT_WIDTH }}
             >
-              {/* Panel chrome matching ClickUp “Activity” column header */}
+              {/* Activity panel header chrome. */}
               <div className="flex shrink-0 items-center justify-between gap-2 border-b border-border/70 py-2 pl-1 pr-0.5">
                 <span className="text-sm font-semibold tracking-tight">Activity</span>
                 <button

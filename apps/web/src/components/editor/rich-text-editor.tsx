@@ -153,7 +153,7 @@ type RichTextEditorProps = {
   /**
    * Visual density / chrome:
    * - `default` — full bordered card + top toolbar (forms)
-   * - `minimal` — ClickUp description style (soft chrome, bubble on select)
+   * - `minimal` — compact description style (soft chrome, bubble on select)
    * - `compact` — comments (shorter, denser)
    */
   variant?: EditorVariant;
@@ -812,7 +812,7 @@ function createTableExtensions(): AnyExtension[] {
 }
 
 /**
- * ClickUp-inspired TipTap editor: `/` slash commands, optional `@` mentions,
+ * AACC Hub TipTap editor: `/` slash commands, optional `@` mentions,
  * bubble format menu on selection, polished typography.
  */
 export function RichTextEditor({

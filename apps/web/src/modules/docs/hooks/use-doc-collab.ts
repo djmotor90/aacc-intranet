@@ -49,7 +49,7 @@ export const COLLAB_CONNECT_WINDOW_MS = 1000;
  * Connect to the Hocuspocus collab room for a doc page.
  *
  * Design notes:
- * - Multiplayer (Yjs CRDT) is the same class of tech Notion/ClickUp use under
+ * - Multiplayer uses a Yjs CRDT to merge concurrent edits safely under
  *   the hood for concurrent editing + carets — not overkill for that feature.
  * - It *is* optional infrastructure: if the collab process isn't running we
  *   fail open to normal local editing after a short timeout.
