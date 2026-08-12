@@ -93,7 +93,7 @@ export function DocRevisionDiff({ previous, current }: { previous: StoredRichDoc
           const tone = row.kind === "added" ? "border-emerald-200 bg-emerald-50 text-emerald-950" : row.kind === "removed" ? "border-red-200 bg-red-50 text-red-950" : "border-transparent text-[#557075]";
           return <div key={`${row.kind}-${row.block.key}-${index}`} className={`mb-1 flex gap-3 rounded-lg border px-3 py-2 ${tone}`}>
             <span className="mt-1.5 flex size-5 shrink-0 items-center justify-center rounded font-mono text-xs font-bold">{row.kind === "added" ? <Plus className="size-3.5" /> : row.kind === "removed" ? <Minus className="size-3.5" /> : null}</span>
-            <RichDocView content={{ type: "doc", content: [row.block.node] }} className="min-w-0 flex-1 text-inherit [&_.aitim-editor-image]:max-w-full" />
+            <RichDocView content={{ type: "doc", content: [row.block.node] }} className="min-w-0 flex-1 break-words text-inherit [overflow-wrap:anywhere] [&_.aitim-editor-image]:max-w-full" />
           </div>;
         })}
       </div>

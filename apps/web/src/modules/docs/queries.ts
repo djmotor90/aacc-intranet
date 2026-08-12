@@ -15,7 +15,7 @@ import {
   spaces,
   statuses,
   tasks,
-  userGroupMemberships,
+  teamMemberships,
   users,
 } from "@aitim/db";
 import { and, asc, desc, eq, ilike, inArray, isNull, or, sql } from "drizzle-orm";
@@ -76,10 +76,10 @@ async function accessibleSpaceIds(user: SessionUserLike): Promise<string[] | "al
   if (user.platformRole === "admin") return "all";
 
   const groupRows = await db
-    .select({ groupId: userGroupMemberships.groupId })
-    .from(userGroupMemberships)
-    .where(eq(userGroupMemberships.userId, user.id));
-  const groupIds = groupRows.map((g) => g.groupId);
+    .select({ teamId: teamMemberships.teamId })
+    .from(teamMemberships)
+    .where(eq(teamMemberships.userId, user.id));
+  const groupIds = groupRows.map((g) => g.teamId);
 
   const memberships = await db
     .select({ spaceId: spaceMembers.spaceId })

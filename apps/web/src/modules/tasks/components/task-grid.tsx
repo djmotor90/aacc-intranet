@@ -1173,9 +1173,9 @@ function GridRow({
         return (
           <TableCell key={col.id} {...cellProps} onClick={(e) => e.stopPropagation()}>
             {canEdit ? (
-              <AssigneeSelect taskId={task.id} users={activeUsers} selectedUsers={item.assignees} size="sm" />
+              <AssigneeSelect taskId={task.id} users={activeUsers} selectedUsers={item.assignees} selectedTeams={item.teamAssignees} size="sm" />
             ) : (
-              <AssigneeAvatarStack users={item.assignees} size="sm" />
+              <AssigneeAvatarStack users={item.assignees} teams={item.teamAssignees} size="sm" />
             )}
           </TableCell>
         );

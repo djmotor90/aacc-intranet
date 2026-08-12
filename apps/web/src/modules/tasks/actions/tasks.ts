@@ -13,8 +13,11 @@ import {
   spaceTaskCounters,
   statuses,
   taskAssignees,
+  taskGroupAssignees,
   tasks,
   taskTags,
+  teamMemberships,
+  teams,
 } from "@aitim/db";
 import { valueSchemaFor, type CustomFieldDefinitionLike, type CustomFieldType } from "@aitim/shared";
 import { and, asc, desc, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
@@ -84,6 +87,17 @@ function parseCustomFieldsFromForm(
   return values;
 }
 
+async function accessibleTeamMemberIds(groupIds: string[], listId: string): Promise<string[]> {
+  if (groupIds.length === 0) return [];
+  const { getUsersWithListAccess } = await import("../queries");
+  const allowed = new Set((await getUsersWithListAccess(listId)).map((person) => person.id));
+  const memberships = await db
+    .select({ userId: teamMemberships.userId })
+    .from(teamMemberships)
+    .where(inArray(teamMemberships.teamId, groupIds));
+  return [...new Set(memberships.map((membership) => membership.userId).filter((id) => allowed.has(id)))];
+}
+
 export async function createTask(formData: FormData) {
   const listId = z.string().uuid().parse(formData.get("listId"));
   const title = z.string().min(1).max(300).parse(formData.get("title"));
@@ -99,7 +113,10 @@ export async function createTask(formData: FormData) {
     : null;
   const descriptionRaw = String(formData.get("description") ?? "").trim();
   const description = descriptionRaw ? descriptionRaw.slice(0, 50_000) : null;
-  const assigneeIds = formData.getAll("assignees").map((v) => z.string().uuid().parse(v));
+  const assigneeIds = [...new Set(formData.getAll("assignees").map((v) => z.string().uuid().parse(v)))];
+  const teamAssigneeIds = [
+    ...new Set(formData.getAll("teamAssignees").map((v) => z.string().uuid().parse(v))),
+  ];
   const tagIds = formData
     .getAll("tags")
     .map((v) => String(v))
@@ -111,6 +128,15 @@ export async function createTask(formData: FormData) {
   const { assertPermission } = await import("@/lib/permissions");
   await assertPermission(user, "create_tasks");
   await assertListRole(list.id, "member");
+  if (teamAssigneeIds.length > 0) {
+    const { getTeamsWithListAccess } = await import("../queries");
+    const assignableTeamIds = new Set(
+      (await getTeamsWithListAccess(list.id)).map((team) => team.id),
+    );
+    if (teamAssigneeIds.some((id) => !assignableTeamIds.has(id))) {
+      throw new Error("One or more Teams cannot access this list");
+    }
+  }
 
   const { parseRequiredCoreFields, CORE_FIELD_LABELS } = await import("../lib/required-fields");
   const requiredCore = parseRequiredCoreFields(list.requiredCoreFields);
@@ -124,7 +150,7 @@ export async function createTask(formData: FormData) {
   if (requiredCore.includes("startDate") && !startDate) {
     throw new Error(`${CORE_FIELD_LABELS.startDate} is required`);
   }
-  if (requiredCore.includes("assignees") && assigneeIds.length === 0) {
+  if (requiredCore.includes("assignees") && assigneeIds.length + teamAssigneeIds.length === 0) {
     throw new Error(`${CORE_FIELD_LABELS.assignees} is required`);
   }
   if (requiredCore.includes("description") && !description) {
@@ -177,6 +203,11 @@ export async function createTask(formData: FormData) {
         assigneeIds.map((userId) => ({ taskId: task.id, userId, assignedBy: user.id })),
       );
     }
+    if (teamAssigneeIds.length > 0) {
+      await tx.insert(taskGroupAssignees).values(
+        teamAssigneeIds.map((groupId) => ({ taskId: task.id, groupId, assignedBy: user.id })),
+      );
+    }
     if (tagIds.length > 0) {
       await tx.insert(taskTags).values(tagIds.map((tagId) => ({ taskId: task.id, tagId })));
     }
@@ -192,13 +223,15 @@ export async function createTask(formData: FormData) {
   });
 
   // Assignees auto-follow; the creator can follow manually if desired.
-  if (createdTaskId && assigneeIds.length > 0) {
-    await ensureTaskFollowers(createdTaskId, assigneeIds, "assigned");
+  const teamMemberIds = await accessibleTeamMemberIds(teamAssigneeIds, listId);
+  const assignmentRecipientIds = [...new Set([...assigneeIds, ...teamMemberIds])];
+  if (createdTaskId && assignmentRecipientIds.length > 0) {
+    await ensureTaskFollowers(createdTaskId, assignmentRecipientIds, "assigned");
   }
 
-  if (assigneeIds.length > 0 && createdTaskId) {
+  if (assignmentRecipientIds.length > 0 && createdTaskId) {
     await notifyUsers({
-      recipientIds: assigneeIds,
+      recipientIds: assignmentRecipientIds,
       type: "assigned",
       taskId: createdTaskId,
       actorId: user.id,
@@ -655,6 +688,76 @@ export async function toggleAssignee(formData: FormData) {
   await pingListUpdate(task.listId);
   revalidatePath(listPath(space.slug, list.slug));
   revalidatePath(`/tasks/task/${task.number}`);
+}
+
+/** Assign or unassign a reusable Team while notifying its members with task access. */
+export async function toggleTeamAssignee(formData: FormData) {
+  const taskId = z.string().uuid().parse(formData.get("taskId"));
+  const groupId = z.string().uuid().parse(formData.get("groupId"));
+  const { task, list, space } = await requireTask(taskId);
+  const user = await requireUser();
+  await assertListRole(list.id, "member");
+
+  const [team] = await db.select().from(teams).where(eq(teams.id, groupId));
+  if (!team) throw new Error("Team not found");
+  const [existing] = await db
+    .select({ groupId: taskGroupAssignees.groupId })
+    .from(taskGroupAssignees)
+    .where(and(eq(taskGroupAssignees.taskId, taskId), eq(taskGroupAssignees.groupId, groupId)));
+  if (!existing) {
+    const { getTeamsWithListAccess } = await import("../queries");
+    const canAssignTeam = (await getTeamsWithListAccess(list.id)).some(
+      (candidate) => candidate.id === groupId,
+    );
+    if (!canAssignTeam) throw new Error("This Team cannot access the list");
+  }
+
+  await db.transaction(async (tx) => {
+    if (existing) {
+      await tx
+        .delete(taskGroupAssignees)
+        .where(and(eq(taskGroupAssignees.taskId, taskId), eq(taskGroupAssignees.groupId, groupId)));
+      await logActivity(tx, {
+        spaceId: space.id,
+        taskId,
+        actorId: user.id,
+        verb: "task.assignee_removed",
+        payload: { groupId, teamName: team.displayName },
+      });
+    } else {
+      await tx.insert(taskGroupAssignees).values({ taskId, groupId, assignedBy: user.id });
+      await logActivity(tx, {
+        spaceId: space.id,
+        taskId,
+        actorId: user.id,
+        verb: "task.assignee_added",
+        payload: { groupId, teamName: team.displayName },
+      });
+    }
+  });
+
+  if (!existing) {
+    const recipientIds = await accessibleTeamMemberIds([groupId], list.id);
+    await ensureTaskFollowers(taskId, recipientIds, "assigned");
+    await notifyUsers({
+      recipientIds,
+      type: "assigned",
+      taskId,
+      actorId: user.id,
+      payload: { number: task.number, title: task.title, groupId, teamName: team.displayName },
+    });
+  }
+  await pingListUpdate(task.listId);
+  revalidatePath(listPath(space.slug, list.slug));
+  revalidatePath(`/tasks/task/${task.number}`);
+}
+
+export async function getAssignableTeamsForTask(taskIdInput: string) {
+  const taskId = z.string().uuid().parse(taskIdInput);
+  const { list } = await requireTask(taskId);
+  await assertListRole(list.id, "guest");
+  const { getTeamsWithListAccess } = await import("../queries");
+  return getTeamsWithListAccess(list.id);
 }
 
 /** Form-action wrapper for the task detail page's "Archive task" button — sends the user back to the list. */

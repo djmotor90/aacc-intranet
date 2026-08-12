@@ -7,13 +7,13 @@
  * Fingerprint: GURVER-KG-AITIM-2026-7F3C9E2A
  * License: Proprietary. All rights reserved. See LICENSE / COPYRIGHT.
  */
-import { db, folderMembers, folders, lists, spaces, users } from "@aitim/db";
+import { db, folderMembers, folders, lists, spaces, teams, users } from "@aitim/db";
 import { and, asc, eq, inArray, isNull, ne, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { assertSpaceRole, requireUser } from "@/lib/rbac";
 import { logActivity } from "../lib/activity";
-import { getActiveUsers, getFolderMembers } from "../queries";
+import { getActiveUsers, getFolderMembers, getTeams } from "../queries";
 import {
   appendedSidebarPosition,
   orderedSidebarPosition,
@@ -117,6 +117,29 @@ export async function createFolder(formData: FormData) {
       actorId: user.id,
       verb: "folder.created",
       payload: { name },
+    });
+  });
+  revalidatePath(`/tasks/${space.slug}`);
+}
+
+/** Rename a folder. Display name only — the stable URL slug is left unchanged. */
+export async function renameFolder(formData: FormData) {
+  const id = z.string().uuid().parse(formData.get("folderId"));
+  const name = z.string().trim().min(1).max(100).parse(formData.get("name"));
+  const { folder, space } = await requireFolder(id);
+  if (folder.deletedAt) throw new Error("Cannot rename a folder that is in the Trash");
+  const user = await requireUser();
+  await assertSpaceRole(space.id, "owner");
+
+  if (name === folder.name) return;
+
+  await db.transaction(async (tx) => {
+    await tx.update(folders).set({ name }).where(eq(folders.id, id));
+    await logActivity(tx, {
+      spaceId: space.id,
+      actorId: user.id,
+      verb: "folder.renamed",
+      payload: { from: folder.name, to: name, folderId: id },
     });
   });
   revalidatePath(`/tasks/${space.slug}`);
@@ -295,31 +318,43 @@ export async function setFolderPrivacy(formData: FormData) {
 
 export async function addFolderMember(formData: FormData) {
   const folderId = z.string().uuid().parse(formData.get("folderId"));
-  const userId = z.string().uuid().parse(formData.get("userId"));
+  const principal = String(formData.get("principal") ?? `user:${formData.get("userId") ?? ""}`);
+  const [principalType, principalIdRaw] = principal.split(":");
+  const principalId = z.string().uuid().parse(principalIdRaw);
+  if (principalType !== "user" && principalType !== "group") throw new Error("Invalid principal");
+  const userId = principalType === "user" ? principalId : null;
+  const groupId = principalType === "group" ? principalId : null;
   const role = folderRoleSchema.parse(formData.get("role"));
   const { folder, space } = await requireFolder(folderId);
   const actor = await requireUser();
   await assertSpaceRole(space.id, "owner");
 
-  const [targetUser] = await db.select().from(users).where(eq(users.id, userId));
-  if (!targetUser) throw new Error("User not found");
+  const [target] = principalType === "user"
+    ? await db.select({ displayName: users.displayName }).from(users).where(eq(users.id, principalId))
+    : await db.select({ displayName: teams.displayName }).from(teams).where(eq(teams.id, principalId));
+  if (!target) throw new Error(principalType === "user" ? "User not found" : "Team not found");
 
   const [existing] = await db
     .select()
     .from(folderMembers)
-    .where(and(eq(folderMembers.folderId, folderId), eq(folderMembers.userId, userId)));
+    .where(
+      and(
+        eq(folderMembers.folderId, folderId),
+        userId ? eq(folderMembers.userId, userId) : eq(folderMembers.groupId, groupId!),
+      ),
+    );
 
   await db.transaction(async (tx) => {
     if (existing) {
       await tx.update(folderMembers).set({ role }).where(eq(folderMembers.id, existing.id));
     } else {
-      await tx.insert(folderMembers).values({ folderId, principalType: "user", userId, role });
+      await tx.insert(folderMembers).values({ folderId, principalType, userId, groupId, role });
     }
     await logActivity(tx, {
       spaceId: space.id,
       actorId: actor.id,
       verb: "folder.member_added",
-      payload: { userId, displayName: targetUser.displayName, role, folderName: folder.name },
+      payload: { userId, groupId, principalType, displayName: target.displayName, role, folderName: folder.name },
     });
   });
   revalidatePath(`/tasks/${space.slug}`);
@@ -349,9 +384,18 @@ export async function removeFolderMember(formData: FormData) {
 export async function getFolderSharingData(folderId: string) {
   const { space } = await requireFolder(folderId);
   await assertSpaceRole(space.id, "owner");
-  const [members, activeUsers] = await Promise.all([getFolderMembers(folderId), getActiveUsers()]);
+  const [members, activeUsers, teams] = await Promise.all([
+    getFolderMembers(folderId),
+    getActiveUsers(),
+    getTeams(),
+  ]);
   const memberUserIds = new Set(members.map((m) => m.userId));
-  return { members, addableUsers: activeUsers.filter((u) => !memberUserIds.has(u.id)) };
+  const memberGroupIds = new Set(members.map((m) => m.groupId));
+  return {
+    members,
+    addableUsers: activeUsers.filter((u) => !memberUserIds.has(u.id)),
+    addableTeams: teams.filter((team) => !memberGroupIds.has(team.id)),
+  };
 }
 
 /** Move a list into another folder/space, optionally beside a specific target list. */

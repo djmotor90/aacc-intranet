@@ -37,15 +37,26 @@ type BossPoolExtras = {
   idleTimeoutMillis?: number;
 };
 
+function boundedInt(raw: string | undefined, fallback: number, min: number, max: number): number {
+  if (!raw?.trim()) return fallback;
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) ? Math.min(max, Math.max(min, Math.trunc(parsed))) : fallback;
+}
+
 /** Pool options shared with node-pg — keep remote / firewalled connections alive. */
 const bossDbOptions: ConstructorOptions & BossPoolExtras = {
   connectionString: process.env.DATABASE_URL!,
   // Separate from the Next.js app pool (DATABASE_POOL_MAX).
-  max: Number(process.env.PGBOSS_POOL_MAX ?? 3),
+  max: boundedInt(process.env.PGBOSS_POOL_MAX, 3, 1, 10),
   keepAlive: true,
   keepAliveInitialDelayMillis: 10_000,
   idleTimeoutMillis: 20_000,
-  connectionTimeoutMillis: 15_000,
+  connectionTimeoutMillis: boundedInt(
+    process.env.PGBOSS_CONNECT_TIMEOUT_MS,
+    30_000,
+    2_000,
+    60_000,
+  ),
 };
 
 async function main() {

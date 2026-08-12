@@ -7,7 +7,7 @@
  * Fingerprint: GURVER-KG-AITIM-2026-7F3C9E2A
  * License: Proprietary. All rights reserved. See LICENSE / COPYRIGHT.
  */
-import { db, listMembers, lists, users } from "@aitim/db";
+import { db, listMembers, lists, teams, users } from "@aitim/db";
 import { and, eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
@@ -17,31 +17,43 @@ import { listPath, requireList, spaceRoleSchema } from "./shared";
 
 export async function addListMember(formData: FormData) {
   const listId = z.string().uuid().parse(formData.get("listId"));
-  const userId = z.string().uuid().parse(formData.get("userId"));
+  const principal = String(formData.get("principal") ?? `user:${formData.get("userId") ?? ""}`);
+  const [principalType, principalIdRaw] = principal.split(":");
+  const principalId = z.string().uuid().parse(principalIdRaw);
+  if (principalType !== "user" && principalType !== "group") throw new Error("Invalid principal");
+  const userId = principalType === "user" ? principalId : null;
+  const groupId = principalType === "group" ? principalId : null;
   const role = spaceRoleSchema.parse(formData.get("role"));
   const { list, space } = await requireList(listId);
   const actor = await requireUser();
   await assertSpaceRole(space.id, "owner");
 
-  const [targetUser] = await db.select().from(users).where(eq(users.id, userId));
-  if (!targetUser) throw new Error("User not found");
+  const [target] = principalType === "user"
+    ? await db.select({ displayName: users.displayName }).from(users).where(eq(users.id, principalId))
+    : await db.select({ displayName: teams.displayName }).from(teams).where(eq(teams.id, principalId));
+  if (!target) throw new Error(principalType === "user" ? "User not found" : "Team not found");
 
   const [existing] = await db
     .select()
     .from(listMembers)
-    .where(and(eq(listMembers.listId, listId), eq(listMembers.userId, userId)));
+    .where(
+      and(
+        eq(listMembers.listId, listId),
+        userId ? eq(listMembers.userId, userId) : eq(listMembers.groupId, groupId!),
+      ),
+    );
 
   await db.transaction(async (tx) => {
     if (existing) {
       await tx.update(listMembers).set({ role }).where(eq(listMembers.id, existing.id));
     } else {
-      await tx.insert(listMembers).values({ listId, principalType: "user", userId, role });
+      await tx.insert(listMembers).values({ listId, principalType, userId, groupId, role });
     }
     await logActivity(tx, {
       spaceId: space.id,
       actorId: actor.id,
       verb: "list.member_added",
-      payload: { userId, displayName: targetUser.displayName, role, listName: list.name },
+      payload: { userId, groupId, principalType, displayName: target.displayName, role, listName: list.name },
     });
   });
   revalidatePath(`${listPath(space.slug, list.slug)}/settings`);

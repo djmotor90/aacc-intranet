@@ -11,7 +11,7 @@ import type { JSONContent } from "@tiptap/react";
 import { AtSign } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useCallback, useMemo, useState, useSyncExternalStore, useTransition } from "react";
-import { extractMentionIds } from "@/components/editor/mention-extension";
+import { extractMentionRefs } from "@/components/editor/mention-extension";
 import { RichTextEditor } from "@/components/editor/rich-text-editor";
 import {
   docToPlainText,
@@ -26,6 +26,9 @@ interface UserOption {
   id: string;
   displayName: string;
   photoKey?: string | null;
+  kind?: "user" | "team";
+  alias?: string | null;
+  color?: string | null;
 }
 
 /**
@@ -79,7 +82,8 @@ export function CommentBox({
 
   const mentionedUsers = useMemo(() => {
     if (!payload?.doc) return [];
-    return extractMentionIds(payload.doc)
+    const refs = extractMentionRefs(payload.doc);
+    return [...refs.userIds, ...refs.groupIds]
       .map((id) => userById.get(id))
       .filter((u): u is UserOption => Boolean(u));
   }, [payload, userById]);
@@ -106,9 +110,11 @@ export function CommentBox({
       formData.set("taskId", taskId);
       if (parentCommentId) formData.set("parentCommentId", parentCommentId);
       formData.set("body", JSON.stringify(posted));
-      for (const id of extractMentionIds(normalizedDoc)) {
+      const mentionRefs = extractMentionRefs(normalizedDoc);
+      for (const id of mentionRefs.userIds) {
         formData.append("mentions", id);
       }
+      for (const id of mentionRefs.groupIds) formData.append("mentionGroups", id);
       startTransition(async () => {
         try {
           await addComment(formData);

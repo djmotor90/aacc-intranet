@@ -11,7 +11,7 @@ import Mention from "@tiptap/extension-mention";
 import { PluginKey } from "@tiptap/pm/state";
 import { ReactRenderer } from "@tiptap/react";
 import type { SuggestionOptions } from "@tiptap/suggestion";
-import { AtSign } from "lucide-react";
+import { AtSign, UsersRound } from "lucide-react";
 import {
   forwardRef,
   useEffect,
@@ -26,6 +26,9 @@ export type MentionUser = {
   id: string;
   displayName: string;
   photoKey?: string | null;
+  kind?: "user" | "team";
+  alias?: string | null;
+  color?: string | null;
 };
 
 export type MentionListRef = {
@@ -67,7 +70,7 @@ const MentionList = forwardRef<
   if (items.length === 0) {
     return (
       <div className="z-[100] w-64 rounded-xl border border-border bg-popover p-3 text-sm text-popover-foreground shadow-xl ring-1 ring-foreground/10">
-        <span className="text-muted-foreground">No one matches</span>
+        <span className="text-muted-foreground">No person or team matches</span>
       </div>
     );
   }
@@ -75,7 +78,7 @@ const MentionList = forwardRef<
   return (
     <div className="z-[100] w-64 overflow-hidden rounded-xl border border-border bg-popover p-1.5 text-popover-foreground shadow-xl ring-1 ring-foreground/10">
       <p className="px-2.5 pb-1.5 pt-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-        People with access
+        People and Teams with access
       </p>
       <div className="max-h-60 overflow-y-auto">
         {items.map((item, index) => {
@@ -93,16 +96,26 @@ const MentionList = forwardRef<
                   : "hover:bg-muted hover:text-foreground",
               )}
             >
-              <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary">
-                {item.displayName
-                  .split(/\s+/)
-                  .map((p) => p[0])
-                  .join("")
-                  .slice(0, 2)
-                  .toUpperCase()}
+              <span
+                className="flex size-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary"
+                style={item.kind === "team" ? { backgroundColor: item.color ?? "#007582", color: "white" } : undefined}
+              >
+                {item.kind === "team" ? (
+                  <UsersRound className="size-4" />
+                ) : (
+                  item.displayName
+                    .split(/\s+/)
+                    .map((p) => p[0])
+                    .join("")
+                    .slice(0, 2)
+                    .toUpperCase()
+                )}
               </span>
-              <span className="min-w-0 flex-1 truncate text-sm font-medium text-inherit">
-                {item.displayName}
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-sm font-medium text-inherit">{item.displayName}</span>
+                {item.kind === "team" && item.alias && (
+                  <span className="block truncate text-[11px] text-muted-foreground">@{item.alias}</span>
+                )}
               </span>
               <AtSign
                 className={cn(
@@ -130,7 +143,11 @@ function buildMentionSuggestion(
       const q = query.toLowerCase().trim();
       const list = !q
         ? users
-        : users.filter((u) => u.displayName.toLowerCase().includes(q));
+        : users.filter(
+            (u) =>
+              u.displayName.toLowerCase().includes(q) ||
+              (u.alias?.toLowerCase().includes(q) ?? false),
+          );
       return list.slice(0, 10);
     },
     command: ({ editor, range, props: user }) => {
@@ -141,7 +158,7 @@ function buildMentionSuggestion(
           {
             type: "mention",
             attrs: {
-              id: user.id,
+              id: user.kind === "team" ? `team:${user.id}` : user.id,
               label: user.displayName,
             },
           },
@@ -227,7 +244,13 @@ export function createMentionExtension(users: MentionUser[]) {
 
 /** Walk a TipTap JSON doc and collect unique mention user ids. */
 export function extractMentionIds(doc: unknown): string[] {
+  return extractMentionRefs(doc).userIds;
+}
+
+/** Walk a TipTap JSON doc and separate concrete people from reusable Teams. */
+export function extractMentionRefs(doc: unknown): { userIds: string[]; groupIds: string[] } {
   const ids = new Set<string>();
+  const groupIds = new Set<string>();
   function walk(node: unknown) {
     if (!node || typeof node !== "object") return;
     const n = node as {
@@ -235,9 +258,13 @@ export function extractMentionIds(doc: unknown): string[] {
       attrs?: { id?: string };
       content?: unknown[];
     };
-    if (n.type === "mention" && n.attrs?.id) ids.add(String(n.attrs.id));
+    if (n.type === "mention" && n.attrs?.id) {
+      const id = String(n.attrs.id);
+      if (id.startsWith("team:")) groupIds.add(id.slice(5));
+      else ids.add(id);
+    }
     if (Array.isArray(n.content)) n.content.forEach(walk);
   }
   walk(doc);
-  return [...ids];
+  return { userIds: [...ids], groupIds: [...groupIds] };
 }

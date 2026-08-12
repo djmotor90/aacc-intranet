@@ -17,6 +17,7 @@ import {
   getSpaceContentTree,
   getSpaceMembers,
   getTaskTypesForSpace,
+  getTeams,
   type FolderNavNode,
   type ListNavNode,
 } from "@/modules/tasks/queries";
@@ -71,11 +72,18 @@ export default async function SpacePage(props: { params: Promise<{ spaceSlug: st
   if (!role) notFound();
 
   const tree = await getSpaceContentTree(space.id, user.id, user.platformRole, role === "owner");
-  const [members, activeUsers, taskTypes] = role === "owner"
-    ? await Promise.all([getSpaceMembers(space.id), getActiveUsers(), getTaskTypesForSpace(space.id)])
-    : [[], [], []];
+  const [members, activeUsers, taskTypes, teams] = role === "owner"
+    ? await Promise.all([
+        getSpaceMembers(space.id),
+        getActiveUsers(),
+        getTaskTypesForSpace(space.id),
+        getTeams(),
+      ])
+    : [[], [], [], []];
   const memberUserIds = new Set(members.map((m) => m.userId));
+  const memberGroupIds = new Set(members.map((m) => m.groupId));
   const addableUsers = activeUsers.filter((u) => !memberUserIds.has(u.id));
+  const addableTeams = teams.filter((team) => !memberGroupIds.has(team.id));
 
   return (
     <div className="w-full">
@@ -89,6 +97,7 @@ export default async function SpacePage(props: { params: Promise<{ spaceSlug: st
             spaceId={space.id}
             members={members}
             addableUsers={addableUsers}
+            addableTeams={addableTeams}
             taskTypes={taskTypes}
           />
         )}

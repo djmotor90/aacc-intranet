@@ -83,6 +83,15 @@ export function fontSizeClass(size: DocFontSize): string {
   return "text-[15px] leading-relaxed [&_h1]:text-3xl [&_input]:text-[2.5rem]";
 }
 
+/**
+ * TipTap owns its typography through the `prose` classes on the editor root,
+ * so it cannot inherit the page wrapper's text size. Keep an explicit class on
+ * the document body for the matching CSS scale in globals.css.
+ */
+export function docBodyFontSizeClass(size: DocFontSize): string {
+  return `doc-body-font-${size}`;
+}
+
 export function pageWidthClass(width: DocPageWidth): string {
   return width === "full" ? "max-w-5xl" : "max-w-3xl";
 }

@@ -712,12 +712,13 @@ const TaskRow = memo(function TaskRow({
                   taskId={task.id}
                   users={activeUsers}
                   selectedUsers={assignees}
+                  selectedTeams={item.teamAssignees}
                   size="sm"
                 />
               </div>
             ) : (
               <div className="flex h-7 items-center px-1">
-                <AssigneeAvatarStack users={assignees} size="sm" />
+                <AssigneeAvatarStack users={assignees} teams={item.teamAssignees} size="sm" />
               </div>
             )}
           </TableCell>

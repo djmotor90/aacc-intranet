@@ -26,7 +26,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { addSpaceMember, createList, removeSpaceMember } from "../actions";
-import type { SpaceMemberRow, TaskTypeMeta } from "../queries";
+import type { SpaceMemberRow, TaskTypeMeta, TeamOption } from "../queries";
 import { SharingDialogBody } from "./sharing-dialog-body";
 import { TaskTypeManager } from "./task-type-manager";
 
@@ -39,11 +39,13 @@ export function SpaceSettingsMenu({
   spaceId,
   members,
   addableUsers,
+  addableTeams,
   taskTypes = [],
 }: {
   spaceId: string;
   members: SpaceMemberRow[];
   addableUsers: UserOption[];
+  addableTeams: TeamOption[];
   taskTypes?: TaskTypeMeta[];
 }) {
   const [sharingOpen, setSharingOpen] = useState(false);
@@ -86,6 +88,7 @@ export function SpaceSettingsMenu({
             idValue={spaceId}
             members={members}
             addableUsers={addableUsers}
+            addableTeams={addableTeams}
             addAction={addSpaceMember}
             removeAction={removeSpaceMember}
           />

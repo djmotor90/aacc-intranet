@@ -70,7 +70,10 @@ export async function withDbRetry<T>(
     } catch (error) {
       lastError = error;
       if (attempt === attempts || !isTransientDatabaseError(error)) throw error;
-      await new Promise((resolve) => setTimeout(resolve, baseDelayMs * attempt));
+      // Add jitter so concurrent SSR requests do not all reconnect on the same
+      // millisecond after PostgreSQL or the container network comes back.
+      const jitterMs = Math.floor(Math.random() * baseDelayMs);
+      await new Promise((resolve) => setTimeout(resolve, baseDelayMs * attempt + jitterMs));
     }
   }
   throw lastError;

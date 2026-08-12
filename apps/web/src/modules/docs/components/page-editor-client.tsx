@@ -62,6 +62,7 @@ import { DOC_STALE_AFTER_DAYS, pagePath } from "@/modules/docs/lib/constants";
 import {
   countWordsAndChars,
   DEFAULT_DOC_PAGE_STYLES,
+  docBodyFontSizeClass,
   fontSizeClass,
   fontStyleClass,
   loadDocPageStyles,
@@ -706,13 +707,18 @@ export function PageEditorClient({
               className="gap-1.5"
               onClick={openHistory}
               disabled={pending}
+              aria-label="History"
+              title="History"
             >
               <History className="size-3.5" />
               <span className="hidden sm:inline">History</span>
             </Button>
-            <SheetContent side="right" className="w-full overflow-y-auto border-l-[#007582]/20 bg-[#f7fbfb] p-0 sm:max-w-4xl">
-              <div className="border-b border-[#007582]/15 bg-gradient-to-r from-[#eaf5f5] via-white to-[#fffaf6] px-6 py-6 sm:px-8">
-                <SheetHeader className="text-left">
+            <SheetContent
+              side="right"
+              className="gap-0 overflow-hidden border-l-[#007582]/20 bg-[#f7fbfb] p-0 data-[side=right]:w-full data-[side=right]:sm:w-[min(92vw,72rem)] data-[side=right]:sm:max-w-none"
+            >
+              <div className="shrink-0 border-b border-[#007582]/15 bg-gradient-to-r from-[#eaf5f5] via-white to-[#fffaf6] px-5 py-5 sm:px-8 sm:py-6">
+                <SheetHeader className="p-0 pr-10 text-left">
                   <div>
                     <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-[#007582]">CEWD · Document control</p>
                     <SheetTitle className="mt-1 text-xl font-semibold tracking-tight text-[#17373b]">Version history</SheetTitle>
@@ -724,7 +730,7 @@ export function PageEditorClient({
                   <span className="rounded-full bg-[#BE5513]/10 px-3 py-1.5 text-[#93400d]">CEWD controlled document</span>
                 </div>
               </div>
-              <div className="p-6 sm:p-8">
+              <div className="@container/history min-h-0 flex-1 overflow-x-hidden overflow-y-auto p-4 sm:p-8">
                 {revisions.length === 0 ? (
                   <div className="mx-auto max-w-md rounded-2xl border border-dashed border-[#007582]/25 bg-white px-6 py-12 text-center shadow-sm">
                     <span className="mx-auto flex size-12 items-center justify-center rounded-2xl bg-[#e6f3f3] text-[#007582]"><History className="size-6" /></span>
@@ -732,11 +738,11 @@ export function PageEditorClient({
                     <p className="mt-2 text-sm leading-6 text-[#557075]">History starts after the next completed save. From then on, every save is retained with the editor and timestamp.</p>
                   </div>
                 ) : (
-                  <div className="grid gap-5 2xl:grid-cols-[15rem_minmax(0,1fr)]">
-                    <aside className="rounded-2xl border border-[#007582]/15 bg-white p-2 shadow-sm">
+                  <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-5 @4xl/history:grid-cols-[15rem_minmax(0,1fr)]">
+                    <aside className="min-w-0 rounded-2xl border border-[#007582]/15 bg-white p-2 shadow-sm">
                       <p className="px-3 pb-2 pt-2 text-[11px] font-bold uppercase tracking-[0.16em] text-[#557075]">Timeline</p>
-                      <div className="space-y-1">{revisions.map((revision) => (
-                        <button key={revision.id} type="button" onClick={() => setSelectedRevisionId(revision.id)} className={cn("w-full rounded-xl border px-3 py-3 text-left transition-colors", selectedRevisionId === revision.id ? "border-[#007582]/30 bg-[#e6f3f3]" : "border-transparent hover:bg-[#f2f8f8]")}>
+                      <div className="flex gap-1 overflow-x-auto pb-1 @4xl/history:block @4xl/history:space-y-1 @4xl/history:overflow-visible @4xl/history:pb-0">{revisions.map((revision) => (
+                        <button key={revision.id} type="button" onClick={() => setSelectedRevisionId(revision.id)} className={cn("w-full min-w-[12rem] rounded-xl border px-3 py-3 text-left transition-colors @4xl/history:min-w-0", selectedRevisionId === revision.id ? "border-[#007582]/30 bg-[#e6f3f3]" : "border-transparent hover:bg-[#f2f8f8]")}>
                           <span className="flex items-center justify-between gap-2 font-semibold text-[#17373b]">Version {revision.bodyVersion}{revision.changeType === "restored" && <span className="rounded bg-[#BE5513]/10 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-[#93400d]">Restored</span>}</span>
                           <span className="mt-1 block text-xs leading-5 text-[#557075]">{new Date(revision.createdAt).toLocaleString()}<br />{revision.actorName ?? "System"}</span>
                         </button>
@@ -745,8 +751,8 @@ export function PageEditorClient({
                     <section className="min-w-0">
                       {selectedRevision && <>
                         <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
-                          <div><p className="text-[11px] font-bold uppercase tracking-[0.16em] text-[#007582]">Version comparison</p><h3 className="mt-1 text-lg font-semibold text-[#17373b]">Version {selectedRevision.bodyVersion} vs. current</h3><p className="mt-1 text-sm text-[#557075]">Review before restoring. A restore creates a new traceable version.</p></div>
-                          {canEdit && <Button size="sm" disabled={pending} onClick={restoreRevision} className="bg-[#007582] text-white hover:bg-[#006570]"><RotateCcw className="size-3.5" /> Restore version</Button>}
+                          <div className="min-w-0"><p className="text-[11px] font-bold uppercase tracking-[0.16em] text-[#007582]">Version comparison</p><h3 className="mt-1 text-lg font-semibold text-[#17373b]">Version {selectedRevision.bodyVersion} vs. current</h3><p className="mt-1 max-w-2xl text-sm leading-6 text-[#557075]">Review before restoring. A restore creates a new traceable version.</p></div>
+                          {canEdit && <Button size="sm" disabled={pending} onClick={restoreRevision} className="shrink-0 bg-[#007582] text-white hover:bg-[#006570]"><RotateCcw className="size-3.5" /> Restore version</Button>}
                         </div>
                         <DocRevisionDiff previous={selectedRevision.body as StoredRichDoc} current={bodyPreview} />
                       </>}
@@ -1079,6 +1085,7 @@ export function PageEditorClient({
               onUploadBatchChange={onUploadBatchChange}
               placeholder="Type / for commands, or start writing…"
               className="border-0 bg-transparent shadow-none"
+              contentClassName={docBodyFontSizeClass(styles.fontSize)}
               editorClassName="min-h-[50vh] pl-0! pr-0! py-0!"
             />
           ) : (
@@ -1095,6 +1102,7 @@ export function PageEditorClient({
               onUploadBatchChange={onUploadBatchChange}
               placeholder="Type / for commands, or start writing…"
               className="border-0 !bg-transparent shadow-none"
+              contentClassName={docBodyFontSizeClass(styles.fontSize)}
               editorClassName="min-h-[50vh] pl-0! pr-0! py-0!"
             />
           )}

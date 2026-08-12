@@ -263,7 +263,7 @@ export function UserSettingsMenu({
     if (isAdmin) {
       items.push(
         { id: "admin-users", label: "Users", icon: Users, group: "admin" },
-        { id: "admin-groups", label: "Groups & Roles", icon: Shield, group: "admin" },
+        { id: "admin-groups", label: "Teams & Groups", icon: Shield, group: "admin" },
         {
           id: "admin-modules",
           label: "Apps & menus",

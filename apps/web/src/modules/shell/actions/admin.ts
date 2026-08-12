@@ -7,8 +7,19 @@
  * Fingerprint: GURVER-KG-AITIM-2026-7F3C9E2A
  * License: Proprietary. All rights reserved. See LICENSE / COPYRIGHT.
  */
-import { db, entraGroups, groupRoleMappings, userGroupMemberships, users } from "@aitim/db";
-import { and, asc, eq, inArray } from "drizzle-orm";
+import {
+  db,
+  entraGroups,
+  folderMembers,
+  groupRoleMappings,
+  listMembers,
+  spaceMembers,
+  teamMemberships,
+  teams,
+  userGroupMemberships,
+  users,
+} from "@aitim/db";
+import { and, asc, eq, inArray, isNotNull, ne, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { enqueue, JOBS } from "@/lib/queue";
@@ -46,7 +57,24 @@ export type AssignablePermissionRole = {
   isSystem: boolean;
 };
 
-export type AdminGroupRow = { id: string; displayName: string };
+export type AdminTeamMemberRow = {
+  id: string;
+  displayName: string;
+  email: string;
+  photoKey: string | null;
+};
+
+export type AdminGroupRow = {
+  id: string;
+  displayName: string;
+  alias: string | null;
+  description: string | null;
+  icon: string | null;
+  color: string | null;
+  members: AdminTeamMemberRow[];
+};
+
+export type AdminEntraGroupOption = { id: string; displayName: string };
 
 export type AdminMappingRow = {
   id: string;
@@ -162,12 +190,54 @@ export async function getAdminUsersData(): Promise<{
 export async function getAdminGroupsData(): Promise<{
   groups: AdminGroupRow[];
   mappings: AdminMappingRow[];
+  availableUsers: AdminTeamMemberRow[];
+  entraGroups: AdminEntraGroupOption[];
 }> {
   await requireAdmin();
-  const groups = await db
-    .select({ id: entraGroups.id, displayName: entraGroups.displayName })
-    .from(entraGroups)
-    .orderBy(asc(entraGroups.displayName));
+  const groupRows = await db
+    .select({
+      id: teams.id,
+      displayName: teams.displayName,
+      alias: teams.alias,
+      description: teams.description,
+      icon: teams.icon,
+      color: teams.color,
+    })
+    .from(teams)
+    .orderBy(asc(teams.displayName));
+  const membershipRows = await db
+    .select({
+      groupId: teamMemberships.teamId,
+      id: users.id,
+      displayName: users.displayName,
+      email: users.email,
+      photoKey: users.photoKey,
+    })
+    .from(teamMemberships)
+    .innerJoin(users, eq(teamMemberships.userId, users.id))
+    .orderBy(asc(users.displayName));
+  const membersByGroup = new Map<string, AdminTeamMemberRow[]>();
+  for (const membership of membershipRows) {
+    const list = membersByGroup.get(membership.groupId) ?? [];
+    list.push({
+      id: membership.id,
+      displayName: membership.displayName,
+      email: membership.email,
+      photoKey: membership.photoKey,
+    });
+    membersByGroup.set(membership.groupId, list);
+  }
+  const groups: AdminGroupRow[] = groupRows.map((group) => ({
+    ...group,
+    members: membersByGroup.get(group.id) ?? [],
+  }));
+  const { listPickerUsers } = await import("@/lib/directory-users");
+  const availableUsers = (await listPickerUsers()).map((user) => ({
+    id: user.id,
+    displayName: user.displayName,
+    email: user.email,
+    photoKey: user.photoKey,
+  }));
   const mappings = await db
     .select({
       id: groupRoleMappings.id,
@@ -177,7 +247,185 @@ export async function getAdminGroupsData(): Promise<{
     })
     .from(groupRoleMappings)
     .innerJoin(entraGroups, eq(groupRoleMappings.groupId, entraGroups.id));
-  return { groups, mappings };
+  const entraGroupOptions = await db
+    .select({ id: entraGroups.id, displayName: entraGroups.displayName })
+    .from(entraGroups)
+    .where(isNotNull(entraGroups.entraGroupId))
+    .orderBy(asc(entraGroups.displayName));
+  return { groups, mappings, availableUsers, entraGroups: entraGroupOptions };
+}
+
+function normalizeTeamAlias(value: string): string {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/^@+/, "")
+    .replace(/[^a-z0-9_-]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 50);
+}
+
+const teamSchema = z.object({
+  name: z.string().trim().min(1).max(100),
+  alias: z.string().trim().max(50).optional(),
+  description: z.string().trim().max(500).optional(),
+  color: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
+  memberIds: z.array(z.string().uuid()).max(500).default([]),
+});
+
+async function assertUniqueTeam(name: string, alias: string, excludeId?: string) {
+  const duplicate = await db
+    .select({ id: teams.id })
+    .from(teams)
+    .where(
+      and(
+        excludeId ? ne(teams.id, excludeId) : undefined,
+        sql`(lower(${teams.displayName}) = lower(${name}) or lower(${teams.alias}) = lower(${alias}))`,
+      ),
+    )
+    .limit(1);
+  if (duplicate.length > 0) throw new Error("A Team with this name or @alias already exists");
+}
+
+export async function createTeam(input: z.input<typeof teamSchema>) {
+  const actor = await requireAdmin();
+  const parsed = teamSchema.parse(input);
+  const alias = normalizeTeamAlias(parsed.alias || parsed.name);
+  if (!alias) throw new Error("Enter a valid Team alias");
+  await assertUniqueTeam(parsed.name, alias);
+  const memberIds = [...new Set(parsed.memberIds)];
+  const [team] = await db.transaction(async (tx) => {
+    const rows = await tx
+      .insert(teams)
+      .values({
+        displayName: parsed.name,
+        alias,
+        description: parsed.description || null,
+        color: parsed.color ?? "#007582",
+        createdBy: actor.id,
+      })
+      .returning();
+    const created = rows[0];
+    if (!created) throw new Error("Could not create Team");
+    if (memberIds.length > 0) {
+      await tx
+        .insert(teamMemberships)
+        .values(memberIds.map((userId) => ({ userId, teamId: created.id, addedBy: actor.id })))
+        .onConflictDoNothing();
+    }
+    return rows;
+  });
+  const { writeAuditLog } = await import("@/lib/audit");
+  await writeAuditLog({
+    category: "user",
+    eventType: "TEAM_CREATED",
+    title: "Team created",
+    actorId: actor.id,
+    targetType: "team",
+    targetId: team?.id,
+    targetLabel: parsed.name,
+    payload: { alias, memberCount: memberIds.length },
+  });
+  revalidatePath("/");
+}
+
+export async function updateTeam(input: z.input<typeof teamSchema> & { id: string }) {
+  const actor = await requireAdmin();
+  const id = z.string().uuid().parse(input.id);
+  const parsed = teamSchema.parse(input);
+  const alias = normalizeTeamAlias(parsed.alias || parsed.name);
+  if (!alias) throw new Error("Enter a valid Team alias");
+  const [team] = await db.select().from(teams).where(eq(teams.id, id));
+  if (!team) throw new Error("Team not found");
+  await assertUniqueTeam(parsed.name, alias, id);
+  await db
+    .update(teams)
+    .set({ displayName: parsed.name, alias, description: parsed.description || null, color: parsed.color })
+    .where(eq(teams.id, id));
+  const { writeAuditLog } = await import("@/lib/audit");
+  await writeAuditLog({
+    category: "user",
+    eventType: "TEAM_UPDATED",
+    title: "Team updated",
+    actorId: actor.id,
+    targetType: "team",
+    targetId: id,
+    targetLabel: parsed.name,
+  });
+  revalidatePath("/");
+}
+
+export async function addTeamMember(input: { teamId: string; userId: string }) {
+  const actor = await requireAdmin();
+  const teamId = z.string().uuid().parse(input.teamId);
+  const userId = z.string().uuid().parse(input.userId);
+  const [team] = await db.select().from(teams).where(eq(teams.id, teamId));
+  if (!team) throw new Error("Team not found");
+  await db
+    .insert(teamMemberships)
+    .values({ teamId, userId, addedBy: actor.id })
+    .onConflictDoNothing();
+  const { writeAuditLog } = await import("@/lib/audit");
+  await writeAuditLog({
+    category: "user",
+    eventType: "TEAM_MEMBER_ADDED",
+    title: "Team member added",
+    actorId: actor.id,
+    targetType: "team",
+    targetId: teamId,
+    targetLabel: team.displayName,
+    payload: { userId },
+  });
+  revalidatePath("/");
+}
+
+export async function removeTeamMember(input: { teamId: string; userId: string }) {
+  const actor = await requireAdmin();
+  const teamId = z.string().uuid().parse(input.teamId);
+  const userId = z.string().uuid().parse(input.userId);
+  const [team] = await db.select().from(teams).where(eq(teams.id, teamId));
+  if (!team) throw new Error("Team not found");
+  await db
+    .delete(teamMemberships)
+    .where(and(eq(teamMemberships.teamId, teamId), eq(teamMemberships.userId, userId)));
+  const { writeAuditLog } = await import("@/lib/audit");
+  await writeAuditLog({
+    category: "user",
+    eventType: "TEAM_MEMBER_REMOVED",
+    title: "Team member removed",
+    actorId: actor.id,
+    targetType: "team",
+    targetId: teamId,
+    targetLabel: team.displayName,
+    payload: { userId },
+  });
+  revalidatePath("/");
+}
+
+export async function deleteTeam(teamIdInput: string) {
+  const actor = await requireAdmin();
+  const teamId = z.string().uuid().parse(teamIdInput);
+  const [team] = await db.select().from(teams).where(eq(teams.id, teamId));
+  if (!team) return;
+  // Legacy membership tables predate group foreign keys, so remove their
+  // Team grants explicitly before deleting the reusable principal.
+  await db.transaction(async (tx) => {
+    await tx.delete(listMembers).where(eq(listMembers.groupId, teamId));
+    await tx.delete(folderMembers).where(eq(folderMembers.groupId, teamId));
+    await tx.delete(spaceMembers).where(eq(spaceMembers.groupId, teamId));
+    await tx.delete(teams).where(eq(teams.id, teamId));
+  });
+  const { writeAuditLog } = await import("@/lib/audit");
+  await writeAuditLog({
+    category: "user",
+    eventType: "TEAM_DELETED",
+    title: "Team deleted",
+    actorId: actor.id,
+    targetType: "team",
+    targetId: teamId,
+    targetLabel: team.displayName,
+  });
+  revalidatePath("/");
 }
 
 export async function triggerEntraSync() {
@@ -199,6 +447,11 @@ export async function createPlatformRoleMapping(formData: FormData) {
     groupId: formData.get("groupId"),
     role: formData.get("role"),
   });
+  const [entraGroup] = await db
+    .select({ id: entraGroups.id })
+    .from(entraGroups)
+    .where(and(eq(entraGroups.id, parsed.groupId), isNotNull(entraGroups.entraGroupId)));
+  if (!entraGroup) throw new Error("Select a synced Entra access group");
   await db.insert(groupRoleMappings).values({
     groupId: parsed.groupId,
     targetType: "platform_role",

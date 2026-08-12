@@ -21,7 +21,7 @@ import {
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
-import { modules, users } from "./platform";
+import { modules, teams, users } from "./platform";
 
 export const spaceRole = pgEnum("space_role", ["owner", "member", "guest"]);
 export const principalType = pgEnum("principal_type", ["user", "group"]);
@@ -100,7 +100,7 @@ export const spaceMembers = pgTable(
       .references(() => spaces.id, { onDelete: "cascade" }),
     principalType: principalType("principal_type").notNull(),
     userId: uuid("user_id").references(() => users.id, { onDelete: "cascade" }),
-    groupId: uuid("group_id"),
+    groupId: uuid("group_id").references(() => teams.id, { onDelete: "cascade" }),
     role: spaceRole("role").notNull().default("member"),
     ...timestamps,
   },
@@ -152,7 +152,7 @@ export const folderMembers = pgTable(
       .references(() => folders.id, { onDelete: "cascade" }),
     principalType: principalType("principal_type").notNull(),
     userId: uuid("user_id").references(() => users.id, { onDelete: "cascade" }),
-    groupId: uuid("group_id"),
+    groupId: uuid("group_id").references(() => teams.id, { onDelete: "cascade" }),
     role: spaceRole("role").notNull().default("member"),
     ...timestamps,
   },
@@ -225,7 +225,7 @@ export const listMembers = pgTable(
       .references(() => lists.id, { onDelete: "cascade" }),
     principalType: principalType("principal_type").notNull(),
     userId: uuid("user_id").references(() => users.id, { onDelete: "cascade" }),
-    groupId: uuid("group_id"),
+    groupId: uuid("group_id").references(() => teams.id, { onDelete: "cascade" }),
     role: spaceRole("role").notNull().default("member"),
     ...timestamps,
   },
@@ -342,6 +342,25 @@ export const taskAssignees = pgTable(
     assignedAt: timestamp("assigned_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [primaryKey({ columns: [t.taskId, t.userId] }), index("task_assignees_user_idx").on(t.userId)],
+);
+
+/** Team-level assignments stay distinct from individual responsibility. */
+export const taskGroupAssignees = pgTable(
+  "task_group_assignees",
+  {
+    taskId: uuid("task_id")
+      .notNull()
+      .references(() => tasks.id, { onDelete: "cascade" }),
+    groupId: uuid("group_id")
+      .notNull()
+      .references(() => teams.id, { onDelete: "cascade" }),
+    assignedBy: uuid("assigned_by").references(() => users.id),
+    assignedAt: timestamp("assigned_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.taskId, t.groupId] }),
+    index("task_group_assignees_group_idx").on(t.groupId),
+  ],
 );
 
 /**
@@ -687,6 +706,11 @@ export const taskTagsRelations = relations(taskTags, ({ one }) => ({
 export const taskAssigneesRelations = relations(taskAssignees, ({ one }) => ({
   task: one(tasks, { fields: [taskAssignees.taskId], references: [tasks.id] }),
   user: one(users, { fields: [taskAssignees.userId], references: [users.id] }),
+}));
+
+export const taskGroupAssigneesRelations = relations(taskGroupAssignees, ({ one }) => ({
+  task: one(tasks, { fields: [taskGroupAssignees.taskId], references: [tasks.id] }),
+  group: one(teams, { fields: [taskGroupAssignees.groupId], references: [teams.id] }),
 }));
 
 export const listsRelations = relations(lists, ({ one, many }) => ({

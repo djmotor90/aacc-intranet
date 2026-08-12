@@ -21,14 +21,25 @@ type BossPoolExtras = {
   idleTimeoutMillis?: number;
 };
 
+function boundedInt(raw: string | undefined, fallback: number, min: number, max: number): number {
+  if (!raw?.trim()) return fallback;
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) ? Math.min(max, Math.max(min, Math.trunc(parsed))) : fallback;
+}
+
 /** Shared pg-boss instance (publisher in web, worker registers handlers too). */
 export function getBoss(): Promise<PgBoss> {
   if (!globalForBoss.bossStarted) {
     const options: ConstructorOptions & BossPoolExtras = {
       connectionString: process.env.DATABASE_URL!,
       // Separate from DATABASE_POOL_MAX (app queries) so boss doesn't starve SSR.
-      max: Number(process.env.PGBOSS_POOL_MAX ?? 3),
-      connectionTimeoutMillis: 15_000,
+      max: boundedInt(process.env.PGBOSS_POOL_MAX, 3, 1, 10),
+      connectionTimeoutMillis: boundedInt(
+        process.env.PGBOSS_CONNECT_TIMEOUT_MS,
+        30_000,
+        2_000,
+        60_000,
+      ),
       // Match worker pool settings so firewalled remote DBs don't drop idle sockets.
       keepAlive: true,
       keepAliveInitialDelayMillis: 10_000,

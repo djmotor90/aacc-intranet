@@ -365,6 +365,20 @@
       "when": 1788000000000,
       "tag": "0051_familiar_oracle",
       "breakpoints": true
+    },
+    {
+      "idx": 52,
+      "version": "7",
+      "when": 1788100000000,
+      "tag": "0052_rare_moira_mactaggert",
+      "breakpoints": true
+    },
+    {
+      "idx": 53,
+      "version": "7",
+      "when": 1788200000000,
+      "tag": "0053_shallow_madame_hydra",
+      "breakpoints": true
     }
   ]
 }

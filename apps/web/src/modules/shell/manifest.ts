@@ -18,6 +18,6 @@ export const shellManifest: ModuleManifest = {
   access: () => true,
   adminNavItems: [
     { label: "Users", href: "/admin/users", icon: "users" },
-    { label: "Groups & Roles", href: "/admin/groups", icon: "shield" },
+    { label: "Teams & Groups", href: "/admin/groups", icon: "shield" },
   ],
 };

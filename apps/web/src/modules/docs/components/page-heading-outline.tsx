@@ -104,6 +104,15 @@ export function PageHeadingOutline({
     const updateActiveHeading = () => {
       cancelAnimationFrame(frame);
       frame = requestAnimationFrame(() => {
+        const hasScrollableContent = scrollRoot.scrollHeight > scrollRoot.clientHeight + 4;
+        const isAtDocumentEnd =
+          hasScrollableContent &&
+          scrollRoot.scrollTop + scrollRoot.clientHeight >= scrollRoot.scrollHeight - 4;
+        if (isAtDocumentEnd) {
+          setActiveId(headings.at(-1)?.id ?? null);
+          return;
+        }
+
         const rootTop = scrollRoot.getBoundingClientRect().top;
         const activationLine = rootTop + 112;
         const elements = getHeadingElements(editorRoot);
@@ -138,8 +147,18 @@ export function PageHeadingOutline({
 
   function scrollToHeading(heading: PageHeading) {
     const editorRoot = editorRootRef.current;
+    const scrollRoot = scrollRootRef.current;
     const element = editorRoot ? getHeadingElements(editorRoot)[heading.index] : null;
-    element?.scrollIntoView({ behavior: "smooth", block: "start" });
+    if (!element || !scrollRoot) return;
+
+    const rootRect = scrollRoot.getBoundingClientRect();
+    const elementRect = element.getBoundingClientRect();
+    const requestedTop = scrollRoot.scrollTop + elementRect.top - rootRect.top - 24;
+    const maxTop = Math.max(0, scrollRoot.scrollHeight - scrollRoot.clientHeight);
+    scrollRoot.scrollTo({
+      top: Math.min(maxTop, Math.max(0, requestedTop)),
+      behavior: "smooth",
+    });
     setActiveId(heading.id);
   }
 
@@ -170,6 +189,7 @@ export function PageHeadingOutline({
               }}
               type="button"
               onClick={() => scrollToHeading(heading)}
+              aria-current={activeId === heading.id ? "location" : undefined}
               className={cn(
                 "relative w-full truncate rounded-md py-1 pr-2 text-left text-xs transition-colors",
                 heading.level === 1 && "pl-2",

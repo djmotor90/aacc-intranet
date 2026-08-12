@@ -351,6 +351,7 @@ function CommentBody({
 export function ActivityPanel({
   taskId,
   mentionableUsers,
+  mentionableTeams = [],
   activity,
   comments,
   currentUserId,
@@ -364,6 +365,13 @@ export function ActivityPanel({
 }: {
   taskId: string;
   mentionableUsers: { id: string; displayName: string; photoKey: string | null }[];
+  mentionableTeams?: {
+    id: string;
+    displayName: string;
+    alias: string | null;
+    color: string | null;
+    kind: "team";
+  }[];
   activity: ActivityEvent[];
   comments: TaskComment[];
   /** Session user id — for “delete own comment”. */
@@ -580,7 +588,7 @@ export function ActivityPanel({
           <div className="box-border shrink-0 rounded-xl border border-border bg-card p-3 shadow-sm">
             <CommentBox
               taskId={taskId}
-              users={mentionableUsers}
+              users={[...mentionableTeams, ...mentionableUsers]}
               parentCommentId={threadRoot.id}
               placeholder="Reply in thread… Use @ to mention"
               autoFocus
@@ -1010,7 +1018,7 @@ export function ActivityPanel({
           )}
         </ul>
         <div className="box-border shrink-0 rounded-xl border border-border bg-card p-3 shadow-sm">
-          <CommentBox taskId={taskId} users={mentionableUsers} />
+          <CommentBox taskId={taskId} users={[...mentionableTeams, ...mentionableUsers]} />
         </div>
       </CardContent>
     </Card>

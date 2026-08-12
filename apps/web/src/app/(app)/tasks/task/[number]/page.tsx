@@ -59,6 +59,7 @@ import {
   getSubtasks,
   getTagsForSpace,
   getTagsForTask,
+  getTeamsWithListAccess,
   getTaskActivity,
   getTaskAttachmentFolders,
   getTaskAttachments,
@@ -166,6 +167,7 @@ export default async function TaskDetailPage(props: { params: Promise<{ number: 
     activity,
     activeUsers,
     mentionableUsers,
+    mentionableTeams,
     taskComments,
     taskAttachments,
     attachmentFolders,
@@ -186,6 +188,7 @@ export default async function TaskDetailPage(props: { params: Promise<{ number: 
     getActiveUsers(),
     // @-mentions only list people who can access this task (list RBAC).
     getUsersWithListAccess(task.listId),
+    getTeamsWithListAccess(task.listId),
     getTaskComments(task.id),
     getTaskAttachments(task.id),
     getTaskAttachmentFolders(task.id),
@@ -205,12 +208,25 @@ export default async function TaskDetailPage(props: { params: Promise<{ number: 
     : null;
   const progress = currentTaskType?.showDeliveryTimeline ? await getTaskProgress(task.id) : null;
   const me = activeUsers.find((u) => u.id === user.id);
-  const { taskAssignees: ta } = await import("@aitim/db");
-  const assigneeRows = await db
-    .select({ id: users.id, displayName: users.displayName, photoKey: users.photoKey })
-    .from(ta)
-    .innerJoin(users, eq(ta.userId, users.id))
-    .where(eq(ta.taskId, task.id));
+  const { teams, taskAssignees: ta, taskGroupAssignees: tga } = await import("@aitim/db");
+  const [assigneeRows, teamAssigneeRows] = await Promise.all([
+    db
+      .select({ id: users.id, displayName: users.displayName, photoKey: users.photoKey })
+      .from(ta)
+      .innerJoin(users, eq(ta.userId, users.id))
+      .where(eq(ta.taskId, task.id)),
+    db
+      .select({
+        id: teams.id,
+        displayName: teams.displayName,
+        alias: teams.alias,
+        color: teams.color,
+        icon: teams.icon,
+      })
+      .from(tga)
+      .innerJoin(teams, eq(tga.groupId, teams.id))
+      .where(eq(tga.taskId, task.id)),
+  ]);
   const cf = (task.customFields ?? {}) as Record<string, unknown>;
   const description = task.description as StoredRichDoc;
   const savedLayout = list.taskLayout as TaskLayout | null;
@@ -457,6 +473,7 @@ export default async function TaskDetailPage(props: { params: Promise<{ number: 
                           taskId={task.id}
                           users={activeUsers}
                           selectedUsers={assigneeRows}
+                          selectedTeams={teamAssigneeRows.map((team) => ({ ...team, memberCount: 0 }))}
                           disabled={!canEdit}
                         />
                       </div>
@@ -596,6 +613,13 @@ export default async function TaskDetailPage(props: { params: Promise<{ number: 
         <ActivityPanel
           taskId={task.id}
           mentionableUsers={mentionableUsers}
+          mentionableTeams={mentionableTeams.map((team) => ({
+            id: team.id,
+            displayName: team.displayName,
+            alias: team.alias,
+            color: team.color,
+            kind: "team" as const,
+          }))}
           activity={activity}
           comments={taskComments}
           currentUserId={user.id}

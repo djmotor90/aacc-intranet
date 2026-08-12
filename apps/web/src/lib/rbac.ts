@@ -13,7 +13,7 @@ import {
   listSecretViewers,
   lists,
   spaceMembers,
-  userGroupMemberships,
+  teamMemberships,
 } from "@aitim/db";
 import { and, eq, inArray, or } from "drizzle-orm";
 import { redirect } from "next/navigation";
@@ -37,22 +37,23 @@ export const requireAdmin = cache(async () => {
 });
 
 /**
- * Entra group ids for a user — fetched once per request (React cache).
+ * App-managed Team ids for a user — fetched once per request (React cache).
  * Previously every getSpaceRole / getFolderRole / getListRole re-queried this,
  * which stacked dozens of pool checkouts and caused
  * "timeout exceeded when trying to connect".
  */
-export const getUserGroupIds = cache(async (userId: string): Promise<string[]> => {
+export const getUserTeamIds = cache(async (userId: string): Promise<string[]> => {
   const groupRows = await db
-    .select({ groupId: userGroupMemberships.groupId })
-    .from(userGroupMemberships)
-    .where(eq(userGroupMemberships.userId, userId));
-  return groupRows.map((r) => r.groupId);
+    .select({ teamId: teamMemberships.teamId })
+    .from(teamMemberships)
+    .where(eq(teamMemberships.userId, userId));
+  return groupRows.map((r) => r.teamId);
 });
 
 /**
- * Effective role in a space: direct membership OR membership via a mapped
- * Entra group; highest role wins.
+ * Effective role in a space: direct membership OR membership via a Team.
+ * A person's explicit role wins over Team roles at the same level, matching
+ * the predictable override behavior users expect from reusable Teams.
  *
  * Platform Super Admin (`platformRole === "admin"`) is god mode — treated as
  * space Admin (internal key `owner`) everywhere and bypasses privacy gates.
@@ -62,10 +63,10 @@ export const getSpaceRole = cache(
   async (userId: string, spaceId: string, platformRole?: string): Promise<SpaceRole | null> => {
     if (platformRole === "admin") return "owner";
 
-    const groupIds = await getUserGroupIds(userId);
+    const groupIds = await getUserTeamIds(userId);
 
     const memberships = await db
-      .select({ role: spaceMembers.role })
+      .select({ role: spaceMembers.role, userId: spaceMembers.userId })
       .from(spaceMembers)
       .where(
         and(
@@ -78,6 +79,8 @@ export const getSpaceRole = cache(
       );
 
     if (memberships.length === 0) return null;
+    const individual = memberships.find((membership) => membership.userId === userId);
+    if (individual) return individual.role;
     return memberships.reduce<SpaceRole>(
       (best, m) => (ROLE_RANK[m.role] > ROLE_RANK[best] ? m.role : best),
       "guest",
@@ -89,7 +92,7 @@ export const getSpaceRole = cache(
 export const userOwnsAnySpace = cache(
   async (userId: string, platformRole?: string): Promise<boolean> => {
     if (platformRole === "admin") return true;
-    const groupIds = await getUserGroupIds(userId);
+    const groupIds = await getUserTeamIds(userId);
     const [row] = await db
       .select({ id: spaceMembers.spaceId })
       .from(spaceMembers)
@@ -141,10 +144,10 @@ export const getFolderRole = cache(
       ? await getFolderRole(userId, folder.parentFolderId, platformRole)
       : spaceRole;
 
-    const groupIds = await getUserGroupIds(userId);
+    const groupIds = await getUserTeamIds(userId);
 
     const directRows = await db
-      .select({ role: folderMembers.role })
+      .select({ role: folderMembers.role, userId: folderMembers.userId })
       .from(folderMembers)
       .where(
         and(
@@ -155,13 +158,14 @@ export const getFolderRole = cache(
           ),
         ),
       );
-    const directRole =
-      directRows.length > 0
+    const individualRole = directRows.find((row) => row.userId === userId)?.role ?? null;
+    const directRole = individualRole ??
+      (directRows.length > 0
         ? directRows.reduce<SpaceRole>(
             (best, m) => (ROLE_RANK[m.role] > ROLE_RANK[best] ? m.role : best),
             "guest",
           )
-        : null;
+        : null);
 
     if (folder.isPrivate) return directRole;
     if (!directRole) return parentRole;
@@ -205,10 +209,10 @@ export const getListRole = cache(
       ? await getFolderRole(userId, list.folderId, platformRole)
       : spaceRole;
 
-    const groupIds = await getUserGroupIds(userId);
+    const groupIds = await getUserTeamIds(userId);
 
     const directRows = await db
-      .select({ role: listMembers.role })
+      .select({ role: listMembers.role, userId: listMembers.userId })
       .from(listMembers)
       .where(
         and(
@@ -219,13 +223,14 @@ export const getListRole = cache(
           ),
         ),
       );
-    const directRole =
-      directRows.length > 0
+    const individualRole = directRows.find((row) => row.userId === userId)?.role ?? null;
+    const directRole = individualRole ??
+      (directRows.length > 0
         ? directRows.reduce<SpaceRole>(
             (best, m) => (ROLE_RANK[m.role] > ROLE_RANK[best] ? m.role : best),
             "guest",
           )
-        : null;
+        : null);
 
     if (list.isPrivate) return directRole;
     if (!directRole) return parentRole;
@@ -258,7 +263,7 @@ export const canViewSecrets = cache(
     const spaceRole = await getSpaceRole(userId, list.spaceId, platformRole);
     if (spaceRole === "owner") return true;
 
-    const groupIds = await getUserGroupIds(userId);
+    const groupIds = await getUserTeamIds(userId);
     const grants = await db
       .select({ id: listSecretViewers.id })
       .from(listSecretViewers)

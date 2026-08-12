@@ -80,6 +80,7 @@ export interface ActivityEntry {
     | "list.privacy_changed"
     | "list.moved"
     | "folder.created"
+    | "folder.renamed"
     | "folder.archived"
     | "folder.deleted"
     | "folder.restored"

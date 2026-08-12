@@ -41,6 +41,7 @@ import {
   getSpaceBySlug,
   getSpaceMembers,
   getStatusesForList,
+  getTeams,
 } from "@/modules/tasks/queries";
 
 
@@ -66,6 +67,7 @@ export default async function ListSettingsPage(props: {
     subtaskCount,
     secretCount,
     secretViewers,
+    teams,
   ] = await Promise.all([
     getStatusesForList(list.id),
     getFieldDefinitions(list.id, true),
@@ -75,9 +77,12 @@ export default async function ListSettingsPage(props: {
     countListSubtasks(list.id),
     countSecrets(list.id),
     getSecretViewers(list.id),
+    getTeams(),
   ]);
   const directMemberIds = new Set(directMembers.map((m) => m.userId));
+  const directMemberGroupIds = new Set(directMembers.map((m) => m.groupId));
   const addableUsers = activeUsers.filter((u) => !directMemberIds.has(u.id));
+  const addableTeams = teams.filter((team) => !directMemberGroupIds.has(team.id));
   const secretViewerIds = new Set(secretViewers.map((v) => v.userId));
   const secretViewerAddable = activeUsers.filter((u) => !secretViewerIds.has(u.id));
 
@@ -282,6 +287,7 @@ export default async function ListSettingsPage(props: {
                 idValue={list.id}
                 members={directMembers}
                 addableUsers={addableUsers}
+                addableTeams={addableTeams}
                 addAction={addListMember}
                 removeAction={removeListMember}
                 inheritedMembers={inheritedMembers}

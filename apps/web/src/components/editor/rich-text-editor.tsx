@@ -160,6 +160,8 @@ type RichTextEditorProps = {
   /** @deprecated use variant="compact" */
   compact?: boolean;
   className?: string;
+  /** Reactive class for the content viewport (also retained in full screen). */
+  contentClassName?: string;
   editorClassName?: string;
   autoFocus?: boolean;
   onChange?: (payload: {
@@ -822,6 +824,7 @@ export function RichTextEditor({
   variant,
   compact = false,
   className,
+  contentClassName,
   editorClassName,
   autoFocus,
   onChange,
@@ -1845,6 +1848,7 @@ export function RichTextEditor({
           className={cn(
             expanded &&
               "mx-auto min-h-full max-w-3xl rounded-xl border border-border/60 bg-card px-6 py-8 shadow-sm sm:px-10 sm:py-10",
+            contentClassName,
           )}
         >
           {editable && <BlockDragGrip editor={editor} enabled />}

@@ -7,7 +7,7 @@
  * Fingerprint: GURVER-KG-AITIM-2026-7F3C9E2A
  * License: Proprietary. All rights reserved. See LICENSE / COPYRIGHT.
  */
-import { db, spaceMembers, users } from "@aitim/db";
+import { db, spaceMembers, teams, users } from "@aitim/db";
 import { and, eq, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
@@ -17,31 +17,43 @@ import { requireSpace, spaceRoleSchema } from "./shared";
 
 export async function addSpaceMember(formData: FormData) {
   const spaceId = z.string().uuid().parse(formData.get("spaceId"));
-  const userId = z.string().uuid().parse(formData.get("userId"));
+  const principal = String(formData.get("principal") ?? `user:${formData.get("userId") ?? ""}`);
+  const [principalType, principalIdRaw] = principal.split(":");
+  const principalId = z.string().uuid().parse(principalIdRaw);
+  if (principalType !== "user" && principalType !== "group") throw new Error("Invalid principal");
+  const userId = principalType === "user" ? principalId : null;
+  const groupId = principalType === "group" ? principalId : null;
   const role = spaceRoleSchema.parse(formData.get("role"));
   const space = await requireSpace(spaceId);
   const actor = await requireUser();
   await assertSpaceRole(spaceId, "owner");
 
-  const [targetUser] = await db.select().from(users).where(eq(users.id, userId));
-  if (!targetUser) throw new Error("User not found");
+  const [target] = principalType === "user"
+    ? await db.select({ displayName: users.displayName }).from(users).where(eq(users.id, principalId))
+    : await db.select({ displayName: teams.displayName }).from(teams).where(eq(teams.id, principalId));
+  if (!target) throw new Error(principalType === "user" ? "User not found" : "Team not found");
 
   const [existing] = await db
     .select()
     .from(spaceMembers)
-    .where(and(eq(spaceMembers.spaceId, spaceId), eq(spaceMembers.userId, userId)));
+    .where(
+      and(
+        eq(spaceMembers.spaceId, spaceId),
+        userId ? eq(spaceMembers.userId, userId) : eq(spaceMembers.groupId, groupId!),
+      ),
+    );
 
   await db.transaction(async (tx) => {
     if (existing) {
       await tx.update(spaceMembers).set({ role }).where(eq(spaceMembers.id, existing.id));
     } else {
-      await tx.insert(spaceMembers).values({ spaceId, principalType: "user", userId, role });
+      await tx.insert(spaceMembers).values({ spaceId, principalType, userId, groupId, role });
     }
     await logActivity(tx, {
       spaceId,
       actorId: actor.id,
       verb: "space.member_added",
-      payload: { userId, displayName: targetUser.displayName, role },
+      payload: { userId, groupId, principalType, displayName: target.displayName, role },
     });
   });
   revalidatePath(`/tasks/${space.slug}`);

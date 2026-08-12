@@ -91,15 +91,57 @@ export const usersRelations = relations(users, ({ one, many }) => ({
     relationName: "manager",
   }),
   groupMemberships: many(userGroupMemberships),
+  teamMemberships: many(teamMemberships),
 }));
 
 export const entraGroups = pgTable("entra_groups", {
   id: uuid("id").primaryKey().defaultRandom(),
-  entraGroupId: text("entra_group_id").notNull().unique(),
+  /** Microsoft Entra object id used only for application access and platform roles. */
+  entraGroupId: text("entra_group_id").unique(),
   displayName: text("display_name").notNull(),
+  /** Legacy collaboration metadata retained for a non-destructive transition. */
+  alias: text("alias").unique(),
+  description: text("description"),
+  icon: text("icon"),
+  color: text("color"),
+  source: text("source").notNull().default("entra"),
+  createdBy: uuid("created_by").references(() => users.id, { onDelete: "set null" }),
   lastSyncedAt: timestamp("last_synced_at", { withTimezone: true }),
   ...timestamps,
 });
+
+/** Collaborative Teams are created and fully managed inside AACC Hub. */
+export const teams = pgTable("teams", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  displayName: text("display_name").notNull(),
+  /** Unique @mention handle without the leading @. */
+  alias: text("alias").notNull().unique(),
+  description: text("description"),
+  icon: text("icon"),
+  color: text("color"),
+  createdBy: uuid("created_by").references(() => users.id, { onDelete: "set null" }),
+  ...timestamps,
+});
+
+export const teamMemberships = pgTable(
+  "team_memberships",
+  {
+    teamId: uuid("team_id")
+      .notNull()
+      .references(() => teams.id, { onDelete: "cascade" }),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    addedBy: uuid("added_by").references(() => users.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.teamId, t.userId] })],
+);
+
+export const teamMembershipsRelations = relations(teamMemberships, ({ one }) => ({
+  team: one(teams, { fields: [teamMemberships.teamId], references: [teams.id] }),
+  user: one(users, { fields: [teamMemberships.userId], references: [users.id] }),
+}));
 
 export const userGroupMemberships = pgTable(
   "user_group_memberships",

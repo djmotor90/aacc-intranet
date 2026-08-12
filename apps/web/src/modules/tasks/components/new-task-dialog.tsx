@@ -7,7 +7,7 @@
  * Fingerprint: GURVER-KG-AITIM-2026-7F3C9E2A
  * License: Proprietary. All rights reserved. See LICENSE / COPYRIGHT.
  */
-import { Plus } from "lucide-react";
+import { Plus, UsersRound } from "lucide-react";
 import { useState, useTransition } from "react";
 import { UserAvatar } from "@/components/shell/user-avatar";
 import { Button } from "@/components/ui/button";
@@ -34,7 +34,11 @@ import {
   isCoreFieldRequired,
 } from "@/modules/tasks/lib/required-fields";
 import { createTask } from "../actions";
-import { AssigneeAvatarStack, type UserOption as AssigneeUserOption } from "./assignee-select";
+import {
+  AssigneeAvatarStack,
+  type TeamAssigneeOption,
+  type UserOption as AssigneeUserOption,
+} from "./assignee-select";
 import { CustomFieldInput, type FieldDefLike, type UserOption } from "./custom-field-input";
 
 export type SpaceTagOption = { id: string; name: string; color: string | null };
@@ -48,26 +52,36 @@ function ReqMark() {
 /** Form-friendly assignee picker matching task-detail AssigneeSelect UX. */
 function FormAssigneePicker({
   users,
+  teams,
   required,
   resetKey,
 }: {
   users: AssigneeOption[];
+  teams: TeamAssigneeOption[];
   required?: boolean;
   /** Change this to clear selection (e.g. after successful create). */
   resetKey: number;
 }) {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [selectedTeamIds, setSelectedTeamIds] = useState<string[]>([]);
 
   // Clear selection when resetKey changes (adjust-state-during-render).
   const [prevResetKey, setPrevResetKey] = useState(resetKey);
   if (prevResetKey !== resetKey) {
     setPrevResetKey(resetKey);
     setSelectedIds([]);
+    setSelectedTeamIds([]);
   }
 
   function toggle(userId: string) {
     setSelectedIds((cur) =>
       cur.includes(userId) ? cur.filter((id) => id !== userId) : [...cur, userId],
+    );
+  }
+
+  function toggleTeam(teamId: string) {
+    setSelectedTeamIds((cur) =>
+      cur.includes(teamId) ? cur.filter((id) => id !== teamId) : [...cur, teamId],
     );
   }
 
@@ -83,14 +97,19 @@ function FormAssigneePicker({
       }),
     );
   const unselected = users.filter((u) => !selectedIds.includes(u.id));
+  const selectedTeams = teams.filter((team) => selectedTeamIds.includes(team.id));
+  const unselectedTeams = teams.filter((team) => !selectedTeamIds.includes(team.id));
 
   return (
     <>
       {selectedIds.map((id) => (
         <input key={id} type="hidden" name="assignees" value={id} />
       ))}
+      {selectedTeamIds.map((id) => (
+        <input key={id} type="hidden" name="teamAssignees" value={id} />
+      ))}
       {/* HTML required on a multi-value field: force validation when empty */}
-      {required && selectedIds.length === 0 && (
+      {required && selectedIds.length === 0 && selectedTeamIds.length === 0 && (
         <input
           tabIndex={-1}
           className="sr-only"
@@ -105,16 +124,50 @@ function FormAssigneePicker({
           <button
             type="button"
             aria-label={
-              selected.length === 0
+              selected.length === 0 && selectedTeams.length === 0
                 ? "Add assignee"
-                : `Assignees: ${selected.map((u) => u.displayName).join(", ")}`
+                : `Assignees: ${[...selectedTeams, ...selected].map((item) => item.displayName).join(", ")}`
             }
             className="inline-flex h-9 items-center rounded-md border border-input bg-background px-2 transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
-            <AssigneeAvatarStack users={selected} size="md" emptyLabel="Add assignee" />
+            <AssigneeAvatarStack
+              users={selected}
+              teams={selectedTeams}
+              size="md"
+              emptyLabel="Add assignee"
+            />
           </button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="start" className="max-h-72 min-w-[14rem]">
+          {teams.length > 0 && (
+            <div className="px-2 pb-1 pt-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+              Teams
+            </div>
+          )}
+          {[...selectedTeams, ...unselectedTeams].map((team) => (
+            <DropdownMenuCheckboxItem
+              key={`team:${team.id}`}
+              checked={selectedTeamIds.includes(team.id)}
+              onCheckedChange={() => toggleTeam(team.id)}
+              onSelect={(event) => event.preventDefault()}
+              className="gap-2 py-1.5"
+            >
+              <span
+                className="inline-flex size-6 items-center justify-center rounded-full text-white"
+                style={{ backgroundColor: team.color ?? "#007582" }}
+              >
+                <UsersRound className="size-3.5" />
+              </span>
+              <span className="min-w-0 flex-1 truncate">{team.displayName}</span>
+              {team.alias && <span className="text-xs text-muted-foreground">@{team.alias}</span>}
+            </DropdownMenuCheckboxItem>
+          ))}
+          {teams.length > 0 && users.length > 0 && <DropdownMenuSeparator />}
+          {users.length > 0 && (
+            <div className="px-2 pb-1 pt-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+              People
+            </div>
+          )}
           {selected.map((u) => (
             <DropdownMenuCheckboxItem
               key={u.id}
@@ -150,8 +203,8 @@ function FormAssigneePicker({
               <span className="truncate">{u.displayName}</span>
             </DropdownMenuCheckboxItem>
           ))}
-          {users.length === 0 && (
-            <div className="px-2 py-3 text-sm text-muted-foreground">No users available</div>
+          {users.length === 0 && teams.length === 0 && (
+            <div className="px-2 py-3 text-sm text-muted-foreground">No assignees available</div>
           )}
         </DropdownMenuContent>
       </DropdownMenu>
@@ -163,12 +216,14 @@ export function NewTaskDialog({
   listId,
   fieldDefs,
   users,
+  teams = [],
   requiredCoreFields = [],
   spaceTags = [],
 }: {
   listId: string;
   fieldDefs: FieldDefLike[];
   users: AssigneeOption[];
+  teams?: TeamAssigneeOption[];
   requiredCoreFields?: CoreFieldKey[];
   spaceTags?: SpaceTagOption[];
 }) {
@@ -278,6 +333,7 @@ export function NewTaskDialog({
             <div className="min-w-0">
               <FormAssigneePicker
                 users={users}
+                teams={teams}
                 required={req("assignees")}
                 resetKey={formKey}
               />

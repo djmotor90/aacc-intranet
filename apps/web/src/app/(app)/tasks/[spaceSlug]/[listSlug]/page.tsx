@@ -34,6 +34,7 @@ import {
   getSpaceBySlug,
   getStatusesForList,
   getTagsForSpace,
+  getTeamsWithListAccess,
   getTasksPage,
   getTaskTypesForSpace,
   getWritableListsForUser,
@@ -187,11 +188,12 @@ export default async function ListPage(props: {
     );
   }
 
-  const [listStatuses, fieldDefs, activeUsers, page, spaceTags, writableLists, spaceTaskTypes] =
+  const [listStatuses, fieldDefs, activeUsers, assignableTeams, page, spaceTags, writableLists, spaceTaskTypes] =
     await Promise.all([
       getStatusesForList(list.id),
       getFieldDefinitions(list.id),
       getActiveUsers(),
+      getTeamsWithListAccess(list.id),
       getTasksPage({
         listId: list.id,
         conditions,
@@ -209,7 +211,7 @@ export default async function ListPage(props: {
     : listStatuses.filter((s) => s.category !== "done" && s.category !== "cancelled");
 
   const statusById = new Map(listStatuses.map((s) => [s.id, s]));
-  const boardTasks = page.items.map(({ task, assignees, tags: taskTags, hasAttachments, taskType }) => {
+  const boardTasks = page.items.map(({ task, assignees, teamAssignees, tags: taskTags, hasAttachments, taskType }) => {
     const st = statusById.get(task.statusId);
     return {
       id: task.id,
@@ -221,6 +223,7 @@ export default async function ListPage(props: {
       statusName: st?.name ?? null,
       statusColor: st?.color ?? null,
       assignees,
+      teamAssignees,
       tags: taskTags,
       hasAttachments,
       taskType,
@@ -260,6 +263,7 @@ export default async function ListPage(props: {
                 listId={list.id}
                 fieldDefs={fieldDefs}
                 users={activeUsers}
+                teams={assignableTeams}
                 requiredCoreFields={parseRequiredCoreFields(list.requiredCoreFields)}
                 spaceTags={spaceTags}
               />

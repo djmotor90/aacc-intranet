@@ -31,6 +31,11 @@ The local equivalent is `docker build .` from the repo root.
 ```
 APP_BASE_URL=https://intranet.<your-domain>
 DATABASE_URL=postgres://...   # internal Coolify postgres URL
+DATABASE_POOL_MIN=1
+DATABASE_POOL_MAX=10
+DATABASE_CONNECT_TIMEOUT_MS=15000
+PGBOSS_POOL_MAX=3
+PGBOSS_CONNECT_TIMEOUT_MS=30000
 AUTH_URL=https://intranet.<your-domain>   # MUST match public domain; pins OAuth redirect_uri
 AUTH_SECRET=                  # openssl rand -base64 32
 AUTH_TRUST_HOST=true
@@ -51,6 +56,23 @@ S3_FORCE_PATH_STYLE=true
 TURNSTILE_SITE_KEY=
 TURNSTILE_SECRET_KEY=
 ```
+
+Keep the web database pool and pg-boss pool separate. The defaults above use at
+most 10 application connections plus 3 queue connections per service. Page reads
+fail over to a fresh attempt after 15 seconds, while queue workers allow 30 seconds
+for PostgreSQL or the container network to return during a restart. Increasing
+these pools can make a reconnect storm worse; raise them only after checking
+`pg_stat_activity` and the database's `max_connections`.
+
+## Troubleshooting: SSE timing and database connection errors
+
+A successful `/api/sse` request shown as taking 20–30 seconds is expected: it is
+a live event stream and the duration is how long the connection stayed open. If
+the same log window also shows failed Drizzle queries and pg-boss reports
+`timeout exceeded when trying to connect` for several queues, treat those lines
+as one shared PostgreSQL or container-network interruption—not as separate queue
+failures. Check the Postgres health, resource usage, container restarts, network,
+`pg_stat_activity`, and `max_connections` before changing pool sizes.
 
 ## Troubleshooting: OAuthCallbackError with container hostname
 

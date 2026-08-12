@@ -8,7 +8,7 @@
  * License: Proprietary. All rights reserved. See LICENSE / COPYRIGHT.
  */
 import { Button } from "@/components/ui/button";
-import type { SpaceMemberRow } from "../queries";
+import type { SpaceMemberRow, TeamOption } from "../queries";
 
 interface UserOption {
   id: string;
@@ -32,6 +32,7 @@ export function SharingDialogBody({
   idValue,
   members,
   addableUsers,
+  addableTeams = [],
   addAction,
   removeAction,
   inheritedMembers,
@@ -42,6 +43,7 @@ export function SharingDialogBody({
   idValue: string;
   members: SpaceMemberRow[];
   addableUsers: UserOption[];
+  addableTeams?: TeamOption[];
   addAction: (formData: FormData) => void | Promise<void>;
   removeAction: (formData: FormData) => void | Promise<void>;
   inheritedMembers?: SpaceMemberRow[];
@@ -53,19 +55,30 @@ export function SharingDialogBody({
       <form action={addAction} className="flex items-end gap-2">
         <input type="hidden" name={idFieldName} value={idValue} />
         <select
-          name="userId"
+          name="principal"
           required
           defaultValue=""
           className="h-9 flex-1 rounded-md border bg-transparent px-2 text-sm"
         >
           <option value="" disabled>
-            Add person…
+            Add person or team…
           </option>
+          {addableTeams.length > 0 && (
+            <optgroup label="Teams">
+              {addableTeams.map((team) => (
+                <option key={team.id} value={`group:${team.id}`}>
+                  {team.displayName}{team.alias ? ` (@${team.alias})` : ""}
+                </option>
+              ))}
+            </optgroup>
+          )}
+          <optgroup label="People">
           {addableUsers.map((u) => (
-            <option key={u.id} value={u.id}>
+            <option key={u.id} value={`user:${u.id}`}>
               {u.displayName}
             </option>
           ))}
+          </optgroup>
         </select>
         <select
           name="role"
@@ -76,7 +89,7 @@ export function SharingDialogBody({
           <option value="member">Member</option>
           <option value="guest">Guest</option>
         </select>
-        <Button type="submit" size="sm" disabled={addableUsers.length === 0}>
+        <Button type="submit" size="sm" disabled={addableUsers.length === 0 && addableTeams.length === 0}>
           Invite
         </Button>
       </form>
@@ -89,8 +102,15 @@ export function SharingDialogBody({
           {inheritedMembers.map((m) => (
             <div key={m.id} className="flex items-center justify-between gap-2 py-1">
               <div className="min-w-0">
-                <p className="truncate text-sm font-medium">{m.displayName}</p>
+                <p className="truncate text-sm font-medium">
+                  {m.displayName}{m.principalType === "group" && m.alias ? ` · @${m.alias}` : ""}
+                </p>
                 {m.email && <p className="truncate text-xs text-muted-foreground">{m.email}</p>}
+                {m.principalType === "group" && (
+                  <p className="truncate text-xs text-muted-foreground">
+                    AACC Hub Team
+                  </p>
+                )}
               </div>
               {isPrivate ? (
                 <span className="text-xs text-muted-foreground">
@@ -136,8 +156,15 @@ export function SharingDialogBody({
           return (
             <div key={m.id} className="flex items-center justify-between gap-2 py-1.5">
               <div className="min-w-0">
-                <p className="truncate text-sm font-medium">{m.displayName}</p>
+                <p className="truncate text-sm font-medium">
+                  {m.displayName}{m.principalType === "group" && m.alias ? ` · @${m.alias}` : ""}
+                </p>
                 {m.email && <p className="truncate text-xs text-muted-foreground">{m.email}</p>}
+                {m.principalType === "group" && (
+                  <p className="truncate text-xs text-muted-foreground">
+                    AACC Hub Team
+                  </p>
+                )}
               </div>
               <div className="flex items-center gap-2">
                 <span className="text-xs text-muted-foreground">

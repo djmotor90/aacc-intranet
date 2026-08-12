@@ -7,8 +7,8 @@
  * Fingerprint: GURVER-KG-AITIM-2026-7F3C9E2A
  * License: Proprietary. All rights reserved. See LICENSE / COPYRIGHT.
  */
-import { db } from "@aitim/db";
-import { eq } from "drizzle-orm";
+import { db, teamMemberships } from "@aitim/db";
+import { eq, inArray } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { assertListRole, requireUser } from "@/lib/rbac";
@@ -52,6 +52,9 @@ export async function addComment(formData: FormData) {
 
   bodyText = z.string().min(1).max(10_000).parse(bodyText.trim());
   const rawMentionIds = formData.getAll("mentions").map((v) => z.string().uuid().parse(v));
+  const rawMentionGroupIds = formData
+    .getAll("mentionGroups")
+    .map((v) => z.string().uuid().parse(v));
   const parentRaw = formData.get("parentCommentId")?.toString();
   const parentInput = parentRaw ? z.string().uuid().parse(parentRaw) : null;
 
@@ -62,10 +65,23 @@ export async function addComment(formData: FormData) {
   await assertListRole(list.id, "guest"); // guests may comment
 
   // Only allow mentions of people who can actually see this task.
-  const { getUsersWithListAccess } = await import("../queries");
+  const { getTeamsWithListAccess, getUsersWithListAccess } = await import("../queries");
   const allowed = await getUsersWithListAccess(list.id);
   const allowedIds = new Set(allowed.map((u) => u.id));
-  const mentionIds = [...new Set(rawMentionIds)].filter((id) => allowedIds.has(id));
+  const allowedTeams = new Set((await getTeamsWithListAccess(list.id)).map((team) => team.id));
+  const mentionGroupIds = [...new Set(rawMentionGroupIds)].filter((id) => allowedTeams.has(id));
+  const teamMembers = mentionGroupIds.length
+    ? await db
+        .select({ userId: teamMemberships.userId })
+        .from(teamMemberships)
+        .where(inArray(teamMemberships.teamId, mentionGroupIds))
+    : [];
+  const mentionIds = [
+    ...new Set([
+      ...rawMentionIds,
+      ...teamMembers.map((membership) => membership.userId),
+    ]),
+  ].filter((id) => allowedIds.has(id));
 
   const { comments, commentMentions } = await import("@aitim/db");
 

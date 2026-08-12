@@ -8,7 +8,7 @@
 import { relations, sql } from "drizzle-orm";
 import { boolean, index, jsonb, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 import { lists, principalType, tasks } from "./tasks";
-import { users } from "./platform";
+import { teams, users } from "./platform";
 
 const timestamps = {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
@@ -92,7 +92,7 @@ export const listSecretViewers = pgTable(
       .references(() => lists.id, { onDelete: "cascade" }),
     principalType: principalType("principal_type").notNull(),
     userId: uuid("user_id").references(() => users.id, { onDelete: "cascade" }),
-    groupId: uuid("group_id"),
+    groupId: uuid("group_id").references(() => teams.id, { onDelete: "cascade" }),
     grantedBy: uuid("granted_by").references(() => users.id),
     grantedAt: timestamp("granted_at", { withTimezone: true }).notNull().defaultNow(),
   },

@@ -25,24 +25,28 @@ import {
   tags,
   withDbRetry,
   taskAssignees,
+  taskGroupAssignees,
   taskChecklistItems,
   taskChecklists,
   tasks,
   taskTags,
   taskTypes,
-  userGroupMemberships,
+  teamMemberships,
+  teams,
   users,
 } from "@aitim/db";
 import { and, asc, desc, eq, inArray, isNotNull, isNull, or, sql } from "drizzle-orm";
 import { cache } from "react";
-import { getFolderRole, getListRole, getSpaceRole, getUserGroupIds } from "@/lib/rbac";
+import { getFolderRole, getListRole, getSpaceRole, getUserTeamIds } from "@/lib/rbac";
 import type { SessionUserLike } from "../types";
 
 export const getSpaceBySlug = cache(async (slug: string) => {
-  const [space] = await db
-    .select()
-    .from(spaces)
-    .where(and(eq(spaces.slug, slug), eq(spaces.isArchived, false), isNull(spaces.deletedAt)));
+  const [space] = await withDbRetry(() =>
+    db
+      .select()
+      .from(spaces)
+      .where(and(eq(spaces.slug, slug), eq(spaces.isArchived, false), isNull(spaces.deletedAt))),
+  );
   return space ?? null;
 });
 
@@ -240,7 +244,7 @@ const getTaskNavTreeForUserCached = cache(async (userId: string, platformRole: s
 
   // Direct list/folder grants (list-only or folder-only sharing) can surface a space
   // the user otherwise has no role in at all.
-  const groupIds = await getUserGroupIds(userId);
+  const groupIds = await getUserTeamIds(userId);
 
   const [directListSpaceRows, directFolderSpaceRows] = await Promise.all([
     withDbRetry(() =>
@@ -367,15 +371,17 @@ export async function getWritableListsForUser(
 }
 
 export const getListBySlug = cache(async (spaceId: string, slug: string) => {
-  const [list] = await db
-    .select()
-    .from(lists)
-    .where(
-      and(
-        eq(lists.spaceId, spaceId),
-        eq(lists.slug, slug),
-        eq(lists.isArchived, false),
-        isNull(lists.deletedAt),
+  const [list] = await withDbRetry(() =>
+    db
+      .select()
+      .from(lists)
+      .where(
+        and(
+          eq(lists.spaceId, spaceId),
+          eq(lists.slug, slug),
+          eq(lists.isArchived, false),
+          isNull(lists.deletedAt),
+        ),
       ),
     );
   return list ?? null;
@@ -632,6 +638,16 @@ export interface TaskTag {
   color: string;
 }
 
+export interface TeamOption {
+  id: string;
+  displayName: string;
+  alias: string | null;
+  description?: string | null;
+  icon: string | null;
+  color: string | null;
+  memberCount: number;
+}
+
 export interface TaskTypeMeta {
   id: string;
   name: string;
@@ -643,6 +659,7 @@ export interface TaskTypeMeta {
 export interface TaskWithMeta {
   task: typeof tasks.$inferSelect;
   assignees: { id: string; displayName: string; photoKey: string | null }[];
+  teamAssignees: TeamOption[];
   tags: TaskTag[];
   /** True when the task has at least one file attachment. */
   hasAttachments: boolean;
@@ -656,7 +673,7 @@ async function attachAssignees(taskRows: (typeof tasks.$inferSelect)[]): Promise
   const taskIds = taskRows.map((t) => t.id);
   const taskTypeIds = [...new Set(taskRows.map((t) => t.taskTypeId).filter((id): id is string => !!id))];
 
-  const [assigneeRows, tagRows, attachmentRows, subtaskCountRows, taskTypeRows] = await Promise.all([
+  const [assigneeRows, teamAssigneeRows, tagRows, attachmentRows, subtaskCountRows, taskTypeRows] = await Promise.all([
     db
       .select({
         taskId: taskAssignees.taskId,
@@ -667,6 +684,18 @@ async function attachAssignees(taskRows: (typeof tasks.$inferSelect)[]): Promise
       .from(taskAssignees)
       .innerJoin(users, eq(taskAssignees.userId, users.id))
       .where(inArray(taskAssignees.taskId, taskIds)),
+    db
+      .select({
+        taskId: taskGroupAssignees.taskId,
+        id: teams.id,
+        displayName: teams.displayName,
+        alias: teams.alias,
+        color: teams.color,
+        icon: teams.icon,
+      })
+      .from(taskGroupAssignees)
+      .innerJoin(teams, eq(taskGroupAssignees.groupId, teams.id))
+      .where(inArray(taskGroupAssignees.taskId, taskIds)),
     db
       .select({
         taskId: taskTags.taskId,
@@ -717,6 +746,19 @@ async function attachAssignees(taskRows: (typeof tasks.$inferSelect)[]): Promise
     list.push({ id: row.id, displayName: row.displayName, photoKey: row.photoKey });
     assigneesByTask.set(row.taskId, list);
   }
+  const teamAssigneesByTask = new Map<string, TeamOption[]>();
+  for (const row of teamAssigneeRows) {
+    const list = teamAssigneesByTask.get(row.taskId) ?? [];
+    list.push({
+      id: row.id,
+      displayName: row.displayName,
+      alias: row.alias,
+      color: row.color,
+      icon: row.icon,
+      memberCount: 0,
+    });
+    teamAssigneesByTask.set(row.taskId, list);
+  }
   const tagsByTask = new Map<string, TaskTag[]>();
   for (const row of tagRows) {
     const list = tagsByTask.get(row.taskId) ?? [];
@@ -732,6 +774,7 @@ async function attachAssignees(taskRows: (typeof tasks.$inferSelect)[]): Promise
   return taskRows.map((task) => ({
     task,
     assignees: assigneesByTask.get(task.id) ?? [],
+    teamAssignees: teamAssigneesByTask.get(task.id) ?? [],
     tags: tagsByTask.get(task.id) ?? [],
     hasAttachments: tasksWithAttachments.has(task.id),
     subtaskCount: subtaskCountByTask.get(task.id) ?? 0,
@@ -1126,7 +1169,7 @@ export interface TaskPage {
   groupCounts: { key: string; count: number }[] | null;
 }
 
-export async function getTasksPage(params: {
+export interface TaskPageParams {
   listId: string;
   conditions?: TaskFilterCondition[];
   groupBy?: string;
@@ -1141,7 +1184,9 @@ export async function getTasksPage(params: {
   showClosed?: boolean;
   /** Skip the count/groupCounts queries (used by follow-up pages). */
   countsAlreadyKnown?: boolean;
-}): Promise<TaskPage> {
+}
+
+async function getTasksPageOnce(params: TaskPageParams): Promise<TaskPage> {
   const { listId, conditions = [], groupBy, sort, limit, offset, showClosed = false } = params;
   const defs = await getFieldDefinitions(listId, true);
   const defsById = new Map(defs.map((d) => [d.id, d]));
@@ -1268,6 +1313,11 @@ export async function getTasksPage(params: {
   }
 
   return { items, total, groupCounts };
+}
+
+/** Load a task page again after a brief database or container-network interruption. */
+export async function getTasksPage(params: TaskPageParams): Promise<TaskPage> {
+  return withDbRetry(() => getTasksPageOnce(params), { attempts: 3, baseDelayMs: 300 });
 }
 
 export const getTaskByNumber = cache(async (number: string) => {
@@ -1427,8 +1477,41 @@ export const getActiveUsers = cache(async () => {
   }));
 });
 
+/** App-managed AACC Teams available as reusable collaboration principals. */
+export const getTeams = cache(async (): Promise<TeamOption[]> => {
+  const rows = await db
+    .select({
+      id: teams.id,
+      displayName: teams.displayName,
+      alias: teams.alias,
+      description: teams.description,
+      icon: teams.icon,
+      color: teams.color,
+      memberCount: sql<number>`count(${teamMemberships.userId})::int`.mapWith(Number),
+    })
+    .from(teams)
+    .leftJoin(teamMemberships, eq(teamMemberships.teamId, teams.id))
+    .groupBy(teams.id)
+    .orderBy(asc(teams.displayName));
+  return rows;
+});
+
+/** Teams with at least one active member who can see the list. */
+export async function getTeamsWithListAccess(listId: string): Promise<TeamOption[]> {
+  const allowedUsers = await getUsersWithListAccess(listId);
+  if (allowedUsers.length === 0) return [];
+  const memberships = await db
+    .select({ teamId: teamMemberships.teamId })
+    .from(teamMemberships)
+    .where(inArray(teamMemberships.userId, allowedUsers.map((user) => user.id)));
+  const allowedGroupIds = new Set(memberships.map((membership) => membership.teamId));
+  return (await getTeams()).filter(
+    (team) => allowedGroupIds.has(team.id) && team.memberCount > 0,
+  );
+}
+
 /**
- * Expand membership rows that may point at a user OR an Entra group into
+ * Expand membership rows that may point at a user OR an app-managed Team into
  * concrete active user ids.
  */
 async function expandMemberUserIds(
@@ -1442,9 +1525,9 @@ async function expandMemberUserIds(
   }
   if (groupIds.length > 0) {
     const groupUsers = await db
-      .select({ userId: userGroupMemberships.userId })
-      .from(userGroupMemberships)
-      .where(inArray(userGroupMemberships.groupId, groupIds));
+      .select({ userId: teamMemberships.userId })
+      .from(teamMemberships)
+      .where(inArray(teamMemberships.teamId, groupIds));
     for (const g of groupUsers) ids.add(g.userId);
   }
   return ids;
@@ -1560,8 +1643,11 @@ export interface SpaceMemberRow {
   id: string;
   role: "owner" | "member" | "guest";
   userId: string | null;
+  groupId: string | null;
+  principalType: "user" | "group";
   displayName: string;
   email: string | null;
+  alias: string | null;
 }
 
 export const getSpaceMembers = cache(async (spaceId: string): Promise<SpaceMemberRow[]> => {
@@ -1570,13 +1656,17 @@ export const getSpaceMembers = cache(async (spaceId: string): Promise<SpaceMembe
       id: spaceMembers.id,
       role: spaceMembers.role,
       userId: spaceMembers.userId,
-      displayName: users.displayName,
+      groupId: spaceMembers.groupId,
+      principalType: spaceMembers.principalType,
+      displayName: sql<string>`coalesce(${users.displayName}, ${teams.displayName})`,
       email: users.email,
+      alias: teams.alias,
     })
     .from(spaceMembers)
-    .innerJoin(users, eq(spaceMembers.userId, users.id))
+    .leftJoin(users, eq(spaceMembers.userId, users.id))
+    .leftJoin(teams, eq(spaceMembers.groupId, teams.id))
     .where(eq(spaceMembers.spaceId, spaceId))
-    .orderBy(asc(users.displayName));
+    .orderBy(sql`lower(coalesce(${users.displayName}, ${teams.displayName}))`);
   return rows;
 });
 
@@ -1586,13 +1676,17 @@ export const getListMembers = cache(async (listId: string): Promise<SpaceMemberR
       id: listMembers.id,
       role: listMembers.role,
       userId: listMembers.userId,
-      displayName: users.displayName,
+      groupId: listMembers.groupId,
+      principalType: listMembers.principalType,
+      displayName: sql<string>`coalesce(${users.displayName}, ${teams.displayName})`,
       email: users.email,
+      alias: teams.alias,
     })
     .from(listMembers)
-    .innerJoin(users, eq(listMembers.userId, users.id))
+    .leftJoin(users, eq(listMembers.userId, users.id))
+    .leftJoin(teams, eq(listMembers.groupId, teams.id))
     .where(eq(listMembers.listId, listId))
-    .orderBy(asc(users.displayName));
+    .orderBy(sql`lower(coalesce(${users.displayName}, ${teams.displayName}))`);
   return rows;
 });
 
@@ -1639,13 +1733,17 @@ export const getFolderMembers = cache(async (folderId: string): Promise<SpaceMem
       id: folderMembers.id,
       role: folderMembers.role,
       userId: folderMembers.userId,
-      displayName: users.displayName,
+      groupId: folderMembers.groupId,
+      principalType: folderMembers.principalType,
+      displayName: sql<string>`coalesce(${users.displayName}, ${teams.displayName})`,
       email: users.email,
+      alias: teams.alias,
     })
     .from(folderMembers)
-    .innerJoin(users, eq(folderMembers.userId, users.id))
+    .leftJoin(users, eq(folderMembers.userId, users.id))
+    .leftJoin(teams, eq(folderMembers.groupId, teams.id))
     .where(eq(folderMembers.folderId, folderId))
-    .orderBy(asc(users.displayName));
+    .orderBy(sql`lower(coalesce(${users.displayName}, ${teams.displayName}))`);
   return rows;
 });
 

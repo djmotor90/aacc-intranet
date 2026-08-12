@@ -23,7 +23,7 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { assertSpaceRole, requireUser } from "@/lib/rbac";
 import { logActivity } from "../lib/activity";
-import { getActiveUsers, getSpaceMembers } from "../queries";
+import { getActiveUsers, getSpaceMembers, getTeams } from "../queries";
 import {
   purgeListHard,
   requireFolder,
@@ -281,9 +281,18 @@ export async function purgeSpace(spaceId: string) {
  * sharing data for a space without the nav tree query eagerly loading it for every space. */
 export async function getSpaceSharingData(spaceId: string) {
   await assertSpaceRole(spaceId, "owner");
-  const [members, activeUsers] = await Promise.all([getSpaceMembers(spaceId), getActiveUsers()]);
+  const [members, activeUsers, teams] = await Promise.all([
+    getSpaceMembers(spaceId),
+    getActiveUsers(),
+    getTeams(),
+  ]);
   const memberUserIds = new Set(members.map((m) => m.userId));
-  return { members, addableUsers: activeUsers.filter((u) => !memberUserIds.has(u.id)) };
+  const memberGroupIds = new Set(members.map((m) => m.groupId));
+  return {
+    members,
+    addableUsers: activeUsers.filter((u) => !memberUserIds.has(u.id)),
+    addableTeams: teams.filter((team) => !memberGroupIds.has(team.id)),
+  };
 }
 
 const appearanceIconSchema = z

@@ -62,11 +62,12 @@ import {
   getSpaceSharingData,
   removeFolderMember,
   removeSpaceMember,
+  renameFolder,
   renameList,
   setEntityAppearance,
   setFolderPrivacy,
 } from "../actions";
-import type { SpaceMemberRow } from "../queries";
+import type { SpaceMemberRow, TeamOption } from "../queries";
 import { ColorIconDialog } from "./color-icon-dialog";
 import { SharingDialogBody } from "./sharing-dialog-body";
 
@@ -193,6 +194,7 @@ export function SpaceNavContextMenu({
   const [sharing, setSharing] = useState<{
     members: SpaceMemberRow[];
     addableUsers: { id: string; displayName: string }[];
+    addableTeams: TeamOption[];
   } | null>(null);
   const [loading, startLoading] = useTransition();
   const [pending, startPending] = useTransition();
@@ -440,6 +442,7 @@ export function SpaceNavContextMenu({
               idValue={spaceId}
               members={sharing.members}
               addableUsers={sharing.addableUsers}
+              addableTeams={sharing.addableTeams}
               addAction={async (formData) => {
                 await addSpaceMember(formData);
                 setSharing(await getSpaceSharingData(spaceId));
@@ -664,10 +667,12 @@ export function FolderNavContextMenu({
   const [formName, setFormName] = useState("");
   const [formListId, setFormListId] = useState("");
   const [appearanceOpen, setAppearanceOpen] = useState(false);
+  const [renameOpen, setRenameOpen] = useState(false);
   const [sharingOpen, setSharingOpen] = useState(false);
   const [sharing, setSharing] = useState<{
     members: SpaceMemberRow[];
     addableUsers: { id: string; displayName: string }[];
+    addableTeams: TeamOption[];
   } | null>(null);
   const [loading, startLoading] = useTransition();
   const [privacyPending, startPrivacyTransition] = useTransition();
@@ -676,6 +681,19 @@ export function FolderNavContextMenu({
   const router = useRouter();
 
   if (!canManage) return <>{children}</>;
+
+  function onRename(formData: FormData) {
+    startPending(async () => {
+      try {
+        await renameFolder(formData);
+        toast.success("Folder renamed");
+        setRenameOpen(false);
+        router.refresh();
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : "Failed to rename folder");
+      }
+    });
+  }
 
   function openNewForm() {
     setNewFormOpen(true);
@@ -790,6 +808,10 @@ export function FolderNavContextMenu({
             <ClipboardList className="size-4" />
             New Form
           </ContextMenuItem>
+          <ContextMenuItem onSelect={() => setRenameOpen(true)} className="gap-2" disabled={pending}>
+            <Pencil className="size-4" />
+            Rename
+          </ContextMenuItem>
           <ContextMenuItem onSelect={openSharing} className="gap-2" disabled={pending}>
             <Share2 className="size-4" />
             Sharing &amp; Permissions
@@ -809,6 +831,33 @@ export function FolderNavContextMenu({
           </ContextMenuItem>
         </ContextMenuContent>
       </ContextMenu>
+
+      <Dialog open={renameOpen} onOpenChange={setRenameOpen}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Rename Folder</DialogTitle>
+            <DialogDescription>Update the display name for this folder.</DialogDescription>
+          </DialogHeader>
+
+          <form action={onRename} className="flex flex-col gap-3">
+            <input type="hidden" name="folderId" value={folderId} />
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor={`rename-folder-name-${folderId}`}>Name</Label>
+              <Input
+                id={`rename-folder-name-${folderId}`}
+                name="name"
+                defaultValue={folderName}
+                maxLength={100}
+                required
+                autoFocus
+              />
+            </div>
+            <Button type="submit" className="self-end" disabled={pending}>
+              Save
+            </Button>
+          </form>
+        </DialogContent>
+      </Dialog>
 
       <ColorIconDialog
         open={appearanceOpen}
@@ -956,6 +1005,7 @@ export function FolderNavContextMenu({
               idValue={folderId}
               members={sharing.members}
               addableUsers={sharing.addableUsers}
+              addableTeams={sharing.addableTeams}
               addAction={async (formData) => {
                 await addFolderMember(formData);
                 setSharing(await getFolderSharingData(folderId));

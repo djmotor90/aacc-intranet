@@ -5,7 +5,7 @@
  * Fingerprint: GURVER-KG-AITIM-2026-7F3C9E2A
  * License: Proprietary. All rights reserved. See LICENSE / COPYRIGHT.
  */
-import { CalendarClock, Paperclip } from "lucide-react";
+import { CalendarClock, Paperclip, UsersRound } from "lucide-react";
 import Link from "next/link";
 import type { CSSProperties, ReactNode } from "react";
 // ReactNode used for optional ⋯ menu slot
@@ -13,6 +13,7 @@ import { ProfileAvatar } from "@/components/shell/profile-avatar";
 import { cn } from "@/lib/utils";
 import { EntityIcon } from "./entity-icon";
 import { TagChips } from "./tag-picker";
+import type { TeamAssigneeOption } from "./assignee-select";
 
 /**
  * Soft pastel priority badges (detail page, dense UI).
@@ -58,6 +59,7 @@ export interface TaskCardData {
   statusName?: string | null;
   statusColor?: string | null;
   assignees: { id: string; displayName: string; photoKey: string | null }[];
+  teamAssignees?: TeamAssigneeOption[];
   tags?: { id: string; name: string; color: string }[];
   hasAttachments?: boolean;
   taskType?: { id: string; name: string; icon: string | null; color: string } | null;
@@ -191,10 +193,20 @@ export function TaskCardContent({
           </span>
         )}
 
-        {task.assignees.length > 0 && (
+        {(task.assignees.length > 0 || (task.teamAssignees?.length ?? 0) > 0) && (
           <span className="ml-auto flex items-center gap-1">
             <span className="flex -space-x-1.5">
-              {task.assignees.slice(0, 3).map((a) => (
+              {task.teamAssignees?.slice(0, 3).map((team) => (
+                <span
+                  key={`team:${team.id}`}
+                  title={`${team.displayName} Team`}
+                  className="inline-flex size-5 items-center justify-center rounded-full text-white ring-2 ring-card"
+                  style={{ backgroundColor: team.color ?? "#007582" }}
+                >
+                  <UsersRound className="size-3" />
+                </span>
+              ))}
+              {task.assignees.slice(0, Math.max(0, 3 - (task.teamAssignees?.length ?? 0))).map((a) => (
                 <ProfileAvatar
                   key={a.id}
                   userId={a.id}
@@ -205,9 +217,9 @@ export function TaskCardContent({
                 />
               ))}
             </span>
-            {task.assignees.length > 3 && (
+            {task.assignees.length + (task.teamAssignees?.length ?? 0) > 3 && (
               <span className="text-[10px] font-medium text-muted-foreground">
-                +{task.assignees.length - 3}
+                +{task.assignees.length + (task.teamAssignees?.length ?? 0) - 3}
               </span>
             )}
           </span>

@@ -11,7 +11,6 @@ import { useCallback, useEffect, useState, useTransition } from "react";
 import { UserAvatar } from "@/components/shell/user-avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Table,
   TableBody,
@@ -22,15 +21,10 @@ import {
 } from "@/components/ui/table";
 import { toast } from "sonner";
 import {
-  createPlatformRoleMapping,
-  deleteRoleMapping,
-  getAdminGroupsData,
   getAdminUsersData,
   setUserMembershipRole,
   toggleUserActive,
   triggerEntraSync,
-  type AdminGroupRow,
-  type AdminMappingRow,
   type AdminUserRow,
   type AssignablePermissionRole,
 } from "@/modules/shell/actions/admin";
@@ -273,177 +267,4 @@ export function SettingsAdminUsersPanel() {
   );
 }
 
-export function SettingsAdminGroupsPanel() {
-  const [groups, setGroups] = useState<AdminGroupRow[]>([]);
-  const [mappings, setMappings] = useState<AdminMappingRow[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [pending, startTransition] = useTransition();
-
-  const load = useCallback(async () => {
-    try {
-      const data = await getAdminGroupsData();
-      setError(null);
-      setGroups(data.groups);
-      setMappings(data.mappings);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to load groups");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const data = await getAdminGroupsData();
-        if (cancelled) return;
-        setGroups(data.groups);
-        setMappings(data.mappings);
-      } catch (e) {
-        if (!cancelled) setError(e instanceof Error ? e.message : "Failed to load groups");
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  if (loading) {
-    return <p className="text-sm text-muted-foreground">Loading groups…</p>;
-  }
-  if (error) {
-    return <p className="text-sm text-destructive">{error}</p>;
-  }
-
-  return (
-    <div className="flex flex-col gap-4">
-      <div>
-        <h2 className="text-lg font-semibold">Groups &amp; Roles</h2>
-        <p className="text-sm text-muted-foreground">
-          Map Entra groups to platform roles for automatic access.
-        </p>
-      </div>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Role mappings</CardTitle>
-          <CardDescription>
-            Members of a mapped Entra group automatically receive the mapped role on next sync.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-4">
-          <div className="overflow-x-auto rounded-lg border">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Entra group</TableHead>
-                  <TableHead>Grants</TableHead>
-                  <TableHead />
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {mappings.map((m) => (
-                  <TableRow key={m.id}>
-                    <TableCell>{m.groupName}</TableCell>
-                    <TableCell>
-                      <Badge>
-                        {m.targetType === "platform_role"
-                          ? m.role === "admin"
-                            ? "platform: Super Admin"
-                            : "platform: Member"
-                          : m.role}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        type="button"
-                        disabled={pending}
-                        onClick={() => {
-                          startTransition(async () => {
-                            const fd = new FormData();
-                            fd.set("id", m.id);
-                            await deleteRoleMapping(fd);
-                            await load();
-                          });
-                        }}
-                      >
-                        Remove
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))}
-                {mappings.length === 0 && (
-                  <TableRow>
-                    <TableCell colSpan={3} className="text-muted-foreground">
-                      No mappings yet.
-                    </TableCell>
-                  </TableRow>
-                )}
-              </TableBody>
-            </Table>
-          </div>
-
-          <form
-            className="flex flex-wrap items-end gap-2"
-            onSubmit={(e) => {
-              e.preventDefault();
-              const form = e.currentTarget;
-              const fd = new FormData(form);
-              startTransition(async () => {
-                await createPlatformRoleMapping(fd);
-                form.reset();
-                await load();
-              });
-            }}
-          >
-            <div className="flex flex-col gap-1">
-              <label htmlFor="settings-groupId" className="text-sm font-medium">
-                Group
-              </label>
-              <select
-                id="settings-groupId"
-                name="groupId"
-                required
-                className="h-9 rounded-md border bg-transparent px-3 text-sm"
-              >
-                {groups.map((g) => (
-                  <option key={g.id} value={g.id}>
-                    {g.displayName}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="flex flex-col gap-1">
-              <label htmlFor="settings-role" className="text-sm font-medium">
-                Platform role
-              </label>
-              <select
-                id="settings-role"
-                name="role"
-                required
-                className="h-9 rounded-md border bg-transparent px-3 text-sm"
-              >
-                <option value="admin">Super Admin (god mode)</option>
-                <option value="member">Member</option>
-              </select>
-            </div>
-            <Button type="submit" disabled={groups.length === 0 || pending}>
-              Add mapping
-            </Button>
-          </form>
-          {groups.length === 0 && (
-            <p className="text-sm text-muted-foreground">
-              No Entra groups imported yet — run “Sync from Entra ID” on the Users page first.
-            </p>
-          )}
-        </CardContent>
-      </Card>
-    </div>
-  );
-}
+export { SettingsTeamsPanel as SettingsAdminGroupsPanel } from "./settings-teams-panel";
