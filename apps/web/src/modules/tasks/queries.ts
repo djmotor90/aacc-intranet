@@ -798,12 +798,16 @@ export const getTagsForSpace = cache(async (spaceId: string): Promise<TaskTag[]>
 
 /** Tags currently on a single task. */
 export async function getTagsForTask(taskId: string): Promise<TaskTag[]> {
-  return db
-    .select({ id: tags.id, name: tags.name, color: tags.color })
-    .from(taskTags)
-    .innerJoin(tags, eq(taskTags.tagId, tags.id))
-    .where(eq(taskTags.taskId, taskId))
-    .orderBy(asc(tags.name));
+  return withDbRetry(
+    () =>
+      db
+        .select({ id: tags.id, name: tags.name, color: tags.color })
+        .from(taskTags)
+        .innerJoin(tags, eq(taskTags.tagId, tags.id))
+        .where(eq(taskTags.taskId, taskId))
+        .orderBy(asc(tags.name)),
+    { attempts: 3, baseDelayMs: 300 },
+  );
 }
 
 /** Active task types for a space (Task/Project/etc.), ordered for pickers/managers. */

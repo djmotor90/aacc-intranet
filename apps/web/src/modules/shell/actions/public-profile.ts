@@ -97,6 +97,8 @@ function summarizeVerb(verb: string, payload: unknown): string {
       return "commented";
     case "comment.replied":
       return "replied to a comment";
+    case "comment.edited":
+      return "edited a comment";
     case "attachment.added":
       return "added an attachment";
     case "task.archived":

@@ -17,10 +17,12 @@ import {
   docToPlainText,
   isDocEmpty,
   normalizeImageAttachments,
+  storedToDoc,
+  type StoredRichDoc,
 } from "@/components/editor/doc-utils";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { addComment } from "../actions";
+import { addComment, editComment } from "../actions";
 
 interface UserOption {
   id: string;
@@ -38,6 +40,8 @@ interface UserOption {
 export function CommentBox({
   taskId,
   users,
+  commentId,
+  initialContent,
   parentCommentId,
   placeholder,
   autoFocus,
@@ -48,6 +52,9 @@ export function CommentBox({
   taskId: string;
   /** Mentionable users — people with list access only. */
   users: UserOption[];
+  /** Existing comment id switches the composer into author-only edit mode. */
+  commentId?: string;
+  initialContent?: StoredRichDoc | null;
   parentCommentId?: string | null;
   placeholder?: string;
   autoFocus?: boolean;
@@ -60,14 +67,23 @@ export function CommentBox({
   className?: string;
 }) {
   const router = useRouter();
+  const startingDoc = useMemo(
+    () => (initialContent ? storedToDoc(initialContent) : null),
+    [initialContent],
+  );
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
-  const [empty, setEmpty] = useState(true);
+  const [dirty, setDirty] = useState(!commentId);
+  const [empty, setEmpty] = useState(() => !startingDoc || isDocEmpty(startingDoc));
   const [editorKey, setEditorKey] = useState(0);
   const [payload, setPayload] = useState<{
     text: string;
     doc: JSONContent;
-  } | null>(null);
+  } | null>(() =>
+    startingDoc
+      ? { text: docToPlainText(startingDoc), doc: startingDoc }
+      : null,
+  );
   // After hydration we allow the real empty/pending logic. Server snapshot is
   // false, client snapshot true — React re-renders before paint on hydrate, so
   // SSR + first client paint stay identical and TipTap-related state never
@@ -88,9 +104,9 @@ export function CommentBox({
       .filter((u): u is UserOption => Boolean(u));
   }, [payload, userById]);
 
-  const submitLabel = parentCommentId ? "Reply" : "Comment";
+  const submitLabel = commentId ? "Save changes" : parentCommentId ? "Reply" : "Comment";
   const canSubmit =
-    ready && !pending && !empty && Boolean(payload && !isDocEmpty(payload.doc));
+    ready && !pending && (!commentId || dirty) && !empty && Boolean(payload && !isDocEmpty(payload.doc));
 
   const onSubmit = useCallback(
     (e: React.FormEvent) => {
@@ -107,8 +123,11 @@ export function CommentBox({
         doc: normalizedDoc,
       };
       const formData = new FormData();
-      formData.set("taskId", taskId);
-      if (parentCommentId) formData.set("parentCommentId", parentCommentId);
+      if (commentId) formData.set("commentId", commentId);
+      else {
+        formData.set("taskId", taskId);
+        if (parentCommentId) formData.set("parentCommentId", parentCommentId);
+      }
       formData.set("body", JSON.stringify(posted));
       const mentionRefs = extractMentionRefs(normalizedDoc);
       for (const id of mentionRefs.userIds) {
@@ -117,17 +136,26 @@ export function CommentBox({
       for (const id of mentionRefs.groupIds) formData.append("mentionGroups", id);
       startTransition(async () => {
         try {
-          await addComment(formData);
-          setPayload(null);
-          setEmpty(true);
-          setEditorKey((k) => k + 1);
+          if (commentId) await editComment(formData);
+          else {
+            await addComment(formData);
+            setPayload(null);
+            setEmpty(true);
+            setEditorKey((k) => k + 1);
+          }
           onSuccess?.(posted);
         } catch (err) {
-          setError(err instanceof Error ? err.message : "Failed to comment");
+          setError(
+            err instanceof Error
+              ? err.message
+              : commentId
+                ? "Failed to update comment"
+                : "Failed to comment",
+          );
         }
       });
     },
-    [canSubmit, payload, ready, taskId, parentCommentId, onSuccess],
+    [canSubmit, payload, ready, taskId, commentId, parentCommentId, onSuccess],
   );
 
   return (
@@ -135,6 +163,9 @@ export function CommentBox({
       <RichTextEditor
         key={editorKey}
         variant="compact"
+        initialContent={initialContent}
+        contentClassName="max-h-[min(20rem,40dvh)] min-w-0 overflow-y-auto overscroll-contain scroll-py-3"
+        editorClassName="min-w-0 break-words [overflow-wrap:anywhere]"
         autoFocus={autoFocus}
         taskId={taskId}
         mentionUsers={users}
@@ -144,6 +175,7 @@ export function CommentBox({
           "Write a comment… attach files, paste screenshots, @ mention, / blocks"
         }
         onChange={({ text, doc, empty: isEmpty }) => {
+          setDirty(true);
           setEmpty(isEmpty);
           setPayload({ text, doc });
         }}

@@ -177,6 +177,129 @@ export async function addComment(formData: FormData) {
   revalidatePath(`/tasks/task/${task.number}`);
 }
 
+/** Edit rich comment content. Only the original author may change its words. */
+export async function editComment(formData: FormData) {
+  const commentId = z.string().uuid().parse(formData.get("commentId"));
+  const bodyRaw = String(formData.get("body") ?? "");
+  let bodyText = bodyRaw;
+  let bodyDoc: unknown = undefined;
+  try {
+    const parsed = JSON.parse(bodyRaw) as { text?: string; doc?: unknown };
+    if (parsed && typeof parsed === "object" && ("text" in parsed || "doc" in parsed)) {
+      bodyText = String(parsed.text ?? "");
+      bodyDoc = parsed.doc;
+    }
+  } catch {
+    // Legacy plain-text comments remain editable.
+  }
+
+  if (bodyDoc && typeof bodyDoc === "object") {
+    const { normalizeImageAttachments, docToPlainText, docHasContent } = await import(
+      "@/components/editor/doc-utils"
+    );
+    const normalized = normalizeImageAttachments(
+      bodyDoc as import("@tiptap/react").JSONContent,
+    );
+    bodyDoc = normalized;
+    const fromDoc = docToPlainText(normalized).trim();
+    if (fromDoc) bodyText = fromDoc;
+    if (!bodyText.trim() && docHasContent(normalized)) bodyText = "[Image]";
+  }
+
+  bodyText = z.string().min(1).max(10_000).parse(bodyText.trim());
+  const rawMentionIds = formData.getAll("mentions").map((v) => z.string().uuid().parse(v));
+  const rawMentionGroupIds = formData
+    .getAll("mentionGroups")
+    .map((v) => z.string().uuid().parse(v));
+
+  const user = await requireUser();
+  const { comments, commentMentions } = await import("@aitim/db");
+  const [row] = await db
+    .select({
+      id: comments.id,
+      taskId: comments.taskId,
+      authorId: comments.authorId,
+      parentCommentId: comments.parentCommentId,
+      deletedAt: comments.deletedAt,
+    })
+    .from(comments)
+    .where(eq(comments.id, commentId));
+  if (!row || row.deletedAt) throw new Error("Comment not found");
+  if (row.authorId !== user.id) throw new Error("You can only edit your own comments");
+
+  const { task, list, space } = await requireTask(row.taskId);
+  const { assertPermission } = await import("@/lib/permissions");
+  await assertPermission(user, "comment");
+  await assertListRole(list.id, "guest");
+
+  // Revalidate mentions against current list access; team mentions expand to
+  // their current members, matching new-comment behavior.
+  const { getTeamsWithListAccess, getUsersWithListAccess } = await import("../queries");
+  const allowed = await getUsersWithListAccess(list.id);
+  const allowedIds = new Set(allowed.map((person) => person.id));
+  const allowedTeams = new Set((await getTeamsWithListAccess(list.id)).map((team) => team.id));
+  const mentionGroupIds = [...new Set(rawMentionGroupIds)].filter((id) => allowedTeams.has(id));
+  const teamMembers = mentionGroupIds.length
+    ? await db
+        .select({ userId: teamMemberships.userId })
+        .from(teamMemberships)
+        .where(inArray(teamMemberships.teamId, mentionGroupIds))
+    : [];
+  const mentionIds = [
+    ...new Set([...rawMentionIds, ...teamMembers.map((membership) => membership.userId)]),
+  ].filter((id) => allowedIds.has(id));
+  const previousMentions = await db
+    .select({ userId: commentMentions.userId })
+    .from(commentMentions)
+    .where(eq(commentMentions.commentId, commentId));
+  const previousMentionIds = new Set(previousMentions.map((mention) => mention.userId));
+  const newlyMentionedIds = mentionIds.filter((id) => !previousMentionIds.has(id));
+  const bodyPayload = bodyDoc ? { text: bodyText, doc: bodyDoc } : { text: bodyText };
+
+  await db.transaction(async (tx) => {
+    await tx
+      .update(comments)
+      .set({ body: bodyPayload, editedAt: new Date() })
+      .where(eq(comments.id, commentId));
+    await tx.delete(commentMentions).where(eq(commentMentions.commentId, commentId));
+    if (mentionIds.length > 0) {
+      await tx
+        .insert(commentMentions)
+        .values(mentionIds.map((userId) => ({ commentId, userId })))
+        .onConflictDoNothing();
+    }
+    await logActivity(tx, {
+      spaceId: space.id,
+      taskId: task.id,
+      actorId: user.id,
+      verb: "comment.edited",
+      payload: {
+        commentId,
+        parentCommentId: row.parentCommentId,
+        preview: bodyText.slice(0, 140),
+      },
+    });
+  });
+
+  if (newlyMentionedIds.length > 0) {
+    const { notifyUsers } = await import("@/lib/notify");
+    await notifyUsers({
+      recipientIds: newlyMentionedIds,
+      type: "mentioned",
+      taskId: task.id,
+      actorId: user.id,
+      payload: {
+        preview: bodyText.slice(0, 140),
+        number: task.number,
+        commentId,
+        parentCommentId: row.parentCommentId ?? commentId,
+      },
+    });
+  }
+
+  revalidatePath(`/tasks/task/${task.number}`);
+}
+
 /** Soft-delete a comment. Author may delete own; platform admins may delete any. */
 export async function deleteComment(formData: FormData) {
   const commentId = z.string().uuid().parse(formData.get("commentId"));

@@ -14,6 +14,7 @@ import {
   FileText,
   ListFilter,
   MessageSquare,
+  Pencil,
   Reply,
   Trash2,
   X,
@@ -298,12 +299,30 @@ function DeleteCommentButton({
   );
 }
 
+function EditCommentButton({ canEdit, onEdit }: { canEdit: boolean; onEdit: () => void }) {
+  if (!canEdit) return null;
+  return (
+    <button
+      type="button"
+      title="Edit comment"
+      aria-label="Edit comment"
+      className="inline-flex items-center gap-1 font-medium text-muted-foreground/80 transition-colors hover:text-foreground"
+      onClick={onEdit}
+    >
+      <Pencil className="size-3" />
+      Edit
+    </button>
+  );
+}
+
 function CommentBody({
   comment,
   footer,
+  editor,
 }: {
   comment: TaskComment;
   footer?: ReactNode;
+  editor?: ReactNode;
 }) {
   const body = comment.body as StoredRichDoc;
   const hasRich = Boolean(body && (body.doc || body.type === "doc"));
@@ -312,7 +331,7 @@ function CommentBody({
     : String(body?.text ?? "");
 
   return (
-    <div className="flex gap-3">
+    <div className="flex items-start gap-3">
       <ProfileAvatar
         userId={comment.authorId}
         name={comment.authorName}
@@ -327,17 +346,24 @@ function CommentBody({
             {comment.parentCommentId ? "replied" : "commented"}
           </span>
         </div>
-        <div className="mt-2 text-sm leading-6">
-          {hasRich ? (
-            <RichTextViewer content={body} className="text-sm" />
-          ) : (
-            <p className="whitespace-pre-wrap wrap-break-word">{linkifyPlainText(plain)}</p>
-          )}
-        </div>
-        <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-          <span>{formatActivityTime(comment.createdAt)}</span>
-          {footer}
-        </div>
+        {editor ? (
+          <div className="mt-2">{editor}</div>
+        ) : (
+          <>
+            <div className="mt-2 text-sm leading-6">
+              {hasRich ? (
+                <RichTextViewer content={body} className="text-sm" />
+              ) : (
+                <p className="whitespace-pre-wrap wrap-break-word">{linkifyPlainText(plain)}</p>
+              )}
+            </div>
+            <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+              <span>{formatActivityTime(comment.createdAt)}</span>
+              {comment.editedAt && <span title={comment.editedAt.toLocaleString()}>· edited</span>}
+              {footer}
+            </div>
+          </>
+        )}
       </div>
     </div>
   );
@@ -390,12 +416,32 @@ export function ActivityPanel({
   /** When true, shell already shows “Activity” — no second title/card chrome. */
   embedded?: boolean;
 }) {
+  const router = useRouter();
   const [threadRootId, setThreadRootId] = useState<string | null>(null);
+  const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
   const [filters, setFilters] = useState<ActivityFilters>(DEFAULT_FILTERS);
   const [filterOpen, setFilterOpen] = useState(false);
 
   function canDeleteComment(authorId: string) {
     return canModerateComments || authorId === currentUserId;
+  }
+  function commentEditor(comment: TaskComment) {
+    if (editingCommentId !== comment.id) return undefined;
+    return (
+      <CommentBox
+        taskId={taskId}
+        users={[...mentionableTeams, ...mentionableUsers]}
+        commentId={comment.id}
+        initialContent={comment.body as StoredRichDoc}
+        placeholder="Edit comment…"
+        autoFocus
+        onCancel={() => setEditingCommentId(null)}
+        onSuccess={() => {
+          setEditingCommentId(null);
+          router.refresh();
+        }}
+      />
+    );
   }
   /** Roots whose inline reply tree is expanded on the main feed. */
   const [expandedRoots, setExpandedRoots] = useState<Set<string>>(() => new Set());
@@ -437,7 +483,13 @@ export function ActivityPanel({
 
     if (filters.showActivity) {
       for (const a of activity) {
-        if (a.verb === "comment.created" || a.verb === "comment.replied") continue;
+        if (
+          a.verb === "comment.created" ||
+          a.verb === "comment.replied" ||
+          a.verb === "comment.edited"
+        ) {
+          continue;
+        }
         // Image embeds from the comment editor used to log as attachment.added
         // (before purpose=embed). Hide those so the feed shows the comment with
         // the image instead of a paperclip chip. Non-image files still show.
@@ -553,11 +605,18 @@ export function ActivityPanel({
             <div className="group box-border rounded-lg border border-border bg-card p-3 shadow-sm ring-1 ring-primary/10">
               <CommentBody
                 comment={threadRoot}
+                editor={commentEditor(threadRoot)}
                 footer={
-                  <DeleteCommentButton
-                    commentId={threadRoot.id}
-                    canDelete={canDeleteComment(threadRoot.authorId)}
-                  />
+                  <>
+                    <EditCommentButton
+                      canEdit={threadRoot.authorId === currentUserId}
+                      onEdit={() => setEditingCommentId(threadRoot.id)}
+                    />
+                    <DeleteCommentButton
+                      commentId={threadRoot.id}
+                      canDelete={canDeleteComment(threadRoot.authorId)}
+                    />
+                  </>
                 }
               />
             </div>
@@ -570,11 +629,18 @@ export function ActivityPanel({
                   >
                     <CommentBody
                       comment={r}
+                      editor={commentEditor(r)}
                       footer={
-                        <DeleteCommentButton
-                          commentId={r.id}
-                          canDelete={canDeleteComment(r.authorId)}
-                        />
+                        <>
+                          <EditCommentButton
+                            canEdit={r.authorId === currentUserId}
+                            onEdit={() => setEditingCommentId(r.id)}
+                          />
+                          <DeleteCommentButton
+                            commentId={r.id}
+                            canDelete={canDeleteComment(r.authorId)}
+                          />
+                        </>
                       }
                     />
                   </div>
@@ -930,6 +996,7 @@ export function ActivityPanel({
               >
                 <CommentBody
                   comment={root}
+                  editor={commentEditor(root)}
                   footer={
                     <>
                       <button
@@ -954,6 +1021,10 @@ export function ActivityPanel({
                           {replies.length} {replies.length === 1 ? "reply" : "replies"}
                         </button>
                       )}
+                      <EditCommentButton
+                        canEdit={root.authorId === currentUserId}
+                        onEdit={() => setEditingCommentId(root.id)}
+                      />
                       <DeleteCommentButton
                         commentId={root.id}
                         canDelete={canDeleteComment(root.authorId)}
@@ -984,11 +1055,18 @@ export function ActivityPanel({
                       >
                         <CommentBody
                           comment={r}
+                          editor={commentEditor(r)}
                           footer={
-                            <DeleteCommentButton
-                              commentId={r.id}
-                              canDelete={canDeleteComment(r.authorId)}
-                            />
+                            <>
+                              <EditCommentButton
+                                canEdit={r.authorId === currentUserId}
+                                onEdit={() => setEditingCommentId(r.id)}
+                              />
+                              <DeleteCommentButton
+                                commentId={r.id}
+                                canDelete={canDeleteComment(r.authorId)}
+                              />
+                            </>
                           }
                         />
                       </div>

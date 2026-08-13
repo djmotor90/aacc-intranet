@@ -46,6 +46,7 @@ export interface ActivityEntry {
     | "checklist_item.deleted"
     | "comment.created"
     | "comment.replied"
+    | "comment.edited"
     | "attachment.added"
     | "attachment.removed"
     | "attachment.moved"
