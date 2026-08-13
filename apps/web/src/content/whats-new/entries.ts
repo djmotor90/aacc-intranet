@@ -19,6 +19,28 @@ export const whatsNewFeed: WhatsNewFeed = {
   schemaVersion: 1,
   entries: [
     {
+      id: "2026-08-12-board-card-custom-fields",
+      date: "2026-08-12",
+      publishedAt: "2026-08-12T13:30:00.000Z",
+      kind: "new",
+      module: "tasks",
+      title: "Choose the details shown on Board cards",
+      body: "Each Board view can now show the custom fields that matter to its workflow. Use Card fields to select compact card details, clear them, and keep the configuration after refresh.",
+      href: "/tasks",
+      tags: ["tasks", "board", "custom-fields", "views"],
+    },
+    {
+      id: "2026-08-12-default-task-type",
+      date: "2026-08-12",
+      publishedAt: "2026-08-12T13:15:00.000Z",
+      kind: "improved",
+      module: "tasks",
+      title: "Every task has a clear type",
+      body: "Regular work now uses Task as its built-in default type. Task Type grouping and filters show Task instead of an unclear No value group, while Project and other configured types remain available.",
+      href: "/tasks",
+      tags: ["tasks", "task-types", "grouping"],
+    },
+    {
       id: "2026-08-12-doc-body-font-sizing",
       date: "2026-08-12",
       publishedAt: "2026-08-12T13:00:00.000Z",

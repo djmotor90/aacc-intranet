@@ -63,6 +63,49 @@ export interface TaskCardData {
   tags?: { id: string; name: string; color: string }[];
   hasAttachments?: boolean;
   taskType?: { id: string; name: string; icon: string | null; color: string } | null;
+  customFields?: Record<string, unknown>;
+}
+
+export interface BoardCardFieldDefinition {
+  id: string;
+  label: string;
+  type: string;
+  options: unknown;
+}
+
+const EMPTY_USER_NAMES = new Map<string, string>();
+
+function boardFieldValue(
+  field: BoardCardFieldDefinition,
+  value: unknown,
+  userNames: Map<string, string>,
+): string {
+  if (value === null || value === undefined || value === "") return "—";
+  const options = (Array.isArray(field.options) ? field.options : []) as Array<{
+    id?: string;
+    label?: string;
+  }>;
+  const optionLabel = (id: unknown) =>
+    options.find((option) => option.id === String(id))?.label ?? String(id);
+
+  if (field.type === "checkbox") return value === true ? "Yes" : "No";
+  if (field.type === "dropdown" || field.type === "color") return optionLabel(value);
+  if (field.type === "multi_select") {
+    return Array.isArray(value) && value.length > 0
+      ? value.map(optionLabel).join(", ")
+      : "—";
+  }
+  if (field.type === "user" || field.type === "assignee") {
+    const ids = Array.isArray(value) ? value : [value];
+    return ids.length > 0
+      ? ids.map((id) => userNames.get(String(id)) ?? "Unknown user").join(", ")
+      : "—";
+  }
+  if (field.type === "file" && Array.isArray(value)) {
+    return value.length === 1 ? "1 file" : `${value.length} files`;
+  }
+  if (Array.isArray(value)) return value.map(String).join(", ") || "—";
+  return String(value);
 }
 
 function Chip({
@@ -106,9 +149,13 @@ export function TaskCardContent({
   task,
   /** Optional ⋯ menu rendered at the top right. */
   menu,
+  customFieldDefs = [],
+  userNames = EMPTY_USER_NAMES,
 }: {
   task: TaskCardData;
   menu?: ReactNode;
+  customFieldDefs?: BoardCardFieldDefinition[];
+  userNames?: Map<string, string>;
 }) {
   const { overdue, dueSoon } = dueUrgency(task.dueDate);
 
@@ -159,6 +206,24 @@ export function TaskCardContent({
       </div>
 
       {task.tags && task.tags.length > 0 && <TagChips tags={task.tags} size="sm" />}
+
+      {customFieldDefs.length > 0 && (
+        <dl className="grid gap-1 border-t border-border/70 pt-2 text-[11px] leading-4">
+          {customFieldDefs.map((field) => {
+            const display = boardFieldValue(field, task.customFields?.[field.id], userNames);
+            return (
+              <div key={field.id} className="flex min-w-0 items-baseline justify-between gap-3">
+                <dt className="min-w-0 truncate text-muted-foreground" title={field.label}>
+                  {field.label}
+                </dt>
+                <dd className="max-w-[62%] truncate text-right font-medium text-foreground" title={display}>
+                  {display}
+                </dd>
+              </div>
+            );
+          })}
+        </dl>
+      )}
 
       <div className="flex flex-wrap items-center gap-1.5">
         <Chip className="bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-100">

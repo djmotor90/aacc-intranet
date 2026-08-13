@@ -122,6 +122,7 @@ export async function saveListViewPrefs(
     groupBy?: string;
     filters?: unknown;
     showClosed?: boolean;
+    boardFieldIds?: string[];
     /** When set, writes into this named list_view instead of the list row. */
     viewId?: string;
   },
@@ -152,6 +153,9 @@ export async function saveListViewPrefs(
     if ("groupBy" in prefs) updates.groupBy = prefs.groupBy || null;
     if ("filters" in prefs) updates.filters = prefs.filters ?? [];
     if ("showClosed" in prefs) updates.showClosed = prefs.showClosed === true;
+    if ("boardFieldIds" in prefs) {
+      updates.boardFieldIds = z.array(z.string().uuid()).max(100).parse(prefs.boardFieldIds);
+    }
     if (Object.keys(updates).length === 0) return;
 
     await db.update(listViews).set(updates).where(eq(listViews.id, viewId));
@@ -213,6 +217,7 @@ export async function createListView(params: {
   let groupBy: string | null = null;
   let showClosed = false;
   let tableColumnOrder: unknown = null;
+  let boardFieldIds: unknown = [];
 
   if (params.copyFromViewId) {
     const srcId = z.string().uuid().parse(params.copyFromViewId);
@@ -225,6 +230,7 @@ export async function createListView(params: {
       groupBy = src.groupBy;
       showClosed = src.showClosed;
       tableColumnOrder = src.tableColumnOrder;
+      boardFieldIds = src.boardFieldIds;
     }
   }
 
@@ -249,6 +255,7 @@ export async function createListView(params: {
       groupBy,
       showClosed,
       tableColumnOrder,
+      boardFieldIds,
       position: nextViewPosition(existing),
       createdBy: user.id,
     })
@@ -331,6 +338,7 @@ export async function updateListViewConfig(
     showClosed?: boolean;
     type?: "table" | "board" | "grid";
     tableColumnOrder?: unknown;
+    boardFieldIds?: string[];
   },
 ) {
   "use server";
@@ -348,6 +356,9 @@ export async function updateListViewConfig(
     updates.type = config.type === "board" ? "board" : config.type === "grid" ? "grid" : "table";
   }
   if ("tableColumnOrder" in config) updates.tableColumnOrder = config.tableColumnOrder ?? null;
+  if ("boardFieldIds" in config) {
+    updates.boardFieldIds = z.array(z.string().uuid()).max(100).parse(config.boardFieldIds);
+  }
   if (Object.keys(updates).length === 0) return;
 
   await db.update(listViews).set(updates).where(eq(listViews.id, view.id));

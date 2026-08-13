@@ -24,6 +24,7 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
 import { saveListViewPrefs } from "../actions";
+import { DEFAULT_TASK_TYPE } from "../lib/task-types";
 
 // ─── types ────────────────────────────────────────────────────────────────────
 
@@ -676,7 +677,10 @@ export function FilterBar({
             id: "type",
             label: "Task Type",
             type: "status" as FieldType, // same is / is_not operators as status
-            options: taskTypes.map((t) => ({ id: t.id, label: t.name })),
+            options: [
+              { id: DEFAULT_TASK_TYPE.filterValue, label: DEFAULT_TASK_TYPE.name },
+              ...taskTypes.map((t) => ({ id: t.id, label: t.name })),
+            ],
           },
         ]
       : []),

@@ -77,6 +77,7 @@ import {
 } from "./task-table-column-menu";
 import { TagChips, TagPicker, type TagOption } from "./tag-picker";
 import type { WritableListOption } from "../queries";
+import { DEFAULT_TASK_TYPE } from "../lib/task-types";
 
 /** Compact solid chip for table display cells (matches board card fills). */
 export function TableChip({
@@ -1512,7 +1513,11 @@ export function TaskTable({
 
   const getGroupMeta = useCallback(
     (key: string): { label: string; color?: string } => {
-      if (key === "__none__") return { label: "No value" };
+      if (key === "__none__") {
+        return {
+          label: effectiveGroupBy === "type" ? DEFAULT_TASK_TYPE.name : "No value",
+        };
+      }
       if (effectiveGroupBy === "status") {
         const s = statuses.find((x) => x.id === key);
         return { label: s?.name ?? key, color: s?.color };

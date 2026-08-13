@@ -379,6 +379,13 @@
       "when": 1788200000000,
       "tag": "0053_shallow_madame_hydra",
       "breakpoints": true
+    },
+    {
+      "idx": 54,
+      "version": "7",
+      "when": 1788300000000,
+      "tag": "0054_motionless_talkback",
+      "breakpoints": true
     }
   ]
 }

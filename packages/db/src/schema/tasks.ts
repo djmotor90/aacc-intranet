@@ -258,6 +258,8 @@ export const listViews = pgTable(
     groupBy: text("group_by"),
     showClosed: boolean("show_closed").notNull().default(false),
     tableColumnOrder: jsonb("table_column_order"),
+    /** Custom field definition ids shown on cards for this Board view. */
+    boardFieldIds: jsonb("board_field_ids").notNull().default(sql`'[]'::jsonb`),
     position: text("position").notNull().default("a0"),
     createdBy: uuid("created_by").references(() => users.id),
     ...timestamps,
@@ -304,7 +306,7 @@ export const tasks = pgTable(
     priority: taskPriority("priority"),
     dueDate: date("due_date"),
     startDate: date("start_date"),
-    /** Space-scoped task type (Task/Project/etc.) — null = untyped, unchanged behavior. */
+    /** Space-scoped custom type (Project/Bug/etc.) — null = built-in Task type. */
     taskTypeId: uuid("task_type_id").references(() => taskTypes.id, { onDelete: "set null" }),
     position: text("position").notNull().default("a0"),
     /** { [customFieldDefinitionId]: value } */

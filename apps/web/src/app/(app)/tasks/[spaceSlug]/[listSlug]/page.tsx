@@ -109,6 +109,10 @@ export default async function ListPage(props: {
     (list.tableColumnOrder as string[] | null) ??
     undefined;
 
+  const boardFieldIds = Array.isArray(activeView.boardFieldIds)
+    ? activeView.boardFieldIds.filter((id): id is string => typeof id === "string")
+    : [];
+
   const publicBaseUrl =
     process.env.AUTH_URL?.replace(/\/$/, "") ||
     process.env.APP_BASE_URL?.replace(/\/$/, "") ||
@@ -227,6 +231,7 @@ export default async function ListPage(props: {
       tags: taskTags,
       hasAttachments,
       taskType,
+      customFields: (task.customFields ?? {}) as Record<string, unknown>,
       listId: list.id,
     };
   });
@@ -283,31 +288,37 @@ export default async function ListPage(props: {
       </div>
 
       {view === "board" ? (
-        <>
-          <div className="mb-4 flex items-center gap-2">
-            <Badge variant="secondary">{page.total} tasks</Badge>
-            <Suspense fallback={<Skeleton className="h-7 w-20" />}>
-              <ShowClosedToggle
-                showClosed={showClosed}
-                listId={list.id}
-                viewId={activeView.id}
-              />
-            </Suspense>
-            {page.total > BOARD_LIMIT && (
-              <span className="text-xs text-muted-foreground">
-                Board shows the first {BOARD_LIMIT} tasks — use filters or the table view for the
-                rest.
-              </span>
-            )}
-          </div>
-          <Board
-            statuses={boardStatuses}
-            tasks={boardTasks}
-            canEdit={canEdit}
-            writableLists={writableLists}
-            taskTypes={spaceTaskTypes}
-          />
-        </>
+        <Board
+          key={activeView.id}
+          listId={list.id}
+          viewId={activeView.id}
+          statuses={boardStatuses}
+          tasks={boardTasks}
+          canEdit={canEdit}
+          writableLists={writableLists}
+          taskTypes={spaceTaskTypes}
+          fieldDefs={fieldDefs}
+          activeUsers={activeUsers}
+          initialFieldIds={boardFieldIds}
+          toolbar={
+            <>
+              <Badge variant="secondary">{page.total} tasks</Badge>
+              <Suspense fallback={<Skeleton className="h-7 w-20" />}>
+                <ShowClosedToggle
+                  showClosed={showClosed}
+                  listId={list.id}
+                  viewId={activeView.id}
+                />
+              </Suspense>
+              {page.total > BOARD_LIMIT && (
+                <span className="text-xs text-muted-foreground">
+                  Board shows the first {BOARD_LIMIT} tasks — use filters or the table view for the
+                  rest.
+                </span>
+              )}
+            </>
+          }
+        />
       ) : view === "grid" ? (
         <TaskGrid
           listId={list.id}

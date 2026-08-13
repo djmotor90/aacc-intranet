@@ -13,6 +13,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { assertListRole, assertSpaceRole, requireUser } from "@/lib/rbac";
 import { logActivity } from "../lib/activity";
+import { DEFAULT_TASK_TYPE } from "../lib/task-types";
 import { requireSpace, requireTask } from "./shared";
 
 const hexColor = z.string().regex(/^#[0-9a-fA-F]{6}$/);
@@ -154,7 +155,7 @@ export async function setTaskType(taskId: string, taskTypeId: string | null) {
   const user = await requireUser();
   await assertListRole(list.id, "member");
 
-  let nextName: string | null = null;
+  let nextName: string = DEFAULT_TASK_TYPE.name;
   let nextId: string | null = null;
   if (taskTypeId) {
     const parsedTypeId = z.string().uuid().parse(taskTypeId);

@@ -17,6 +17,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { setTaskType } from "../actions";
+import { DEFAULT_TASK_TYPE } from "../lib/task-types";
 import type { TaskTypeMeta } from "../queries";
 import { EntityIcon } from "./entity-icon";
 
@@ -52,11 +53,10 @@ export function TaskTypeSelect({
   }
 
   if (!canEdit) {
-    if (!current) return null;
     return (
       <span className="inline-flex items-center gap-1.5 rounded-full bg-muted px-2.5 py-0.5 text-xs font-medium">
-        <EntityIcon icon={current.icon} color={current.color} fallback="taskType" size="xs" />
-        {current.name}
+        <EntityIcon icon={current?.icon ?? null} color={current?.color} fallback="taskType" size="xs" />
+        {current?.name ?? DEFAULT_TASK_TYPE.name}
       </span>
     );
   }
@@ -71,13 +71,13 @@ export function TaskTypeSelect({
           title="Change task type"
         >
           <EntityIcon icon={current?.icon ?? null} color={current?.color} fallback="taskType" size="xs" />
-          {current?.name ?? "Set type"}
+          {current?.name ?? DEFAULT_TASK_TYPE.name}
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start">
         <DropdownMenuItem onSelect={() => select(null)} className="gap-2">
           <EntityIcon fallback="taskType" size="xs" />
-          None
+          {DEFAULT_TASK_TYPE.name}
         </DropdownMenuItem>
         {options.map((t) => (
           <DropdownMenuItem key={t.id} onSelect={() => select(t)} className="gap-2">

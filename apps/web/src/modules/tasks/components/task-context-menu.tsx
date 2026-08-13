@@ -68,6 +68,7 @@ import {
   toggleTaskFollow,
   trashTaskById,
 } from "../actions";
+import { DEFAULT_TASK_TYPE } from "../lib/task-types";
 import type { TaskTypeMeta, WritableListOption } from "../queries";
 import { EntityIcon } from "./entity-icon";
 
@@ -317,11 +318,13 @@ function TaskMenuBody({
                   className={MENU_ITEM_CLASS}
                   disabled={busy}
                   onSelect={() =>
-                    run(() => setTaskType(task.id, null), { success: "Task type cleared" })
+                    run(() => setTaskType(task.id, null), {
+                      success: `Converted to ${DEFAULT_TASK_TYPE.name}`,
+                    })
                   }
                 >
                   <EntityIcon fallback="taskType" size="xs" />
-                  <span className="flex-1">None</span>
+                  <span className="flex-1">{DEFAULT_TASK_TYPE.name}</span>
                   {!task.taskTypeId && <Check className="size-3.5" />}
                 </Item>
                 {taskTypes.map((t) => (

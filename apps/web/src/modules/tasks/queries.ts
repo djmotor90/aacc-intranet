@@ -39,6 +39,7 @@ import { and, asc, desc, eq, inArray, isNotNull, isNull, or, sql } from "drizzle
 import { cache } from "react";
 import { getFolderRole, getListRole, getSpaceRole, getUserTeamIds } from "@/lib/rbac";
 import type { SessionUserLike } from "../types";
+import { DEFAULT_TASK_TYPE } from "./lib/task-types";
 
 export const getSpaceBySlug = cache(async (slug: string) => {
   const [space] = await withDbRetry(() =>
@@ -398,6 +399,7 @@ export interface ListViewRow {
   groupBy: string | null;
   showClosed: boolean;
   tableColumnOrder: unknown;
+  boardFieldIds: unknown;
   position: string;
 }
 
@@ -420,6 +422,7 @@ export async function getListViews(listId: string): Promise<ListViewRow[]> {
       groupBy: listViews.groupBy,
       showClosed: listViews.showClosed,
       tableColumnOrder: listViews.tableColumnOrder,
+      boardFieldIds: listViews.boardFieldIds,
       position: listViews.position,
     })
     .from(listViews)
@@ -556,6 +559,7 @@ export async function ensureListViews(listId: string): Promise<ListViewRow[]> {
       groupBy: list.defaultGroupBy,
       showClosed: false,
       tableColumnOrder: list.tableColumnOrder,
+      boardFieldIds: [],
       position: "a0",
     },
     {
@@ -566,6 +570,7 @@ export async function ensureListViews(listId: string): Promise<ListViewRow[]> {
       groupBy: null,
       showClosed: false,
       tableColumnOrder: null,
+      boardFieldIds: [],
       position: "a1",
     },
   ]);
@@ -951,6 +956,11 @@ function conditionSql(c: TaskFilterCondition, defsById: Map<string, FieldDefRow>
       : sql`(${tasks.priority} IS NULL OR ${tasks.priority} != ${c.value})`;
   }
   if (c.field === "type") {
+    if (c.value === DEFAULT_TASK_TYPE.filterValue) {
+      return c.op === "is"
+        ? sql`${tasks.taskTypeId} IS NULL`
+        : sql`${tasks.taskTypeId} IS NOT NULL`;
+    }
     return c.op === "is"
       ? sql`${tasks.taskTypeId} = ${c.value}`
       : sql`(${tasks.taskTypeId} IS NULL OR ${tasks.taskTypeId} != ${c.value})`;
@@ -1065,7 +1075,7 @@ function groupOrderParts(groupBy: string | undefined, defsById: Map<string, Fiel
   }
   if (groupBy === "type") {
     return [
-      sql`coalesce((SELECT lower(tt.name) FROM ${taskTypes} tt WHERE tt.id = ${tasks.taskTypeId}), lower(${tasks.taskTypeId}::text)) ASC NULLS LAST`,
+      sql`coalesce((SELECT lower(tt.name) FROM ${taskTypes} tt WHERE tt.id = ${tasks.taskTypeId}), lower(${tasks.taskTypeId}::text), 'task') ASC`,
       sql`${tasks.taskTypeId} ASC NULLS LAST`,
     ];
   }
