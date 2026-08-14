@@ -7,11 +7,17 @@
  */
 import { chatManifest } from "./chat/manifest";
 import { docsManifest } from "./docs/manifest";
+import { eeDictionaryManifest } from "./ee-dictionary/manifest";
 import { shellManifest } from "./shell/manifest";
 import type { ModuleManifest, NavIcon, NavItem, SessionUserLike } from "./types";
 
 /** Built-in shell modules only. Workspace apps (Tasks, Accounts, …) come from the DB. */
-export const moduleRegistry: ModuleManifest[] = [shellManifest, docsManifest, chatManifest];
+export const moduleRegistry: ModuleManifest[] = [
+  shellManifest,
+  docsManifest,
+  chatManifest,
+  eeDictionaryManifest,
+];
 
 export function navItemsFor(user: SessionUserLike) {
   return moduleRegistry.filter((m) => m.access(user)).flatMap((m) => m.navItems);

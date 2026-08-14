@@ -19,7 +19,8 @@ export type NavIcon =
   | "tasks"
   | "home"
   | "docs"
-  | "chat";
+  | "chat"
+  | "database";
 
 export interface NavItem {
   label: string;

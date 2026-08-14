@@ -11,3 +11,4 @@ export * from "./forms";
 export * from "./secrets";
 export * from "./docs";
 export * from "./chat";
+export * from "./ee-dictionary";

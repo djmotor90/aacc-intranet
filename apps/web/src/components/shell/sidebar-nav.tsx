@@ -22,6 +22,7 @@ import {
   Building2,
   ChevronDown,
   ChevronRight,
+  Database,
   FileText,
   Home,
   type LucideIcon,
@@ -93,6 +94,7 @@ const ICONS: Record<NavIcon, LucideIcon> = {
   home: Home,
   docs: FileText,
   chat: MessageCircle,
+  database: Database,
 };
 
 export interface TaskNavTreeItem {

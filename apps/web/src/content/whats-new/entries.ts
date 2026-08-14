@@ -19,6 +19,18 @@ export const whatsNewFeed: WhatsNewFeed = {
   schemaVersion: 1,
   entries: [
     {
+      id: "2026-08-13-ee-data-dictionary",
+      date: "2026-08-13",
+      publishedAt: "2026-08-13T14:00:00.000Z",
+      kind: "new",
+      module: "admin",
+      title: "New: searchable EE SQL data dictionary",
+      body: "Admins can now browse the Lifelong Learning Extended Education database schema (906 tables, 9,400+ columns) from a new \"DB Dictionary\" nav item — instant search across table and column names, replacing the source Word doc that froze past a few hundred results.",
+      href: "/ee-dictionary",
+      tags: ["admin", "database", "search"],
+      audience: "admin",
+    },
+    {
       id: "2026-08-13-edit-your-task-comments",
       date: "2026-08-13",
       publishedAt: "2026-08-13T12:45:00.000Z",
