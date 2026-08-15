@@ -10,6 +10,7 @@ import Link from "next/link";
 import type { CSSProperties, ReactNode } from "react";
 // ReactNode used for optional ⋯ menu slot
 import { ProfileAvatar } from "@/components/shell/profile-avatar";
+import { solidChipStyle } from "@/lib/color-contrast";
 import { cn } from "@/lib/utils";
 import { EntityIcon } from "./entity-icon";
 import { TagChips } from "./tag-picker";
@@ -41,12 +42,9 @@ export const PRIORITY_LABELS: Record<string, string> = {
   low: "Low",
 };
 
-/** Solid filled chip using a hex status color. */
+/** Solid filled chip using a hex status color (text meets 4.5:1). */
 export function colorFillStyle(hex: string): CSSProperties {
-  return {
-    backgroundColor: hex,
-    color: "#fff",
-  };
+  return solidChipStyle(hex);
 }
 
 export interface TaskCardData {
@@ -265,8 +263,8 @@ export function TaskCardContent({
                 <span
                   key={`team:${team.id}`}
                   title={`${team.displayName} Team`}
-                  className="inline-flex size-5 items-center justify-center rounded-full text-white ring-2 ring-card"
-                  style={{ backgroundColor: team.color ?? "#007582" }}
+                  className="inline-flex size-5 items-center justify-center rounded-full ring-2 ring-card"
+                  style={solidChipStyle(team.color ?? "#007582")}
                 >
                   <UsersRound className="size-3" />
                 </span>

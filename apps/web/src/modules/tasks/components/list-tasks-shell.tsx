@@ -58,6 +58,7 @@ export function ListTasksShell({
   canEdit,
   initialColumnOrder,
   view,
+  currentUserId,
 }: {
   listId: string;
   viewId?: string;
@@ -76,6 +77,7 @@ export function ListTasksShell({
   canEdit: boolean;
   initialColumnOrder?: string[];
   view: "table" | "board";
+  currentUserId: string;
 }) {
   const [groupBy, setGroupBy] = useState(initialGroupBy);
   const [items, setItems] = useState(initialItems);
@@ -210,6 +212,7 @@ export function ListTasksShell({
         spaceTags={spaceTags}
         viewId={viewId}
         onGroupByChange={applyGroupBy}
+        currentUserId={currentUserId}
       />
     </>
   );

@@ -18,6 +18,7 @@ import {
   type FormTheme,
 } from "../lib/form-types";
 import { FormPreview, type FormSubmitFile } from "./form-view-panel";
+import { ensureContrast } from "@/lib/color-contrast";
 import { cn } from "@/lib/utils";
 
 export function PublicFormClient({
@@ -71,7 +72,7 @@ export function PublicFormClient({
         }}
       >
         <h1 className="text-lg font-semibold">{title}</h1>
-        <p className="mt-2 text-sm" style={{ color: theme.mutedColor }}>
+        <p className="mt-2 text-sm" style={{ color: ensureContrast(theme.mutedColor, theme.cardColor) }}>
           This form is not accepting submissions right now.
         </p>
       </div>
@@ -141,8 +142,8 @@ export function PublicFormClient({
       />
       {!embed && theme.showBranding && (
         <p
-          className="mt-6 text-center text-[11px]"
-          style={{ color: theme.mutedColor }}
+          className="mt-6 text-center text-xs"
+          style={{ color: ensureContrast(theme.mutedColor, theme.backgroundColor) }}
         >
           Powered by AACC Hub
         </p>

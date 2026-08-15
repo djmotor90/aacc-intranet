@@ -46,6 +46,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { ensureContrast, solidChipStyle, tintedChipStyle } from "@/lib/color-contrast";
 import { cn } from "@/lib/utils";
 import {
   clearFormLogo,
@@ -1717,8 +1718,8 @@ export function FormViewPanel({
             background: theme.backgroundColor,
           }}
         >
-          <p className="mb-4 text-xs font-medium uppercase tracking-wider opacity-70"
-            style={{ color: theme.mutedColor }}
+          <p className="mb-4 text-xs font-medium uppercase tracking-wider"
+            style={{ color: ensureContrast(theme.mutedColor, theme.backgroundColor) }}
           >
             Public form preview
           </p>
@@ -1760,6 +1761,7 @@ export function FormViewPanel({
                 size="icon"
                 className="shrink-0"
                 onClick={() => copyText(publicUrl, "link")}
+                aria-label={copied === "link" ? "Link copied" : "Copy public form link"}
               >
                 {copied === "link" ? (
                   <Check className="size-4" />
@@ -1768,7 +1770,7 @@ export function FormViewPanel({
                 )}
               </Button>
               <Button type="button" variant="outline" size="icon" className="shrink-0" asChild>
-                <a href={publicUrl} target="_blank" rel="noreferrer">
+                <a href={publicUrl} target="_blank" rel="noreferrer" aria-label="Open public form in a new tab">
                   <ExternalLink className="size-4" />
                 </a>
               </Button>
@@ -1938,12 +1940,12 @@ export function FormPreview({
       >
         <div
           className="mx-auto mb-4 flex size-14 items-center justify-center rounded-full"
-          style={{ background: `${theme.primaryColor}22` }}
+          style={tintedChipStyle(theme.primaryColor, theme.cardColor)}
         >
-          <Check className="size-7" style={{ color: theme.primaryColor }} />
+          <Check className="size-7" />
         </div>
         <h2 className="text-xl font-semibold tracking-tight">Submitted</h2>
-        <p className="mt-2 text-sm" style={{ color: theme.mutedColor }}>
+        <p className="mt-2 text-sm" style={{ color: ensureContrast(theme.mutedColor, theme.cardColor) }}>
           {successMessage || "Thanks — we received your request."}
         </p>
       </div>
@@ -2015,7 +2017,7 @@ export function FormPreview({
         {introMd ? (
           <p
             className="whitespace-pre-wrap text-sm leading-relaxed"
-            style={{ color: theme.mutedColor }}
+            style={{ color: ensureContrast(theme.mutedColor, theme.cardColor) }}
           >
             {introMd}
           </p>
@@ -2210,16 +2212,16 @@ export function FormPreview({
           type="submit"
           disabled={submitting}
           className={cn(
-            "h-11 w-full text-sm font-semibold text-white shadow-sm transition-opacity disabled:opacity-60",
+            "h-11 w-full text-sm font-semibold shadow-sm transition-opacity disabled:opacity-60",
             formRadiusClass(theme.radius === "2xl" ? "xl" : "md"),
           )}
-          style={{ background: theme.primaryColor }}
+          style={solidChipStyle(theme.primaryColor)}
         >
           {submitting ? "Submitting…" : theme.submitLabel || "Submit"}
         </button>
       )}
       {disabled && (
-        <p className="text-center text-[11px]" style={{ color: theme.mutedColor }}>
+        <p className="text-center text-xs" style={{ color: ensureContrast(theme.mutedColor, theme.cardColor) }}>
           Preview only — responses won&apos;t be saved
         </p>
       )}

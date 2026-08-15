@@ -26,6 +26,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
+import { solidChipStyle } from "@/lib/color-contrast";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -153,8 +154,8 @@ function FormAssigneePicker({
               className="gap-2 py-1.5"
             >
               <span
-                className="inline-flex size-6 items-center justify-center rounded-full text-white"
-                style={{ backgroundColor: team.color ?? "#007582" }}
+                className="inline-flex size-6 items-center justify-center rounded-full"
+                style={solidChipStyle(team.color ?? "#007582")}
               >
                 <UsersRound className="size-3.5" />
               </span>

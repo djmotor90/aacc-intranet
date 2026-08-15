@@ -6,12 +6,20 @@
  * License: Proprietary. All rights reserved. See LICENSE / COPYRIGHT.
  */
 import { createHash, randomUUID } from "node:crypto";
-import { attachmentFolders, attachments, db, lists, spaces, tasks } from "@aitim/db";
+import {
+  attachmentFolders,
+  attachmentVersions,
+  attachments,
+  db,
+  lists,
+  spaces,
+  tasks,
+} from "@aitim/db";
 import { and, eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { getListRole } from "@/lib/rbac";
-import { BUCKETS, putObject } from "@/lib/storage";
+import { BUCKETS, deleteObject, putObject } from "@/lib/storage";
 import {
   MAX_ATTACHMENT_BYTES,
   MAX_ATTACHMENT_LABEL,
@@ -73,43 +81,66 @@ export async function POST(req: Request, ctx: { params: Promise<{ taskId: string
   const purposeRaw = formData.get("purpose");
   const isEmbed = purposeRaw === "embed" || purposeRaw === "editor";
 
-  const [created] = await db.transaction(async (tx) => {
-    const [rowInsert] = await tx
-      .insert(attachments)
-      .values({
-        taskId,
-        folderId,
+  let created: {
+    id: string;
+    fileName: string;
+    mimeType: string;
+    sizeBytes: number;
+    folderId: string | null;
+  } | undefined;
+  try {
+    [created] = await db.transaction(async (tx) => {
+      const [rowInsert] = await tx
+        .insert(attachments)
+        .values({
+          taskId,
+          folderId,
+          uploaderId: session.user.id,
+          objectKey,
+          fileName: safeName,
+          mimeType,
+          sizeBytes: file.size,
+          checksumSha256: checksum,
+        })
+        .returning({
+          id: attachments.id,
+          fileName: attachments.fileName,
+          mimeType: attachments.mimeType,
+          sizeBytes: attachments.sizeBytes,
+          folderId: attachments.folderId,
+        });
+      if (!rowInsert) throw new Error("Attachment insert failed");
+      await tx.insert(attachmentVersions).values({
+        attachmentId: rowInsert.id,
+        versionNumber: 1,
         uploaderId: session.user.id,
         objectKey,
         fileName: safeName,
         mimeType,
         sizeBytes: file.size,
         checksumSha256: checksum,
-      })
-      .returning({
-        id: attachments.id,
-        fileName: attachments.fileName,
-        mimeType: attachments.mimeType,
-        sizeBytes: attachments.sizeBytes,
-        folderId: attachments.folderId,
       });
-    if (!isEmbed) {
-      await logActivity(tx, {
-        spaceId: row.space.id,
-        taskId,
-        actorId: session.user.id,
-        verb: "attachment.added",
-        payload: {
-          fileName: safeName,
-          sizeBytes: file.size,
-          folderId,
-          mimeType,
-          attachmentId: rowInsert?.id,
-        },
-      });
-    }
-    return [rowInsert];
-  });
+      if (!isEmbed) {
+        await logActivity(tx, {
+          spaceId: row.space.id,
+          taskId,
+          actorId: session.user.id,
+          verb: "attachment.added",
+          payload: {
+            fileName: safeName,
+            sizeBytes: file.size,
+            folderId,
+            mimeType,
+            attachmentId: rowInsert.id,
+          },
+        });
+      }
+      return [rowInsert];
+    });
+  } catch {
+    await deleteObject(BUCKETS.attachments, objectKey).catch(() => undefined);
+    return NextResponse.json({ error: "upload failed" }, { status: 500 });
+  }
 
   if (!created) {
     return NextResponse.json({ error: "upload failed" }, { status: 500 });

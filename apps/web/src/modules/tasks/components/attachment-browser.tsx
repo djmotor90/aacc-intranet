@@ -13,6 +13,7 @@ import {
   ExternalLink,
   Folder,
   FolderPlus,
+  History,
   LayoutGrid,
   List,
   MoreHorizontal,
@@ -80,6 +81,20 @@ export type AttachmentRow = {
   fileName: string;
   mimeType: string;
   sizeBytes: number;
+  currentVersion: number;
+  currentVersionLabel: string | null;
+  uploaderId: string | null;
+  uploaderName: string | null;
+};
+
+type AttachmentVersionRow = {
+  versionNumber: number;
+  versionLabel: string | null;
+  fileName: string;
+  mimeType: string;
+  sizeBytes: number;
+  checksumSha256: string | null;
+  createdAt: string;
   uploaderId: string | null;
   uploaderName: string | null;
 };
@@ -113,6 +128,7 @@ export function AttachmentBrowser({
 }) {
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const versionInputRef = useRef<HTMLInputElement>(null);
   const [view, setView] = useState<ViewMode>("grid");
   const [currentFolderId, setCurrentFolderId] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
@@ -126,6 +142,13 @@ export function AttachmentBrowser({
   const [selectedId, setSelectedId] = useState<string | null>(null);
   /** In-app image lightbox (with explicit close control). */
   const [preview, setPreview] = useState<AttachmentRow | null>(null);
+  const [versionTarget, setVersionTarget] = useState<AttachmentRow | null>(null);
+  const [versionFile, setVersionFile] = useState<File | null>(null);
+  const [versionLabel, setVersionLabel] = useState("");
+  const [labelTarget, setLabelTarget] = useState<AttachmentRow | null>(null);
+  const [historyAttachment, setHistoryAttachment] = useState<AttachmentRow | null>(null);
+  const [versionHistory, setVersionHistory] = useState<AttachmentVersionRow[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
   const [zoom, setZoom] = useState(1);
   /** Natural pixel size of the previewed image (for real scrollable zoom). */
   const [naturalSize, setNaturalSize] = useState<{ w: number; h: number } | null>(null);
@@ -427,6 +450,132 @@ export function AttachmentBrowser({
     [taskId, refresh],
   );
 
+  async function openVersionHistory(file: AttachmentRow) {
+    setHistoryAttachment(file);
+    setVersionHistory([]);
+    setHistoryLoading(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/attachments/${file.id}/versions`);
+      const data = (await res.json().catch(() => ({}))) as {
+        error?: string;
+        versions?: AttachmentVersionRow[];
+      };
+      if (!res.ok) throw new Error(data.error ?? "Could not load version history");
+      setVersionHistory(data.versions ?? []);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not load version history");
+      setHistoryAttachment(null);
+    } finally {
+      setHistoryLoading(false);
+    }
+  }
+
+  async function uploadNewVersion() {
+    if (!versionTarget || !versionFile || !versionLabel.trim()) return;
+    const file = versionFile;
+    if (file.size === 0 || file.size > MAX_ATTACHMENT_BYTES) {
+      setError(`${file.name}: too large (max ${MAX_ATTACHMENT_LABEL})`);
+      return;
+    }
+    setPending(true);
+    setError(null);
+    try {
+      const formData = new FormData();
+      formData.set("file", file);
+      formData.set("versionLabel", versionLabel.trim());
+      const res = await fetch(`/api/attachments/${versionTarget.id}/versions`, {
+        method: "POST",
+        body: formData,
+      });
+      const data = (await res.json().catch(() => ({}))) as { error?: string };
+      if (!res.ok) throw new Error(data.error ?? `Version upload failed (${res.status})`);
+      refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Version upload failed");
+    } finally {
+      setPending(false);
+      setVersionTarget(null);
+      setVersionFile(null);
+      setVersionLabel("");
+      if (versionInputRef.current) versionInputRef.current.value = "";
+    }
+  }
+
+  async function saveCurrentVersionLabel() {
+    if (!labelTarget || !versionLabel.trim()) return;
+    setPending(true);
+    setError(null);
+    try {
+      const res = await fetch(
+        `/api/attachments/${labelTarget.id}/versions/${labelTarget.currentVersion}`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ versionLabel: versionLabel.trim() }),
+        },
+      );
+      const data = (await res.json().catch(() => ({}))) as { error?: string };
+      if (!res.ok) throw new Error(data.error ?? "Could not save the file version");
+      setLabelTarget(null);
+      setVersionLabel("");
+      refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not save the file version");
+    } finally {
+      setPending(false);
+    }
+  }
+
+  function fileMenuItems(file: AttachmentRow) {
+    return [
+      {
+        label: isImageAttachment(file.mimeType, file.fileName) ? "Preview" : "Open",
+        onSelect: () => openAttachment(file),
+      },
+      {
+        label: "Open in new tab",
+        onSelect: () => {
+          window.open(`/api/attachments/${file.id}`, "_blank", "noopener,noreferrer");
+        },
+      },
+      {
+        label: "Version history",
+        onSelect: () => void openVersionHistory(file),
+      },
+      ...(canDeleteFile(file)
+        ? [
+            {
+              label: file.currentVersionLabel ? "Change version label" : "Set version label",
+              onSelect: () => {
+                setLabelTarget(file);
+                setVersionLabel(file.currentVersionLabel ?? "");
+              },
+            },
+            {
+              label: "Upload new version",
+              onSelect: () => {
+                setVersionTarget(file);
+                setVersionFile(null);
+                setVersionLabel("");
+                setTimeout(() => versionInputRef.current?.click(), 0);
+              },
+            },
+            {
+              label: "Delete",
+              destructive: true as const,
+              onSelect: () => {
+                if (!window.confirm(`Delete “${file.fileName}” and all of its versions?`)) return;
+                const fd = new FormData();
+                fd.set("attachmentId", file.id);
+                void run(() => deleteAttachment(fd));
+              },
+            },
+          ]
+        : []),
+    ];
+  }
+
   function canDeleteFile(a: AttachmentRow) {
     return isPlatformAdmin || canEdit || a.uploaderId === currentUserId;
   }
@@ -675,40 +824,11 @@ export function AttachmentBrowser({
           canEdit && "cursor-grab active:cursor-grabbing",
         )}
       >
-        {(canEdit || canDeleteFile(file)) && (
-          <div className="absolute right-1.5 top-1.5">
-            <ItemMenu
-              items={[
-                {
-                  label: isImageAttachment(file.mimeType, file.fileName) ? "Preview" : "Open",
-                  onSelect: () => openAttachment(file),
-                },
-                {
-                  label: "Open in new tab",
-                  onSelect: () => {
-                    window.open(`/api/attachments/${file.id}`, "_blank", "noopener,noreferrer");
-                  },
-                },
-                ...(canDeleteFile(file)
-                  ? [
-                      {
-                        label: "Delete",
-                        destructive: true as const,
-                        onSelect: () => {
-                          if (!window.confirm(`Delete “${file.fileName}”?`)) return;
-                          const fd = new FormData();
-                          fd.set("attachmentId", file.id);
-                          void run(() => deleteAttachment(fd));
-                        },
-                      },
-                    ]
-                  : []),
-              ]}
-            >
-              <MoreHorizontal className="size-3.5" />
-            </ItemMenu>
-          </div>
-        )}
+        <div className="absolute right-1.5 top-1.5">
+          <ItemMenu items={fileMenuItems(file)}>
+            <MoreHorizontal className="size-3.5" />
+          </ItemMenu>
+        </div>
         <FileTypeVisual
           mimeType={file.mimeType}
           fileName={file.fileName}
@@ -720,7 +840,7 @@ export function AttachmentBrowser({
             {file.fileName}
           </div>
           <div className="mt-0.5 text-[10px] text-muted-foreground">
-            {formatAttachmentBytes(file.sizeBytes)}
+            {file.currentVersionLabel ?? `Revision ${file.currentVersion}`} · {formatAttachmentBytes(file.sizeBytes)}
           </div>
         </div>
       </div>
@@ -840,27 +960,12 @@ export function AttachmentBrowser({
           {file.fileName}
         </button>
         <span className="shrink-0 text-xs text-muted-foreground">
-          {formatAttachmentBytes(file.sizeBytes)}
+          {file.currentVersionLabel ?? `Revision ${file.currentVersion}`} · {formatAttachmentBytes(file.sizeBytes)}
           {file.uploaderName ? ` · ${file.uploaderName}` : ""}
         </span>
-        {canDeleteFile(file) && (
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            className="size-7 shrink-0 p-0 opacity-0 group-hover:opacity-100 text-destructive hover:bg-destructive/10 hover:text-destructive"
-            disabled={pending}
-            aria-label={`Delete ${file.fileName}`}
-            onClick={() => {
-              if (!window.confirm(`Delete “${file.fileName}”?`)) return;
-              const fd = new FormData();
-              fd.set("attachmentId", file.id);
-              void run(() => deleteAttachment(fd));
-            }}
-          >
-            <Trash2 className="size-3.5" />
-          </Button>
-        )}
+        <ItemMenu items={fileMenuItems(file)}>
+          <MoreHorizontal className="size-3.5" />
+        </ItemMenu>
       </li>
     );
   }
@@ -876,6 +981,15 @@ export function AttachmentBrowser({
           hidden
           onChange={(e) => {
             void uploadFiles(Array.from(e.target.files ?? []), currentFolderId);
+          }}
+        />
+        <input
+          ref={versionInputRef}
+          type="file"
+          hidden
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            if (file) setVersionFile(file);
           }}
         />
         {canEdit && (
@@ -1074,6 +1188,197 @@ export function AttachmentBrowser({
       </div>
 
       {error && <p className="text-sm text-destructive">{error}</p>}
+
+      <Dialog
+        open={versionTarget !== null && versionFile !== null}
+        onOpenChange={(open) => {
+          if (!open && !pending) {
+            setVersionTarget(null);
+            setVersionFile(null);
+            setVersionLabel("");
+            if (versionInputRef.current) versionInputRef.current.value = "";
+          }
+        }}
+      >
+        <DialogContent className="max-w-md">
+          <DialogTitle>Upload updated file</DialogTitle>
+          <DialogDescription>
+            The current file remains in history. Enter the actual release version for the new file.
+          </DialogDescription>
+          <div className="rounded-xl border bg-muted/25 px-3 py-2 text-sm">
+            <div className="truncate font-medium">{versionFile?.name}</div>
+            <div className="text-xs text-muted-foreground">
+              {versionFile ? formatAttachmentBytes(versionFile.size) : ""}
+            </div>
+          </div>
+          <label className="grid gap-1.5 text-sm font-medium">
+            File version
+            <Input
+              value={versionLabel}
+              onChange={(event) => setVersionLabel(event.target.value)}
+              placeholder="v2024.2.0"
+              maxLength={50}
+              autoFocus
+              onKeyDown={(event) => {
+                if (event.key === "Enter" && versionLabel.trim()) {
+                  event.preventDefault();
+                  void uploadNewVersion();
+                }
+              }}
+            />
+          </label>
+          <div className="flex justify-end gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              disabled={pending}
+              onClick={() => {
+                setVersionTarget(null);
+                setVersionFile(null);
+                setVersionLabel("");
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              disabled={pending || !versionLabel.trim()}
+              onClick={() => void uploadNewVersion()}
+            >
+              {pending ? "Uploading…" : "Upload version"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={labelTarget !== null}
+        onOpenChange={(open) => {
+          if (!open && !pending) {
+            setLabelTarget(null);
+            setVersionLabel("");
+          }
+        }}
+      >
+        <DialogContent className="max-w-md">
+          <DialogTitle>Set file version</DialogTitle>
+          <DialogDescription>
+            Use the real release version supplied with this file—not its internal revision number.
+          </DialogDescription>
+          <label className="grid gap-1.5 text-sm font-medium">
+            File version
+            <Input
+              value={versionLabel}
+              onChange={(event) => setVersionLabel(event.target.value)}
+              placeholder="v2024.2.0"
+              maxLength={50}
+              autoFocus
+              onKeyDown={(event) => {
+                if (event.key === "Enter" && versionLabel.trim()) {
+                  event.preventDefault();
+                  void saveCurrentVersionLabel();
+                }
+              }}
+            />
+          </label>
+          <div className="flex justify-end gap-2">
+            <Button type="button" variant="outline" disabled={pending} onClick={() => setLabelTarget(null)}>
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              disabled={pending || !versionLabel.trim()}
+              onClick={() => void saveCurrentVersionLabel()}
+            >
+              {pending ? "Saving…" : "Save version"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={historyAttachment !== null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setHistoryAttachment(null);
+            setVersionHistory([]);
+          }
+        }}
+      >
+        <DialogContent className="max-h-[min(82vh,760px)] max-w-2xl overflow-hidden p-0 sm:max-w-2xl">
+          <div className="border-b bg-gradient-to-br from-primary/10 via-background to-accent/10 px-6 py-5 pr-14">
+            <div className="mb-2 flex size-10 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-sm">
+              <History className="size-5" />
+            </div>
+            <DialogTitle className="text-xl">Version history</DialogTitle>
+            <DialogDescription className="mt-1 line-clamp-2">
+              {historyAttachment?.fileName}. Every upload is retained and remains available to download.
+            </DialogDescription>
+          </div>
+          <div className="min-h-0 overflow-y-auto px-6 py-4">
+            {historyLoading ? (
+              <div className="flex items-center justify-center py-12 text-sm text-muted-foreground">
+                Loading versions…
+              </div>
+            ) : versionHistory.length === 0 ? (
+              <div className="rounded-xl border border-dashed p-8 text-center text-sm text-muted-foreground">
+                No retained versions were found.
+              </div>
+            ) : (
+              <ol className="space-y-2">
+                {versionHistory.map((version) => {
+                  const isCurrent = version.versionNumber === historyAttachment?.currentVersion;
+                  return (
+                    <li
+                      key={version.versionNumber}
+                      className={cn(
+                        "flex items-center gap-3 rounded-xl border px-4 py-3",
+                        isCurrent ? "border-primary/35 bg-primary/5" : "bg-card",
+                      )}
+                    >
+                      <div
+                        className={cn(
+                          "flex size-9 shrink-0 items-center justify-center rounded-full text-xs font-semibold tabular-nums",
+                          isCurrent
+                            ? "bg-primary text-primary-foreground"
+                            : "bg-muted text-muted-foreground",
+                        )}
+                      >
+                        R{version.versionNumber}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex min-w-0 items-center gap-2">
+                          <span className="truncate text-sm font-medium">
+                            {version.versionLabel ?? `Revision ${version.versionNumber}`}
+                          </span>
+                          {isCurrent && (
+                            <span className="shrink-0 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-primary">
+                              Current
+                            </span>
+                          )}
+                        </div>
+                        <div className="mt-0.5 text-xs text-muted-foreground">
+                          {version.fileName} · {formatAttachmentBytes(version.sizeBytes)} · {version.uploaderName ?? "Public form"} ·{" "}
+                          {new Date(version.createdAt).toLocaleString()}
+                        </div>
+                      </div>
+                      <Button type="button" variant="outline" size="sm" className="shrink-0 gap-1.5" asChild>
+                        <a
+                          href={`/api/attachments/${historyAttachment?.id}/versions/${version.versionNumber}`}
+                          download={version.fileName}
+                        >
+                          <Download className="size-3.5" />
+                          <span className="hidden sm:inline">Download</span>
+                        </a>
+                      </Button>
+                    </li>
+                  );
+                })}
+              </ol>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Image lightbox — zoom, explicit X close (backdrop / Esc also close) */}
       <Dialog open={preview !== null} onOpenChange={(open) => !open && closePreview()}>

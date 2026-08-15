@@ -586,11 +586,78 @@ export const attachments = pgTable(
     mimeType: text("mime_type").notNull(),
     sizeBytes: integer("size_bytes").notNull(),
     checksumSha256: text("checksum_sha256"),
+    /** Latest immutable version stored in attachment_versions. */
+    currentVersion: integer("current_version").notNull().default(1),
+    /** User-facing release label, e.g. v2024.2.0. */
+    currentVersionLabel: text("current_version_label"),
     ...timestamps,
   },
   (t) => [
     index("attachments_task_idx").on(t.taskId),
     index("attachments_folder_idx").on(t.folderId),
+  ],
+);
+
+/** Immutable file snapshots for a task attachment. */
+export const attachmentVersions = pgTable(
+  "attachment_versions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    attachmentId: uuid("attachment_id")
+      .notNull()
+      .references(() => attachments.id, { onDelete: "cascade" }),
+    versionNumber: integer("version_number").notNull(),
+    /** User-facing release label, independent from the internal revision number. */
+    versionLabel: text("version_label"),
+    uploaderId: uuid("uploader_id").references(() => users.id),
+    objectKey: text("object_key").notNull(),
+    fileName: text("file_name").notNull(),
+    mimeType: text("mime_type").notNull(),
+    sizeBytes: integer("size_bytes").notNull(),
+    checksumSha256: text("checksum_sha256"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("attachment_versions_attachment_version_idx").on(
+      t.attachmentId,
+      t.versionNumber,
+    ),
+    index("attachment_versions_attachment_idx").on(t.attachmentId),
+  ],
+);
+
+/**
+ * Manual and timer time entries on a task (or unassigned).
+ * `endedAt` null means a running timer — at most one per user.
+ */
+export const timeEntries = pgTable(
+  "time_entries",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    /** Null = logged without a task ("No task selected"). */
+    taskId: uuid("task_id").references(() => tasks.id, { onDelete: "set null" }),
+    /** Person the time is attributed to. */
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    startedAt: timestamp("started_at", { withTimezone: true }).notNull(),
+    /** Null while a timer is running. */
+    endedAt: timestamp("ended_at", { withTimezone: true }),
+    /** Persisted length for stopped entries. Running timers compute from startedAt. */
+    durationSeconds: integer("duration_seconds").notNull().default(0),
+    notes: text("notes"),
+    billable: boolean("billable").notNull().default(false),
+    /** Freeform labels on the entry (not task tags). */
+    tags: jsonb("tags").notNull().default(sql`'[]'::jsonb`),
+    createdBy: uuid("created_by").references(() => users.id),
+    ...timestamps,
+  },
+  (t) => [
+    index("time_entries_task_idx").on(t.taskId),
+    index("time_entries_user_started_idx").on(t.userId, t.startedAt),
+    uniqueIndex("time_entries_one_running_per_user_idx")
+      .on(t.userId)
+      .where(sql`${t.endedAt} is null`),
   ],
 );
 
@@ -668,6 +735,13 @@ export const tasksRelations = relations(tasks, ({ one, many }) => ({
   comments: many(comments),
   attachments: many(attachments),
   attachmentFolders: many(attachmentFolders),
+  timeEntries: many(timeEntries),
+}));
+
+export const timeEntriesRelations = relations(timeEntries, ({ one }) => ({
+  task: one(tasks, { fields: [timeEntries.taskId], references: [tasks.id] }),
+  user: one(users, { fields: [timeEntries.userId], references: [users.id] }),
+  creator: one(users, { fields: [timeEntries.createdBy], references: [users.id] }),
 }));
 
 export const taskFollowersRelations = relations(taskFollowers, ({ one }) => ({
@@ -686,13 +760,25 @@ export const attachmentFoldersRelations = relations(attachmentFolders, ({ one, m
   attachments: many(attachments),
 }));
 
-export const attachmentsRelations = relations(attachments, ({ one }) => ({
+export const attachmentsRelations = relations(attachments, ({ one, many }) => ({
   task: one(tasks, { fields: [attachments.taskId], references: [tasks.id] }),
   folder: one(attachmentFolders, {
     fields: [attachments.folderId],
     references: [attachmentFolders.id],
   }),
   uploader: one(users, { fields: [attachments.uploaderId], references: [users.id] }),
+  versions: many(attachmentVersions),
+}));
+
+export const attachmentVersionsRelations = relations(attachmentVersions, ({ one }) => ({
+  attachment: one(attachments, {
+    fields: [attachmentVersions.attachmentId],
+    references: [attachments.id],
+  }),
+  uploader: one(users, {
+    fields: [attachmentVersions.uploaderId],
+    references: [users.id],
+  }),
 }));
 
 export const tagsRelations = relations(tags, ({ one, many }) => ({

@@ -283,7 +283,10 @@ export function NotificationBell() {
         >
           <Bell className="size-4" />
           {unreadCount > 0 && (
-            <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-semibold text-primary-foreground">
+            <span
+              className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-semibold text-primary-foreground"
+              aria-hidden
+            >
               {unreadCount > 99 ? "99+" : unreadCount}
             </span>
           )}
@@ -292,6 +295,8 @@ export function NotificationBell() {
       <PopoverContent
         align="end"
         sideOffset={8}
+        role="dialog"
+        aria-label="Notifications"
         className="flex w-[min(100vw-1.5rem,24rem)] flex-col gap-0 overflow-hidden p-0"
       >
         <div className="flex items-center justify-between gap-2 border-b px-3 py-2.5">

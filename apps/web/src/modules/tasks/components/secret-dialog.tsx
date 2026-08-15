@@ -88,8 +88,8 @@ function FieldRow({
           />
           Sensitive
         </label>
-        <Button type="button" variant="ghost" size="icon" className="size-8 shrink-0" onClick={onRemove}>
-          <X className="size-3.5" />
+        <Button type="button" variant="ghost" size="icon" className="size-8 shrink-0" onClick={onRemove} aria-label="Remove field">
+          <X className="size-3.5" aria-hidden />
         </Button>
       </div>
       <div className="flex items-center gap-1.5">
@@ -116,6 +116,7 @@ function FieldRow({
             size="icon"
             className="size-8 shrink-0"
             onClick={() => setShowValue((v) => !v)}
+            aria-label={showValue ? "Hide value" : "Show value"}
           >
             {showValue ? <EyeOff className="size-3.5" /> : <Eye className="size-3.5" />}
           </Button>

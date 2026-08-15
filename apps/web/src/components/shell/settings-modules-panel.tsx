@@ -12,6 +12,7 @@ import { useCallback, useEffect, useState, useTransition } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { solidChipStyle } from "@/lib/color-contrast";
 import { cn } from "@/lib/utils";
 import { MODULE_ICONS, type WorkspaceModuleRow } from "@/modules/shell/module-types";
 import {
@@ -198,8 +199,8 @@ export function SettingsModulesPanel() {
         {rows.map((row) => (
           <li key={row.id} className="flex items-center gap-3 px-4 py-3">
             <span
-              className="flex size-9 shrink-0 items-center justify-center rounded-lg text-xs font-semibold text-white"
-              style={{ backgroundColor: row.color || "#64748b" }}
+              className="flex size-9 shrink-0 items-center justify-center rounded-lg text-xs font-semibold"
+              style={solidChipStyle(row.color || "#64748b")}
             >
               {row.name.slice(0, 1).toUpperCase()}
             </span>

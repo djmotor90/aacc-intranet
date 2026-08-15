@@ -18,6 +18,7 @@ import {
   DropdownMenuContent,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { tintedChipStyle } from "@/lib/color-contrast";
 import { cn } from "@/lib/utils";
 import {
   updateTaskCustomField,
@@ -764,9 +765,7 @@ export function MultiSelectEditCell({
               <span
                 key={o.id}
                 className="rounded px-1.5 py-0.5 text-xs font-medium"
-                style={
-                  o.color ? { backgroundColor: `${o.color}26`, color: o.color } : { backgroundColor: "var(--muted)" }
-                }
+                style={o.color ? tintedChipStyle(o.color) : { backgroundColor: "var(--muted)" }}
               >
                 {o.label}
               </span>

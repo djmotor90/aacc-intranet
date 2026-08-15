@@ -24,6 +24,7 @@ import {
   statuses,
   tags,
   withDbRetry,
+  timeEntries,
   taskAssignees,
   taskGroupAssignees,
   taskChecklistItems,
@@ -35,7 +36,7 @@ import {
   teams,
   users,
 } from "@aitim/db";
-import { and, asc, desc, eq, inArray, isNotNull, isNull, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, ilike, inArray, isNotNull, isNull, or, sql } from "drizzle-orm";
 import { cache } from "react";
 import { getFolderRole, getListRole, getSpaceRole, getUserTeamIds } from "@/lib/rbac";
 import type { SessionUserLike } from "../types";
@@ -671,6 +672,10 @@ export interface TaskWithMeta {
   /** Non-archived, non-trashed direct children — drives the table's expand chevron. */
   subtaskCount: number;
   taskType: TaskTypeMeta | null;
+  /** Completed (stopped) time on this task only. */
+  timeTrackedSeconds: number;
+  /** Running timer on this task, if any. */
+  runningTimer: { userId: string; startedAt: Date } | null;
 }
 
 async function attachAssignees(taskRows: (typeof tasks.$inferSelect)[]): Promise<TaskWithMeta[]> {
@@ -678,7 +683,7 @@ async function attachAssignees(taskRows: (typeof tasks.$inferSelect)[]): Promise
   const taskIds = taskRows.map((t) => t.id);
   const taskTypeIds = [...new Set(taskRows.map((t) => t.taskTypeId).filter((id): id is string => !!id))];
 
-  const [assigneeRows, teamAssigneeRows, tagRows, attachmentRows, subtaskCountRows, taskTypeRows] = await Promise.all([
+  const [assigneeRows, teamAssigneeRows, tagRows, attachmentRows, subtaskCountRows, taskTypeRows, timeSumRows, runningRows] = await Promise.all([
     db
       .select({
         taskId: taskAssignees.taskId,
@@ -742,6 +747,22 @@ async function attachAssignees(taskRows: (typeof tasks.$inferSelect)[]): Promise
           })
           .from(taskTypes)
           .where(inArray(taskTypes.id, taskTypeIds)),
+    db
+      .select({
+        taskId: timeEntries.taskId,
+        seconds: sql<number>`coalesce(sum(${timeEntries.durationSeconds}), 0)::int`.mapWith(Number),
+      })
+      .from(timeEntries)
+      .where(and(inArray(timeEntries.taskId, taskIds), isNotNull(timeEntries.endedAt)))
+      .groupBy(timeEntries.taskId),
+    db
+      .select({
+        taskId: timeEntries.taskId,
+        userId: timeEntries.userId,
+        startedAt: timeEntries.startedAt,
+      })
+      .from(timeEntries)
+      .where(and(inArray(timeEntries.taskId, taskIds), isNull(timeEntries.endedAt))),
   ]);
 
   const taskTypeById = new Map(taskTypeRows.map((r) => [r.id, r]));
@@ -776,6 +797,14 @@ async function attachAssignees(taskRows: (typeof tasks.$inferSelect)[]): Promise
       .filter((r): r is { parentTaskId: string; n: number } => r.parentTaskId !== null)
       .map((r) => [r.parentTaskId, r.n]),
   );
+  const timeByTask = new Map<string, number>();
+  for (const row of timeSumRows) {
+    if (row.taskId) timeByTask.set(row.taskId, row.seconds);
+  }
+  const runningByTask = new Map<string, { userId: string; startedAt: Date }>();
+  for (const row of runningRows) {
+    if (row.taskId) runningByTask.set(row.taskId, { userId: row.userId, startedAt: row.startedAt });
+  }
   return taskRows.map((task) => ({
     task,
     assignees: assigneesByTask.get(task.id) ?? [],
@@ -784,6 +813,8 @@ async function attachAssignees(taskRows: (typeof tasks.$inferSelect)[]): Promise
     hasAttachments: tasksWithAttachments.has(task.id),
     subtaskCount: subtaskCountByTask.get(task.id) ?? 0,
     taskType: task.taskTypeId ? (taskTypeById.get(task.taskTypeId) ?? null) : null,
+    timeTrackedSeconds: timeByTask.get(task.id) ?? 0,
+    runningTimer: runningByTask.get(task.id) ?? null,
   }));
 }
 
@@ -1167,6 +1198,14 @@ function orderSql(groupBy: string | undefined, sort: TaskSortSpec | null | undef
               : sql`${tasks.completedAt} DESC NULLS LAST`,
           );
           break;
+        case "time_tracked": {
+          const tracked = sql`coalesce((
+            SELECT sum(te.duration_seconds) FROM time_entries te
+            WHERE te.task_id = ${tasks.id} AND te.ended_at IS NOT NULL
+          ), 0)`;
+          parts.push(asc ? sql`${tracked} ASC` : sql`${tracked} DESC`);
+          break;
+        }
         default:
           break;
       }
@@ -1801,6 +1840,8 @@ export async function getTaskAttachments(taskId: string) {
       fileName: attachments.fileName,
       mimeType: attachments.mimeType,
       sizeBytes: attachments.sizeBytes,
+      currentVersion: attachments.currentVersion,
+      currentVersionLabel: attachments.currentVersionLabel,
       createdAt: attachments.createdAt,
       uploaderId: attachments.uploaderId,
       uploaderName: users.displayName,
@@ -2037,3 +2078,243 @@ export async function getTrashItemsForUser(
   items.sort((a, b) => b.deletedAt.getTime() - a.deletedAt.getTime());
   return items;
 }
+
+// ─── time tracking ────────────────────────────────────────────────────────────
+
+export interface TimeEntryUser {
+  id: string;
+  displayName: string;
+  photoKey: string | null;
+}
+
+export interface TimeEntryRow {
+  id: string;
+  taskId: string | null;
+  taskNumber: string | null;
+  taskTitle: string | null;
+  taskStatusColor: string | null;
+  listId: string | null;
+  user: TimeEntryUser;
+  startedAt: Date;
+  endedAt: Date | null;
+  durationSeconds: number;
+  notes: string | null;
+  billable: boolean;
+  tags: string[];
+  createdBy: string | null;
+}
+
+export interface TaskTimeSummary {
+  taskSeconds: number;
+  withSubtasksSeconds: number;
+  entries: TimeEntryRow[];
+  running: TimeEntryRow | null;
+}
+
+export interface TimeTaskSuggestion {
+  id: string;
+  number: string;
+  title: string;
+  listName: string;
+  spaceName: string;
+  statusColor: string | null;
+}
+
+function mapTimeEntryRow(row: {
+  id: string;
+  taskId: string | null;
+  taskNumber: string | null;
+  taskTitle: string | null;
+  taskStatusColor: string | null;
+  listId: string | null;
+  userId: string;
+  userName: string;
+  userPhotoKey: string | null;
+  startedAt: Date;
+  endedAt: Date | null;
+  durationSeconds: number;
+  notes: string | null;
+  billable: boolean;
+  tags: unknown;
+  createdBy: string | null;
+}): TimeEntryRow {
+  return {
+    id: row.id,
+    taskId: row.taskId,
+    taskNumber: row.taskNumber,
+    taskTitle: row.taskTitle,
+    taskStatusColor: row.taskStatusColor,
+    listId: row.listId,
+    user: { id: row.userId, displayName: row.userName, photoKey: row.userPhotoKey },
+    startedAt: row.startedAt,
+    endedAt: row.endedAt,
+    durationSeconds: row.durationSeconds,
+    notes: row.notes,
+    billable: row.billable,
+    tags: Array.isArray(row.tags)
+      ? row.tags.filter((t): t is string => typeof t === "string")
+      : [],
+    createdBy: row.createdBy,
+  };
+}
+
+const timeEntrySelect = {
+  id: timeEntries.id,
+  taskId: timeEntries.taskId,
+  taskNumber: tasks.number,
+  taskTitle: tasks.title,
+  taskStatusColor: statuses.color,
+  listId: tasks.listId,
+  userId: timeEntries.userId,
+  userName: users.displayName,
+  userPhotoKey: users.photoKey,
+  startedAt: timeEntries.startedAt,
+  endedAt: timeEntries.endedAt,
+  durationSeconds: timeEntries.durationSeconds,
+  notes: timeEntries.notes,
+  billable: timeEntries.billable,
+  tags: timeEntries.tags,
+  createdBy: timeEntries.createdBy,
+};
+
+export async function getTimeEntriesByIds(ids: string[]): Promise<TimeEntryRow[]> {
+  if (ids.length === 0) return [];
+  const rows = await db
+    .select(timeEntrySelect)
+    .from(timeEntries)
+    .innerJoin(users, eq(timeEntries.userId, users.id))
+    .leftJoin(tasks, eq(timeEntries.taskId, tasks.id))
+    .leftJoin(statuses, eq(tasks.statusId, statuses.id))
+    .where(inArray(timeEntries.id, ids));
+  return rows.map(mapTimeEntryRow);
+}
+
+export async function getTaskTimeSummary(taskId: string): Promise<TaskTimeSummary> {
+  const descendantResult = await db.execute<{ id: string }>(sql`
+    WITH RECURSIVE descendants AS (
+      SELECT id FROM tasks WHERE id = ${taskId}
+      UNION ALL
+      SELECT t.id FROM tasks t
+      INNER JOIN descendants d ON t.parent_task_id = d.id
+      WHERE t.is_archived = false AND t.deleted_at IS NULL
+    )
+    SELECT id FROM descendants
+  `);
+  const descendantIds = descendantResult.rows.map((r) => r.id);
+  const rows = await db
+    .select(timeEntrySelect)
+    .from(timeEntries)
+    .innerJoin(users, eq(timeEntries.userId, users.id))
+    .leftJoin(tasks, eq(timeEntries.taskId, tasks.id))
+    .leftJoin(statuses, eq(tasks.statusId, statuses.id))
+    .where(inArray(timeEntries.taskId, descendantIds))
+    .orderBy(desc(timeEntries.startedAt));
+
+  const entries = rows.map(mapTimeEntryRow);
+  let taskSeconds = 0;
+  let withSubtasksSeconds = 0;
+  let running: TimeEntryRow | null = null;
+  for (const entry of entries) {
+    const seconds = entry.endedAt
+      ? entry.durationSeconds
+      : Math.max(0, Math.floor((Date.now() - entry.startedAt.getTime()) / 1000));
+    withSubtasksSeconds += seconds;
+    if (entry.taskId === taskId) {
+      taskSeconds += seconds;
+      if (!entry.endedAt) running = entry;
+    }
+  }
+  return { taskSeconds, withSubtasksSeconds, entries: entries.filter((e) => e.taskId === taskId), running };
+}
+
+export async function getRunningTimerForUser(userId: string): Promise<TimeEntryRow | null> {
+  const [row] = await db
+    .select(timeEntrySelect)
+    .from(timeEntries)
+    .innerJoin(users, eq(timeEntries.userId, users.id))
+    .leftJoin(tasks, eq(timeEntries.taskId, tasks.id))
+    .leftJoin(statuses, eq(tasks.statusId, statuses.id))
+    .where(and(eq(timeEntries.userId, userId), isNull(timeEntries.endedAt)))
+    .limit(1);
+  return row ? mapTimeEntryRow(row) : null;
+}
+
+export async function getUserTimeEntries(
+  userId: string,
+  from: Date,
+  to: Date,
+): Promise<TimeEntryRow[]> {
+  const rows = await db
+    .select(timeEntrySelect)
+    .from(timeEntries)
+    .innerJoin(users, eq(timeEntries.userId, users.id))
+    .leftJoin(tasks, eq(timeEntries.taskId, tasks.id))
+    .leftJoin(statuses, eq(tasks.statusId, statuses.id))
+    .where(
+      and(
+        eq(timeEntries.userId, userId),
+        sql`${timeEntries.startedAt} >= ${from}`,
+        sql`${timeEntries.startedAt} < ${to}`,
+      ),
+    )
+    .orderBy(desc(timeEntries.startedAt));
+  return rows.map(mapTimeEntryRow);
+}
+
+export async function getUserTodayTrackedSeconds(userId: string, from: Date, to: Date): Promise<number> {
+  const [row] = await db
+    .select({
+      seconds: sql<number>`coalesce(sum(
+        CASE WHEN ${timeEntries.endedAt} IS NULL
+          THEN GREATEST(0, EXTRACT(EPOCH FROM (now() - ${timeEntries.startedAt}))::int)
+          ELSE ${timeEntries.durationSeconds}
+        END
+      ), 0)::int`.mapWith(Number),
+    })
+    .from(timeEntries)
+    .where(
+      and(
+        eq(timeEntries.userId, userId),
+        sql`${timeEntries.startedAt} >= ${from}`,
+        sql`${timeEntries.startedAt} < ${to}`,
+      ),
+    );
+  return row?.seconds ?? 0;
+}
+
+export async function searchTasksForTimeTracking(
+  listIds: string[],
+  query: string,
+  limit = 12,
+): Promise<TimeTaskSuggestion[]> {
+  if (listIds.length === 0) return [];
+  const q = query.trim();
+  const like = q ? `%${q.replaceAll("%", "\\%").replaceAll("_", "\\_")}%` : null;
+  const rows = await db
+    .select({
+      id: tasks.id,
+      number: tasks.number,
+      title: tasks.title,
+      listName: lists.name,
+      spaceName: spaces.name,
+      statusColor: statuses.color,
+    })
+    .from(tasks)
+    .innerJoin(lists, eq(tasks.listId, lists.id))
+    .innerJoin(spaces, eq(lists.spaceId, spaces.id))
+    .innerJoin(statuses, eq(tasks.statusId, statuses.id))
+    .where(
+      and(
+        inArray(tasks.listId, listIds),
+        eq(tasks.isArchived, false),
+        isNull(tasks.deletedAt),
+        like
+          ? or(ilike(tasks.title, like), ilike(tasks.number, like))
+          : sql`true`,
+      ),
+    )
+    .orderBy(desc(tasks.updatedAt))
+    .limit(limit);
+  return rows;
+}
+

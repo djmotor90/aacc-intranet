@@ -801,6 +801,49 @@ html.aitim-block-dragging .ProseMirror .tableWrapper.ProseMirror-selectednode {
   }
   html {
     @apply font-sans;
+    /* WCAG 1.4.4 — do not lock text size; honor browser / OS zoom. */
+    font-size: 100%;
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+  :focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+}
+
+/* WCAG 2.4.1 — skip link is first in tab order, visible only on focus. */
+.skip-link {
+  position: absolute;
+  left: 0.75rem;
+  top: 0.75rem;
+  z-index: 100;
+  transform: translateY(-180%);
+  border-radius: 0.5rem;
+  background: var(--primary);
+  color: var(--primary-foreground);
+  padding: 0.5rem 0.85rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  text-decoration: underline;
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.18);
+}
+.skip-link:focus,
+.skip-link:focus-visible {
+  transform: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html:focus-within {
+    scroll-behavior: auto;
+  }
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }
 

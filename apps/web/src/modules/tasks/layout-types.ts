@@ -9,7 +9,7 @@
  * Task detail layout configuration stored as JSONB on the lists table.
  * Groups contain ordered field IDs. Fields not in any group are hidden.
  *
- * Core field IDs: "status" | "priority" | "due_date" | "start_date" | "assignees" | "tags" | "description"
+ * Core field IDs: "status" | "priority" | "due_date" | "start_date" | "assignees" | "tags" | "time_tracked" | "description"
  *   Read-only auto-managed: "created_at" | "closed_at"
  * Custom field IDs: `cf_${definition.id}`
  */
@@ -44,16 +44,31 @@ export const CORE_FIELDS: CoreField[] = [
   { id: "priority",    label: "Priority" },
   { id: "due_date",    label: "Due date" },
   { id: "start_date",  label: "Start date" },
-  { id: "assignees",   label: "Assignees" },
-  { id: "tags",        label: "Tags" },
-  { id: "description", label: "Description" },
+  { id: "assignees",    label: "Assignees" },
+  { id: "tags",         label: "Tags" },
+  { id: "time_tracked", label: "Time tracked" },
+  { id: "description",  label: "Description" },
   { id: "created_at",  label: "Created date", readonly: true },
   { id: "closed_at",   label: "Closed date",  readonly: true },
 ];
 
 /** IDs of core fields shown in the default layout (excludes readonly/auto-managed fields).
  * Tags render under the title and can also be placed via the layout builder. */
-const DEFAULT_FIELD_IDS = ["status", "priority", "due_date", "start_date", "assignees", "description"];
+const DEFAULT_FIELD_IDS = ["status", "priority", "due_date", "start_date", "assignees", "time_tracked", "description"];
+
+/** Insert a core field into saved layouts that predate it. */
+export function ensureLayoutField(layout: TaskLayout, fieldId: string, afterId?: string): TaskLayout {
+  if (layout.groups.some((g) => g.fields.some((f) => f.id === fieldId))) return layout;
+  const groups = layout.groups.map((group, index) => {
+    if (index !== 0) return group;
+    const fields = [...group.fields];
+    const at = afterId ? fields.findIndex((f) => f.id === afterId) : -1;
+    if (at >= 0) fields.splice(at + 1, 0, { id: fieldId });
+    else fields.push({ id: fieldId });
+    return { ...group, fields };
+  });
+  return { ...layout, groups };
+}
 
 /** Build the default layout used when none has been configured yet. */
 export function defaultLayout(fieldDefs: { id: string }[]): TaskLayout {

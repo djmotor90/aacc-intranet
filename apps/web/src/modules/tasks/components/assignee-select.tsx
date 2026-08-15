@@ -21,6 +21,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { solidChipStyle } from "@/lib/color-contrast";
 import { cn } from "@/lib/utils";
 import { getAssignableTeamsForTask, toggleAssignee, toggleTeamAssignee } from "../actions";
 
@@ -105,9 +106,9 @@ export function AssigneeAvatarStack({
               className={cn(
                 s.avatar,
                 s.ring,
-                "inline-flex items-center justify-center rounded-full text-white ring-background",
+                "inline-flex items-center justify-center rounded-full ring-background",
               )}
-              style={{ backgroundColor: entry.value.color ?? "#007582" }}
+              style={solidChipStyle(entry.value.color ?? "#007582")}
               title={`${entry.value.displayName} Team`}
             >
               <UsersRound className={s.icon} />
@@ -289,7 +290,7 @@ export function AssigneeSelect({
             onSelect={(event) => event.preventDefault()}
             className="gap-2 py-1.5"
           >
-            <span className="flex size-6 items-center justify-center rounded-full text-white" style={{ backgroundColor: team.color ?? "#007582" }}>
+            <span className="flex size-6 items-center justify-center rounded-full" style={solidChipStyle(team.color ?? "#007582")}>
               <UsersRound className="size-3.5" />
             </span>
             <span className="min-w-0 flex-1 truncate">{team.displayName}</span>
@@ -304,7 +305,7 @@ export function AssigneeSelect({
             onSelect={(event) => event.preventDefault()}
             className="gap-2 py-1.5"
           >
-            <span className="flex size-6 items-center justify-center rounded-full text-white" style={{ backgroundColor: team.color ?? "#007582" }}>
+            <span className="flex size-6 items-center justify-center rounded-full" style={solidChipStyle(team.color ?? "#007582")}>
               <UsersRound className="size-3.5" />
             </span>
             <span className="min-w-0 flex-1 truncate">{team.displayName}</span>

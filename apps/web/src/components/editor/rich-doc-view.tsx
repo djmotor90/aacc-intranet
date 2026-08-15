@@ -11,6 +11,7 @@ import type { JSONContent } from "@tiptap/react";
 import type { ReactNode } from "react";
 import { useMemo } from "react";
 import { linkifyJsonContent } from "@/lib/linkify";
+import { ensureContrast, onColorText } from "@/lib/color-contrast";
 import { cn } from "@/lib/utils";
 import { isImageAttachmentMeta, storedToDoc, type StoredRichDoc } from "./doc-utils";
 
@@ -74,7 +75,7 @@ function applyMarks(text: string, marks: Mark[] | undefined, key: string): React
           <mark
             key={`${key}-h`}
             className="rounded-sm px-0.5"
-            style={color ? { backgroundColor: color } : undefined}
+            style={color ? { backgroundColor: color, color: onColorText(color) } : undefined}
           >
             {node}
           </mark>
@@ -84,7 +85,7 @@ function applyMarks(text: string, marks: Mark[] | undefined, key: string): React
       case "textStyle": {
         const color = mark.attrs?.color ? String(mark.attrs.color) : undefined;
         node = (
-          <span key={`${key}-ts`} style={color ? { color } : undefined}>
+          <span key={`${key}-ts`} style={color ? { color: ensureContrast(color, "#ffffff") } : undefined}>
             {node}
           </span>
         );

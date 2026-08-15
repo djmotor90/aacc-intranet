@@ -18,6 +18,8 @@ export type AttachmentRow = {
   fileName: string;
   mimeType: string;
   sizeBytes: number;
+  currentVersion: number;
+  currentVersionLabel: string | null;
   uploaderId: string | null;
   uploaderName: string | null;
 };
@@ -72,7 +74,7 @@ export function AttachmentList({
             {a.fileName}
           </a>
           <span className="shrink-0 text-xs text-muted-foreground">
-            {formatBytes(a.sizeBytes)} · {a.uploaderName ?? "—"}
+            {a.currentVersionLabel ?? `Revision ${a.currentVersion}`} · {formatBytes(a.sizeBytes)} · {a.uploaderName ?? "—"}
           </span>
           {canDelete(a) && (
             <Button

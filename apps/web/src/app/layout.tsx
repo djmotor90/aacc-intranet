@@ -8,6 +8,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { CODE_OWNERSHIP, ownershipBanner } from "@aitim/shared";
+import { LiveAnnouncer, SkipLink } from "@/components/a11y";
 import { ThemeProvider } from "@/components/theme-provider";
 import { Toaster } from "@/components/ui/sonner";
 import "./globals.css";
@@ -94,6 +95,8 @@ export default function RootLayout({
           {ownershipBanner()}
         </span>
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
+          <SkipLink />
+          <LiveAnnouncer />
           {children}
           <Toaster />
         </ThemeProvider>

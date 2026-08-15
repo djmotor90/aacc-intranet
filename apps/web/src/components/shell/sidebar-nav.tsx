@@ -349,7 +349,7 @@ export function SidebarNav({
 
   return (
     <DndContext id="sidebar-tree-dnd" sensors={sensors} onDragStart={onDragStart} onDragEnd={onDragEnd}>
-      <nav className="flex flex-col gap-1">
+      <nav aria-label="Main" className="flex flex-col gap-1">
         {items.map((item) => {
           const Icon = ICONS[item.icon];
           const isWorkspaceApp = Boolean(item.moduleId);
@@ -392,6 +392,7 @@ export function SidebarNav({
                   href={item.href}
                   title={item.label}
                   aria-label={item.label}
+                  aria-current={isActive ? "page" : undefined}
                   className={cn(
                     "relative flex size-9 items-center justify-center rounded-md transition-colors",
                     isActive
@@ -421,6 +422,7 @@ export function SidebarNav({
             >
               <Link
                 href={item.href}
+                aria-current={isActive ? "page" : undefined}
                 className="flex min-w-0 flex-1 items-center gap-2 px-3 py-2"
               >
                 <Icon className="size-4 shrink-0" />

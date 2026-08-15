@@ -37,6 +37,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { solidChipStyle } from "@/lib/color-contrast";
 import { cn } from "@/lib/utils";
 import type { TaskFilterCondition, TaskWithMeta } from "../queries";
 import {
@@ -60,6 +61,7 @@ import {
   TitleEditCell,
 } from "./editable-cells";
 import { PRIORITY_CARD_STYLES, PRIORITY_LABELS } from "./task-card";
+import { TimeTrackedCell } from "./time-tracked-field";
 import { TaskStatusPicker } from "./task-status-circle";
 import {
   COL_MIN,
@@ -85,8 +87,9 @@ const BASE_COLUMNS: ColumnDef[] = [
   { id: "tags",       label: "Tags",         width: 180, minWidth: COL_MIN },
   { id: "due",        label: "Due date",     width: 140, minWidth: COL_MIN },
   { id: "start_date", label: "Start date",   width: 140, minWidth: COL_MIN },
-  { id: "assignees",  label: "Assignees",    width: 150, minWidth: COL_MIN },
-  { id: "created_at", label: "Created date", width: 160, minWidth: COL_MIN },
+  { id: "assignees",     label: "Assignees",    width: 150, minWidth: COL_MIN },
+  { id: "time_tracked",  label: "Time tracked", width: 150, minWidth: COL_MIN },
+  { id: "created_at",    label: "Created date", width: 160, minWidth: COL_MIN },
   { id: "closed_at",  label: "Closed date",  width: 160, minWidth: COL_MIN },
 ];
 const BASE_COL_MAP = new Map(BASE_COLUMNS.map((c) => [c.id, c]));
@@ -95,7 +98,7 @@ const HIDEABLE_BASE_COLS = BASE_COLUMNS.filter((c) => !ALWAYS_VISIBLE.has(c.id))
 const DEFAULT_HIDDEN_COLS = ["created_at", "closed_at"];
 
 /** Columns whose value is a single settable field — pasteable / fillable. */
-const READONLY_COLS = new Set(["number", "created_at", "closed_at"]);
+const READONLY_COLS = new Set(["number", "created_at", "closed_at", "time_tracked"]);
 /** Relational (many-to-many) columns — editable by click, not by paste/fill. */
 const RELATIONAL_COLS = new Set(["tags", "assignees"]);
 
@@ -135,6 +138,7 @@ function getCellRaw(colId: string, item: TaskWithMeta): unknown {
     case "closed_at": return task.completedAt;
     case "tags": return item.tags.map((t) => t.id);
     case "assignees": return item.assignees.map((a) => a.id);
+    case "time_tracked": return item.timeTrackedSeconds;
     default: return undefined;
   }
 }
@@ -165,6 +169,7 @@ function getCellDisplayText(
     case "closed_at": { const s = fmtShortDate(task.completedAt); return s === "—" ? "" : s; }
     case "tags": return item.tags.map((t) => t.name).join(", ");
     case "assignees": return item.assignees.map((a) => a.displayName).join(", ");
+    case "time_tracked": return item.timeTrackedSeconds ? String(item.timeTrackedSeconds) : "";
     default: return "";
   }
 }
@@ -304,6 +309,7 @@ export function TaskGrid({
   showClosed = false,
   spaceTags = [],
   viewId,
+  currentUserId,
 }: {
   items: TaskWithMeta[];
   totalCount: number;
@@ -317,6 +323,7 @@ export function TaskGrid({
   showClosed?: boolean;
   spaceTags?: TagOption[];
   viewId?: string;
+  currentUserId: string;
 }) {
   const statusById = useMemo(() => new Map(statuses.map((s) => [s.id, s])), [statuses]);
   const fieldDefsById = useMemo(() => new Map(fieldDefs.map((d) => [d.id, d])), [fieldDefs]);
@@ -830,7 +837,9 @@ export function TaskGrid({
       >
         <div
           ref={setScrollEl}
-          className="h-full min-h-0 overflow-auto overscroll-contain [scrollbar-gutter:stable]"
+          tabIndex={0}
+          aria-label="Task grid"
+          className="h-full min-h-0 overflow-auto overscroll-contain [scrollbar-gutter:stable] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           style={{ WebkitOverflowScrolling: "touch", willChange: "scroll-position" }}
         >
           <table className="w-full caption-bottom table-fixed border-collapse text-sm" style={{ width: totalWidth }}>
@@ -925,6 +934,7 @@ export function TaskGrid({
                     onPatchTask={patchTask}
                     onPatchCustomField={patchCustomField}
                     onMouseDownCell={(col, e) => { beginSelect(vRow.index, col, e.shiftKey); }}
+                    currentUserId={currentUserId}
                   />
                 );
               })}
@@ -998,6 +1008,7 @@ function GridRow({
   onPatchTask,
   onPatchCustomField,
   onMouseDownCell,
+  currentUserId,
 }: {
   row: number;
   item: TaskWithMeta;
@@ -1015,6 +1026,7 @@ function GridRow({
   onPatchTask: (taskId: string, patch: Partial<TaskWithMeta["task"]>) => void;
   onPatchCustomField: (taskId: string, defId: string, value: unknown) => void;
   onMouseDownCell: (col: number, e: React.MouseEvent) => void;
+  currentUserId: string;
 }) {
   const task = item.task;
   const cf = (task.customFields ?? {}) as Record<string, unknown>;
@@ -1091,7 +1103,7 @@ function GridRow({
         return (
           <TableCell key={col.id} {...cellProps}>
             {st ? (
-              <TableChip style={{ backgroundColor: st.color, color: "#fff" }} title={st.name}>
+              <TableChip style={solidChipStyle(st.color)} title={st.name}>
                 <span className="size-1.5 shrink-0 rounded-full bg-white/90" />
                 <span className="truncate">{st.name}</span>
               </TableChip>
@@ -1168,6 +1180,27 @@ function GridRow({
             {item.tags.length > 0 ? <TagChips tags={item.tags} /> : <span className="text-muted-foreground">—</span>}
           </TableCell>
         );
+
+      case "time_tracked": {
+        const me = activeUsers.find((u) => u.id === currentUserId) ?? {
+          id: currentUserId,
+          displayName: "Me",
+          photoKey: null,
+        };
+        return (
+          <TableCell key={col.id} {...cellProps} onClick={(e) => e.stopPropagation()}>
+            <TimeTrackedCell
+              taskId={task.id}
+              completedSeconds={item.timeTrackedSeconds ?? 0}
+              runningStartedAt={item.runningTimer?.startedAt ?? null}
+              runningUserId={item.runningTimer?.userId ?? null}
+              canEdit={canEdit}
+              currentUser={me}
+              users={activeUsers}
+            />
+          </TableCell>
+        );
+      }
 
       case "assignees":
         return (

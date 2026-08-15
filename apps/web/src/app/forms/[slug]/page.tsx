@@ -11,6 +11,7 @@ import { Suspense } from "react";
 import { PublicFormClient } from "@/modules/tasks/components/public-form-client";
 import { parseFormTheme } from "@/modules/tasks/lib/form-types";
 import { getFormBySlug } from "@/modules/tasks/queries";
+import { MAIN_CONTENT_ID } from "@/components/a11y";
 import { cn } from "@/lib/utils";
 
 export async function generateMetadata(props: {
@@ -45,8 +46,10 @@ export default async function PublicFormPage(props: {
     (Array.isArray(sp.embed) && (sp.embed[0] === "1" || sp.embed[0] === "true"));
 
   return (
-    <div
-      className={cn("min-h-screen", embed && "min-h-0")}
+    <main
+      id={MAIN_CONTENT_ID}
+      tabIndex={-1}
+      className={cn("min-h-screen outline-none", embed && "min-h-0")}
       style={{
         background: embed ? "transparent" : theme.backgroundColor,
         color: theme.textColor,
@@ -73,6 +76,6 @@ export default async function PublicFormPage(props: {
           />
         </Suspense>
       </div>
-    </div>
+    </main>
   );
 }

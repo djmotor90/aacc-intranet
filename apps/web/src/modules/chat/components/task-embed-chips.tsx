@@ -9,6 +9,7 @@
 
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
+import { tintedChipStyle } from "@/lib/color-contrast";
 import { cn } from "@/lib/utils";
 import type { TaskListEmbed } from "../lib/types";
 
@@ -29,11 +30,7 @@ export function TaskEmbedChips({ embed }: { embed: TaskListEmbed }) {
             <Badge
               variant="secondary"
               className="h-5 px-1.5 text-[10px] uppercase"
-              style={
-                item.statusColor
-                  ? { backgroundColor: `${item.statusColor}22`, color: item.statusColor }
-                  : undefined
-              }
+              style={item.statusColor ? tintedChipStyle(item.statusColor) : undefined}
             >
               {item.status}
             </Badge>

@@ -8,6 +8,7 @@
  * License: Proprietary. All rights reserved. See LICENSE / COPYRIGHT.
  */
 import {
+  attachmentVersions,
   attachments,
   customFieldDefinitions,
   db,
@@ -861,18 +862,32 @@ export async function submitPublicForm(params: {
           `Could not store file "${safeName}". Check storage configuration (S3).`,
         );
       }
-      const [att] = await db
-        .insert(attachments)
-        .values({
-          taskId,
-          fileName: safeName,
+      const [att] = await db.transaction(async (tx) => {
+        const [inserted] = await tx
+          .insert(attachments)
+          .values({
+            taskId,
+            fileName: safeName,
+            objectKey,
+            mimeType,
+            sizeBytes: f.buffer.length,
+            checksumSha256: checksum,
+            uploaderId: null,
+          })
+          .returning({ id: attachments.id });
+        if (!inserted) return [];
+        await tx.insert(attachmentVersions).values({
+          attachmentId: inserted.id,
+          versionNumber: 1,
+          uploaderId: null,
           objectKey,
+          fileName: safeName,
           mimeType,
           sizeBytes: f.buffer.length,
           checksumSha256: checksum,
-          uploaderId: null,
-        })
-        .returning({ id: attachments.id });
+        });
+        return [inserted];
+      });
       if (!att) throw new Error(`Failed to save attachment "${safeName}"`);
       await logActivity(db, {
         spaceId: space.id,

@@ -12,6 +12,7 @@ import { AppShell } from "@/components/shell/app-shell";
 import { NotificationBell } from "@/components/shell/notification-bell";
 import { UserSettingsMenu } from "@/components/shell/user-settings-menu";
 import { WhatsNewButton } from "@/components/shell/whats-new-button";
+import { TrackTimeButton } from "@/modules/tasks/components/track-time-button";
 import { signOut } from "@/lib/auth";
 import { requireUser, userOwnsAnySpace } from "@/lib/rbac";
 import { navItemsFor, workspaceModulesToNavItems } from "@/modules/registry";
@@ -57,6 +58,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       isAdmin={isAdmin}
       header={
         <div className="flex items-center gap-1">
+          <TrackTimeButton />
           <WhatsNewButton isAdmin={isAdmin} />
           <NotificationBell />
           <Suspense fallback={null}>

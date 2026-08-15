@@ -765,8 +765,8 @@ export function PageEditorClient({
 
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button type="button" size="icon" variant="ghost" className="size-8">
-                <MoreHorizontal className="size-4" />
+              <Button type="button" size="icon" variant="ghost" className="size-8" aria-label="Page actions">
+                <MoreHorizontal className="size-4" aria-hidden />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">

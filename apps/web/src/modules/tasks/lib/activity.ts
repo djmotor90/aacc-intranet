@@ -48,6 +48,8 @@ export interface ActivityEntry {
     | "comment.replied"
     | "comment.edited"
     | "attachment.added"
+    | "attachment.version_added"
+    | "attachment.version_labeled"
     | "attachment.removed"
     | "attachment.moved"
     | "attachment_folder.created"
@@ -100,7 +102,12 @@ export interface ActivityEntry {
     | "list.secret_viewer_added"
     | "list.secret_viewer_removed"
     | "form.created"
-    | "form.updated";
+    | "form.updated"
+    | "time.logged"
+    | "time.started"
+    | "time.stopped"
+    | "time.updated"
+    | "time.deleted";
   payload?: Record<string, unknown>;
 }
 

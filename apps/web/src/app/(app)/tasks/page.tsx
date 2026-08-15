@@ -47,7 +47,7 @@ export default async function TasksHomePage() {
             <Link key={s.id} href={`/tasks/${s.slug}`}>
               <Card className="transition-colors hover:bg-muted/50">
                 <CardHeader>
-                  <CardTitle style={s.color ? { color: s.color } : undefined}>{s.name}</CardTitle>
+                  <CardTitle>{s.name}</CardTitle>
                   <CardDescription>Space · {s.taskPrefix}</CardDescription>
                 </CardHeader>
               </Card>

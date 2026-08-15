@@ -70,6 +70,7 @@ import {
   PRIORITY_LABELS,
 } from "./task-card";
 import { TaskActionsMenu, TaskContextMenu } from "./task-context-menu";
+import { TimeTrackedCell } from "./time-tracked-field";
 import { TaskStatusPicker } from "./task-status-circle";
 import {
   TaskTableColumnMenu,
@@ -208,8 +209,9 @@ const BASE_COLUMNS = [
   { id: "tags",       label: "Tags",         width: 180, minWidth: COL_MIN },
   { id: "due",        label: "Due date",     width: 140, minWidth: COL_MIN },
   { id: "start_date", label: "Start date",   width: 140, minWidth: COL_MIN },
-  { id: "assignees",  label: "Assignees",    width: 150, minWidth: COL_MIN },
-  { id: "created_at", label: "Created date", width: 160, minWidth: COL_MIN },
+  { id: "assignees",     label: "Assignees",    width: 150, minWidth: COL_MIN },
+  { id: "time_tracked",  label: "Time tracked", width: 150, minWidth: COL_MIN },
+  { id: "created_at",    label: "Created date", width: 160, minWidth: COL_MIN },
   { id: "closed_at",  label: "Closed date",  width: 160, minWidth: COL_MIN },
 ];
 const BASE_COL_MAP = new Map(BASE_COLUMNS.map((c) => [c.id, c]));
@@ -235,6 +237,7 @@ const SORTABLE_BASE = new Set([
   "start_date",
   "created_at",
   "closed_at",
+  "time_tracked",
 ]);
 /** Native columns that can group rows (matches filter bar). */
 const GROUPABLE_BASE = new Set(["status", "priority"]);
@@ -282,6 +285,7 @@ interface TaskRowProps {
   taskTypes: TaskTypeMeta[];
   onPatchTask: (taskId: string, patch: Partial<TaskWithMeta["task"]>) => void;
   onPatchCustomField: (taskId: string, defId: string, value: unknown) => void;
+  currentUserId: string;
   /** Nesting depth for subtask rows — 0 for top-level tasks. */
   depth?: number;
   /** Direct, non-archived child count — drives the expand chevron. */
@@ -313,6 +317,7 @@ const TaskRow = memo(function TaskRow({
   taskTypes,
   onPatchTask,
   onPatchCustomField,
+  currentUserId,
   depth = 0,
   subtaskCount,
   expanded,
@@ -703,6 +708,27 @@ const TaskRow = memo(function TaskRow({
           </TableCell>
         );
 
+      case "time_tracked": {
+        const me = activeUsers.find((u) => u.id === currentUserId) ?? {
+          id: currentUserId,
+          displayName: "Me",
+          photoKey: null,
+        };
+        return (
+          <TableCell key={colId} className="p-0.5" onClick={(e) => e.stopPropagation()}>
+            <TimeTrackedCell
+              taskId={task.id}
+              completedSeconds={item.timeTrackedSeconds ?? 0}
+              runningStartedAt={item.runningTimer?.startedAt ?? null}
+              runningUserId={item.runningTimer?.userId ?? null}
+              canEdit={canEdit}
+              currentUser={me}
+              users={activeUsers}
+            />
+          </TableCell>
+        );
+      }
+
       case "assignees":
         // Always show the avatar stack; the picker opens from the stack itself.
         return (
@@ -882,6 +908,7 @@ export function TaskTable({
   spaceTags = [],
   viewId,
   onGroupByChange,
+  currentUserId,
 }: {
   /** First page of tasks (server-filtered and ordered). */
   items: TaskWithMeta[];
@@ -912,6 +939,7 @@ export function TaskTable({
   viewId?: string;
   /** Soft group-by (no full navigation). */
   onGroupByChange?: (value: string) => void;
+  currentUserId: string;
 }) {
   const statusById = useMemo(() => new Map(statuses.map((s) => [s.id, s])), [statuses]);
   const router = useRouter();
@@ -1489,6 +1517,7 @@ export function TaskTable({
         taskTypes={taskTypes}
         onPatchTask={opts.onPatchTask ?? patchTask}
         onPatchCustomField={opts.onPatchCustomField ?? patchCustomField}
+        currentUserId={currentUserId}
         depth={opts.depth ?? 0}
         subtaskCount={item.subtaskCount}
         expanded={expandedTaskIds.has(item.task.id)}
@@ -1797,7 +1826,9 @@ export function TaskTable({
       */}
       <div
         ref={setScrollEl}
-        className="min-h-0 flex-1 overflow-auto overscroll-contain [scrollbar-gutter:stable]"
+        tabIndex={0}
+        aria-label="Task table"
+        className="min-h-0 flex-1 overflow-auto overscroll-contain [scrollbar-gutter:stable] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         style={{
           WebkitOverflowScrolling: "touch",
           // Hint the browser this surface is scroll-driven (compositor-friendly).

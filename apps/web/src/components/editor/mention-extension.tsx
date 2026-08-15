@@ -18,6 +18,7 @@ import {
   useImperativeHandle,
   useState,
 } from "react";
+import { solidChipStyle } from "@/lib/color-contrast";
 import { cn } from "@/lib/utils";
 
 export const mentionPluginKey = new PluginKey("mentionSuggestion");
@@ -98,7 +99,7 @@ const MentionList = forwardRef<
             >
               <span
                 className="flex size-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary"
-                style={item.kind === "team" ? { backgroundColor: item.color ?? "#007582", color: "white" } : undefined}
+                style={item.kind === "team" ? solidChipStyle(item.color ?? "#007582") : undefined}
               >
                 {item.kind === "team" ? (
                   <UsersRound className="size-4" />

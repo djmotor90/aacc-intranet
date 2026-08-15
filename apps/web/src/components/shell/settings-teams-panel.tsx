@@ -11,6 +11,7 @@ import { Pencil, Plus, Search, Trash2, UsersRound, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
 import { toast } from "sonner";
 import { UserAvatar } from "@/components/shell/user-avatar";
+import { solidChipStyle } from "@/lib/color-contrast";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -56,8 +57,8 @@ function TeamMark({ team }: { team: AdminGroupRow }) {
     .toUpperCase();
   return (
     <span
-      className="flex size-9 shrink-0 items-center justify-center rounded-xl text-xs font-bold text-white shadow-sm"
-      style={{ backgroundColor: team.color ?? "#007582" }}
+      className="flex size-9 shrink-0 items-center justify-center rounded-xl text-xs font-bold shadow-sm"
+      style={solidChipStyle(team.color ?? "#007582")}
       aria-hidden
     >
       {team.icon || initials || "T"}

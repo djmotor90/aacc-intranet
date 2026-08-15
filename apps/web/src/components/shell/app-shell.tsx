@@ -19,6 +19,7 @@ import {
   type PointerEvent as ReactPointerEvent,
   type ReactNode,
 } from "react";
+import { MAIN_CONTENT_ID } from "@/components/a11y";
 import { cn } from "@/lib/utils";
 import type { NavItem } from "@/modules/types";
 import { PresenceHeartbeat } from "./presence-heartbeat";
@@ -182,6 +183,7 @@ export function AppShell({
         )}
         style={{ width: railWidth }}
         data-collapsed={collapsed || undefined}
+        aria-label="Workspace"
       >
         {/* Brand */}
         <div
@@ -194,7 +196,7 @@ export function AppShell({
           <Link
             href="/"
             className={cn(
-              "font-semibold tracking-tight",
+              "rounded-md font-semibold tracking-tight focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring",
               collapsed ? "text-base" : "w-full",
             )}
             title="AACC Hub"
@@ -202,6 +204,7 @@ export function AppShell({
             {collapsed ? (
               <span className="flex size-8 items-center justify-center rounded-md bg-primary text-sm font-bold text-primary-foreground">
                 A
+                <span className="sr-only">AACC Hub home</span>
               </span>
             ) : (
               <span className="flex w-full flex-col items-center gap-1.5">
@@ -215,7 +218,7 @@ export function AppShell({
                     priority
                   />
                 </span>
-                <span className="text-[10px] font-bold uppercase tracking-[0.24em] text-primary">
+                <span className="text-xs font-bold uppercase tracking-[0.2em] text-primary">
                   AACC Hub
                 </span>
               </span>
@@ -244,13 +247,33 @@ export function AppShell({
             role="separator"
             aria-orientation="vertical"
             aria-label="Resize sidebar"
+            aria-valuemin={MIN_EXPANDED}
+            aria-valuemax={MAX_PX_CAP}
+            aria-valuenow={Math.round(width)}
+            tabIndex={0}
             onPointerDown={onResizePointerDown}
             onPointerMove={onResizePointerMove}
             onPointerUp={onResizePointerUp}
             onPointerCancel={onResizePointerUp}
+            onKeyDown={(e) => {
+              if (e.key === "ArrowLeft") {
+                e.preventDefault();
+                setWidth((w) => Math.max(MIN_EXPANDED, w - 16));
+              } else if (e.key === "ArrowRight") {
+                e.preventDefault();
+                setWidth((w) => Math.min(maxWidthPx(), w + 16));
+              } else if (e.key === "Home") {
+                e.preventDefault();
+                setWidth(MIN_EXPANDED);
+              } else if (e.key === "End") {
+                e.preventDefault();
+                setWidth(maxWidthPx());
+              }
+            }}
             className={cn(
               "absolute bottom-12 top-0 right-0 z-20 w-1.5 translate-x-1/2 cursor-col-resize touch-none",
               "hover:bg-primary/25 active:bg-primary/35",
+              "focus-visible:bg-primary/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring",
               dragging && "bg-primary/35",
             )}
           />
@@ -289,12 +312,17 @@ export function AppShell({
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-        <header className="flex h-14 shrink-0 items-center justify-end border-b border-t-[3px] border-t-primary bg-background px-4 sm:px-6">
+        <header
+          className="flex min-h-14 shrink-0 items-center justify-end border-b border-t-[3px] border-t-primary bg-background px-4 py-1 sm:px-6"
+          aria-label="Application"
+        >
           {header}
         </header>
         <main
+          id={MAIN_CONTENT_ID}
+          tabIndex={-1}
           className={cn(
-            "min-h-0 min-w-0 flex-1 bg-background",
+            "min-h-0 min-w-0 flex-1 bg-background outline-none",
             fullBleedMain
               ? "flex flex-col overflow-hidden p-0"
               : "overflow-x-auto overflow-y-auto p-6",

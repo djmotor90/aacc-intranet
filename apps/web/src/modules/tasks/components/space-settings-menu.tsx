@@ -56,8 +56,8 @@ export function SpaceSettingsMenu({
     <>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button variant="outline" size="sm">
-            <Settings className="size-4" />
+          <Button variant="outline" size="sm" aria-label="Space settings">
+            <Settings className="size-4" aria-hidden />
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">

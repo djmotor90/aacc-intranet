@@ -28,6 +28,7 @@ import { type MouseEvent, useMemo, useState, useTransition } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { tintedChipStyle } from "@/lib/color-contrast";
 import { cn } from "@/lib/utils";
 import { deleteSecret, deleteSecretCategory, revealSecretField } from "../actions";
 import type { RedactedSecretField, SecretRow } from "../lib/secret-fields";
@@ -298,7 +299,7 @@ export function SecretsPanel({
                     >
                       <span
                         className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-md"
-                        style={{ backgroundColor: `${s.categoryColor}1f`, color: s.categoryColor }}
+                        style={tintedChipStyle(s.categoryColor)}
                       >
                         <CategoryIcon name={s.categoryName} />
                       </span>
@@ -307,7 +308,7 @@ export function SecretsPanel({
                           <span className="truncate text-sm font-semibold">{s.title}</span>
                           <span
                             className="inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium"
-                            style={{ backgroundColor: `${s.categoryColor}1f`, color: s.categoryColor }}
+                            style={tintedChipStyle(s.categoryColor)}
                           >
                             {s.categoryName}
                           </span>

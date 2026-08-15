@@ -149,11 +149,11 @@ export default async function ListPage(props: {
               </h1>
             </div>
             {isSpaceOwner && (
-              <Link href={`/tasks/${space.slug}/${list.slug}/settings`} aria-label="List settings">
-                <Button variant="outline" size="sm">
-                  <Settings className="size-4" />
-                </Button>
-              </Link>
+              <Button asChild variant="outline" size="sm">
+                <Link href={`/tasks/${space.slug}/${list.slug}/settings`} aria-label="List settings">
+                  <Settings className="size-4" aria-hidden />
+                </Link>
+              </Button>
             )}
           </div>
           <Suspense fallback={<Skeleton className="h-8 w-64" />}>
@@ -257,11 +257,11 @@ export default async function ListPage(props: {
 
           <div className="flex shrink-0 items-center gap-2 pt-0.5">
             {isSpaceOwner && (
-              <Link href={`/tasks/${space.slug}/${list.slug}/settings`} aria-label="List settings">
-                <Button variant="outline" size="sm">
-                  <Settings className="size-4" />
-                </Button>
-              </Link>
+              <Button asChild variant="outline" size="sm">
+                <Link href={`/tasks/${space.slug}/${list.slug}/settings`} aria-label="List settings">
+                  <Settings className="size-4" aria-hidden />
+                </Link>
+              </Button>
             )}
             {canEdit && (
               <NewTaskDialog
@@ -333,6 +333,7 @@ export default async function ListPage(props: {
           showClosed={showClosed}
           canEdit={canEdit}
           initialColumnOrder={columnOrder}
+          currentUserId={user.id}
         />
       ) : (
         <ListTasksShell
@@ -353,6 +354,7 @@ export default async function ListPage(props: {
           showClosed={showClosed}
           canEdit={canEdit}
           initialColumnOrder={columnOrder}
+          currentUserId={user.id}
         />
       )}
     </div>

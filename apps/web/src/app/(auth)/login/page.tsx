@@ -8,7 +8,9 @@
 import type { Metadata } from "next";
 import Image from "next/image";
 import { redirect } from "next/navigation";
+import { MAIN_CONTENT_ID } from "@/components/a11y";
 import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { auth, signIn } from "@/lib/auth";
@@ -35,7 +37,11 @@ export default async function LoginPage() {
   );
 
   return (
-    <main className="relative flex min-h-svh items-center justify-center overflow-hidden bg-brand-aqua/35 p-4 dark:bg-background">
+    <main
+      id={MAIN_CONTENT_ID}
+      tabIndex={-1}
+      className="relative flex min-h-svh items-center justify-center overflow-hidden bg-brand-aqua/35 p-4 outline-none dark:bg-background"
+    >
       <div className="pointer-events-none absolute -left-24 -top-24 size-80 rounded-full bg-primary/15 blur-3xl" />
       <div className="pointer-events-none absolute -bottom-28 -right-16 size-80 rounded-full bg-brand-orange/15 blur-3xl" />
       <div className="absolute inset-x-0 top-0 h-2 bg-primary">
@@ -95,19 +101,27 @@ export default async function LoginPage() {
                 });
               }}
             >
-              <Input
-                name="email"
-                type="email"
-                autoComplete="username"
-                placeholder="you@aacc.edu"
-                required
-              />
-              <Input
-                name="password"
-                type="password"
-                autoComplete="current-password"
-                placeholder="Password"
-              />
+              <div className="grid gap-1.5">
+                <Label htmlFor="login-email">Email</Label>
+                <Input
+                  id="login-email"
+                  name="email"
+                  type="email"
+                  autoComplete="username"
+                  placeholder="you@aacc.edu"
+                  required
+                />
+              </div>
+              <div className="grid gap-1.5">
+                <Label htmlFor="login-password">Password</Label>
+                <Input
+                  id="login-password"
+                  name="password"
+                  type="password"
+                  autoComplete="current-password"
+                  placeholder="Password"
+                />
+              </div>
               <Button type="submit" variant={entraEnabled ? "secondary" : "default"} className="w-full">
                 Sign in
               </Button>

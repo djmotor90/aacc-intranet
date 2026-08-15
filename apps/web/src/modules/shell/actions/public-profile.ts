@@ -101,6 +101,10 @@ function summarizeVerb(verb: string, payload: unknown): string {
       return "edited a comment";
     case "attachment.added":
       return "added an attachment";
+    case "attachment.version_added":
+      return `uploaded attachment version ${p.versionLabel ?? p.versionNumber ?? ""}`.trim();
+    case "attachment.version_labeled":
+      return `set an attachment version to ${p.versionLabel ?? "a new label"}`;
     case "task.archived":
       return "archived a task";
     case "task.deleted":

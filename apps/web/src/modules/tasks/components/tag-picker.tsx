@@ -13,6 +13,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { solidChipStyle } from "@/lib/color-contrast";
 import { cn } from "@/lib/utils";
 import { createAndAddTag, toggleTaskTag } from "../actions";
 
@@ -48,10 +49,10 @@ function TagChip({
   return (
     <span
       className={cn(
-        "inline-flex max-w-full items-center gap-1 rounded-full font-medium text-white",
+        "inline-flex max-w-full items-center gap-1 rounded-full font-medium",
         size === "sm" ? "px-1.5 py-0.5 text-[10px]" : "px-2 py-0.5 text-xs",
       )}
-      style={{ backgroundColor: tag.color }}
+      style={solidChipStyle(tag.color)}
       title={tag.name}
     >
       <span className="truncate">{tag.name}</span>
@@ -244,6 +245,7 @@ export function TagPicker({
         <Input
           autoFocus
           placeholder="Search or create…"
+          aria-label="Search or create tags"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={(e) => {

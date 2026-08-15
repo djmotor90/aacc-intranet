@@ -11,6 +11,7 @@ import {
   CalendarClock,
   CalendarPlus,
   CheckCircle2,
+  Clock,
   Flag,
   Lock,
   Paperclip,
@@ -27,6 +28,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { tintedChipStyle } from "@/lib/color-contrast";
 import { cn } from "@/lib/utils";
 import { canViewSecrets, getListRole, requireUser } from "@/lib/rbac";
 import { archiveTask, updateTaskCore } from "@/modules/tasks/actions";
@@ -44,12 +46,13 @@ import { SubtasksCardHeader, SubtasksPanel } from "@/modules/tasks/components/su
 import { ChecklistCardHeader, ChecklistPanel } from "@/modules/tasks/components/checklist-panel";
 import { DeliveryTimeline } from "@/modules/tasks/components/delivery-timeline";
 import { TagPicker } from "@/modules/tasks/components/tag-picker";
+import { TimeTrackedField } from "@/modules/tasks/components/time-tracked-field";
 import { TaskDetailShell } from "@/modules/tasks/components/task-detail-shell";
 import { TaskTypeSelect } from "@/modules/tasks/components/task-type-select";
 import { RichTextViewer } from "@/components/editor/rich-text-editor";
 import type { StoredRichDoc } from "@/components/editor/doc-utils";
 import { TaskDescriptionEditor } from "@/modules/tasks/components/task-description-editor";
-import { defaultLayout, type TaskLayout } from "@/modules/tasks/layout-types";
+import { defaultLayout, ensureLayoutField, type TaskLayout } from "@/modules/tasks/layout-types";
 import { getSecretsForTask } from "@/modules/tasks/lib/secrets";
 import {
   getActiveUsers,
@@ -69,6 +72,7 @@ import {
   getTaskComments,
   getTaskParentChain,
   getTaskProgress,
+  getTaskTimeSummary,
   getTaskTypesForSpace,
   getUsersWithListAccess,
   getWritableListsForUser,
@@ -89,6 +93,7 @@ const FIELD_ACCENTS: Record<string, string> = {
   closed_at: "bg-slate-100 text-slate-600 dark:bg-slate-900 dark:text-slate-300",
   assignees: "bg-purple-100 text-purple-700 dark:bg-purple-950 dark:text-purple-300",
   tags: "bg-pink-100 text-pink-700 dark:bg-pink-950 dark:text-pink-300",
+  time_tracked: "bg-sky-100 text-sky-700 dark:bg-sky-950 dark:text-sky-300",
   description: "bg-primary/10 text-primary dark:bg-primary/20",
 };
 
@@ -101,6 +106,7 @@ const FIELD_ICONS: Record<string, typeof CalendarClock> = {
   closed_at: CheckCircle2,
   assignees: UsersIcon,
   tags: TagIcon,
+  time_tracked: Clock,
   description: Text,
 };
 
@@ -181,6 +187,7 @@ export default async function TaskDetailPage(props: { params: Promise<{ number: 
     docsSpaces,
     spaceTaskTypes,
     checklists,
+    timeSummary,
   ] = await Promise.all([
     getStatusesForList(task.listId),
     getFieldDefinitions(task.listId),
@@ -202,6 +209,7 @@ export default async function TaskDetailPage(props: { params: Promise<{ number: 
     listSpacesForDocs(user),
     getTaskTypesForSpace(space.id),
     getTaskChecklists(task.id),
+    getTaskTimeSummary(task.id),
   ]);
   const currentTaskType = task.taskTypeId
     ? (spaceTaskTypes.find((t) => t.id === task.taskTypeId) ?? null)
@@ -230,7 +238,7 @@ export default async function TaskDetailPage(props: { params: Promise<{ number: 
   const cf = (task.customFields ?? {}) as Record<string, unknown>;
   const description = task.description as StoredRichDoc;
   const savedLayout = list.taskLayout as TaskLayout | null;
-  const layout = savedLayout ?? defaultLayout(fieldDefs);
+  const layout = ensureLayoutField(savedLayout ?? defaultLayout(fieldDefs), "time_tracked", "assignees");
   const currentStatus = listStatuses.find((s) => s.id === task.statusId);
 
   const canSecrets = await canViewSecrets(user.id, list.id, user.platformRole);
@@ -292,7 +300,7 @@ export default async function TaskDetailPage(props: { params: Promise<{ number: 
         {currentStatus && (
           <span
             className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium"
-            style={{ backgroundColor: `${currentStatus.color}1f`, color: currentStatus.color }}
+            style={tintedChipStyle(currentStatus.color)}
           >
             <span className="size-1.5 rounded-full" style={{ backgroundColor: currentStatus.color }} />
             {currentStatus.name}
@@ -333,7 +341,11 @@ export default async function TaskDetailPage(props: { params: Promise<{ number: 
           <input type="hidden" name="taskId" value={task.id} />
 
           {/* title — under tabs when Secrets is on */}
+          <label htmlFor="task-title" className="sr-only">
+            Task title
+          </label>
           <Input
+            id="task-title"
             name="title"
             defaultValue={task.title}
             required
@@ -478,6 +490,20 @@ export default async function TaskDetailPage(props: { params: Promise<{ number: 
                         />
                       </div>
                     </div>
+                  );
+                  if (fieldId === "time_tracked") return (
+                    <TimeTrackedField
+                      key="time_tracked"
+                      taskId={task.id}
+                      canEdit={canEdit && !task.isArchived}
+                      currentUser={{
+                        id: user.id,
+                        displayName: me?.displayName ?? user.name ?? "Me",
+                        photoKey: me?.photoKey ?? null,
+                      }}
+                      users={activeUsers}
+                      initialSeconds={timeSummary.taskSeconds}
+                    />
                   );
                   if (fieldId === "tags") return (
                     <div

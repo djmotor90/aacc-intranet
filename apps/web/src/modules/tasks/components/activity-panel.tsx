@@ -38,6 +38,7 @@ import { docToPlainText, storedToDoc, type StoredRichDoc } from "@/components/ed
 import { linkifyPlainText } from "@/lib/linkify";
 import { cn } from "@/lib/utils";
 import { deleteComment } from "../actions";
+import { formatDuration } from "../lib/time";
 import type { TaskComment, TaskFollowerRow } from "../queries";
 import { CommentBox } from "./comment-box";
 import { FollowBell } from "./follow-bell";
@@ -66,6 +67,7 @@ type ActivityKind =
   | "tags"
   | "task"
   | "secrets"
+  | "time"
   | "other";
 
 type DatePreset = "all" | "today" | "7d" | "30d" | "custom";
@@ -102,11 +104,13 @@ const ACTIVITY_KIND_LABELS: Record<ActivityKind, string> = {
   tags: "Tags",
   task: "Task (create / rename / archive)",
   secrets: "Secrets",
+  time: "Time tracked",
   other: "Other",
 };
 
 function activityKind(verb: string): ActivityKind {
   if (verb.includes("secret")) return "secrets";
+  if (verb.startsWith("time.")) return "time";
   if (verb.includes("status")) return "status";
   if (verb.includes("assignee")) return "assignees";
   if (verb.includes("field") || verb.includes("priority") || verb.includes("due_date"))
@@ -182,6 +186,12 @@ function countActiveFilters(f: ActivityFilters): number {
   return n;
 }
 
+function formatActivityDuration(seconds: unknown): string {
+  const n = typeof seconds === "number" ? seconds : Number(seconds);
+  if (!Number.isFinite(n)) return "time";
+  return formatDuration(n);
+}
+
 function formatActivityTime(date: Date): string {
   return new Intl.DateTimeFormat("en", {
     month: "short",
@@ -219,6 +229,10 @@ function describeActivity(a: ActivityEvent): string {
       return `${who} changed ${p.field}: ${JSON.stringify(p.from)} → ${JSON.stringify(p.to)}`;
     case "attachment.added":
       return `${who} added attachment`;
+    case "attachment.version_added":
+      return `${who} uploaded ${p.versionLabel ?? `revision ${p.versionNumber ?? "?"}`} of ${p.fileName ?? "an attachment"}`;
+    case "attachment.version_labeled":
+      return `${who} labeled ${p.fileName ?? "an attachment"} as ${p.versionLabel ?? "a new version"}`;
     case "attachment.removed":
       return `${who} removed attachment${p.fileName ? ` ${p.fileName}` : ""}`;
     case "attachment.moved":
@@ -241,6 +255,16 @@ function describeActivity(a: ActivityEvent): string {
       return `${who} moved the task${p.toList ? ` to ${p.toList}` : ""}`;
     case "task.subtask_created":
       return `${who} created subtask${p.number ? ` ${p.number}` : ""}${p.title ? ` “${p.title}”` : ""}`;
+    case "time.logged":
+      return `${who} logged ${formatActivityDuration(p.seconds)}`;
+    case "time.started":
+      return `${who} started a timer`;
+    case "time.stopped":
+      return `${who} stopped a timer${p.seconds != null ? ` (${formatActivityDuration(p.seconds)})` : ""}`;
+    case "time.updated":
+      return `${who} updated a time entry`;
+    case "time.deleted":
+      return `${who} deleted a time entry`;
     case "secret.created":
       return `${who} added secret${p.title ? ` ${p.title}` : ""}`;
     case "secret.updated":

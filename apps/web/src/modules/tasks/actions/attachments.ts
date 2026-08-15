@@ -19,7 +19,7 @@ import { requireTask } from "./shared";
 export async function deleteAttachment(formData: FormData) {
   const attachmentId = z.string().uuid().parse(formData.get("attachmentId"));
   const user = await requireUser();
-  const { attachments } = await import("@aitim/db");
+  const { attachmentVersions, attachments } = await import("@aitim/db");
 
   const [row] = await db
     .select({
@@ -44,12 +44,17 @@ export async function deleteAttachment(formData: FormData) {
     throw new Error("You cannot delete this attachment");
   }
 
+  const versions = await db
+    .select({ objectKey: attachmentVersions.objectKey })
+    .from(attachmentVersions)
+    .where(eq(attachmentVersions.attachmentId, attachmentId));
   const { BUCKETS, deleteObject } = await import("@/lib/storage");
-  try {
-    await deleteObject(BUCKETS.attachments, row.objectKey);
-  } catch {
-    // Still remove the DB row if the object is already gone
-  }
+  const objectKeys = new Set([row.objectKey, ...versions.map((version) => version.objectKey)]);
+  await Promise.all(
+    [...objectKeys].map((objectKey) =>
+      deleteObject(BUCKETS.attachments, objectKey).catch(() => undefined),
+    ),
+  );
 
   await db.transaction(async (tx) => {
     await tx.delete(attachments).where(eq(attachments.id, attachmentId));
