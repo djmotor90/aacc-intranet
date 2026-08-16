@@ -5,11 +5,12 @@
  * Fingerprint: GURVER-KG-AITIM-2026-7F3C9E2A
  * License: Proprietary. All rights reserved. See LICENSE / COPYRIGHT.
  */
-export * from "./platform";
-export * from "./tasks";
-export * from "./forms";
-export * from "./secrets";
-export * from "./docs";
-export * from "./chat";
-export * from "./ee-dictionary";
-export * from "./outreach";
+import type { ModuleManifest } from "../types";
+
+export const outreachManifest: ModuleManifest = {
+  slug: "outreach",
+  name: "Outreach",
+  basePath: "/outreach",
+  navItems: [{ label: "Outreach", href: "/outreach", icon: "building" }],
+  access: () => true,
+};

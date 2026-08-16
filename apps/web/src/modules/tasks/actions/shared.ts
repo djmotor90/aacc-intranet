@@ -12,17 +12,17 @@
  * is directly callable from the client.
  */
 import {
+  allocateTaskNumber,
   db,
   folders,
   formSubmissions,
   lists,
   publicForms,
   spaces,
-  spaceTaskCounters,
   statuses,
   tasks,
 } from "@aitim/db";
-import { and, asc, eq, inArray, ne, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, ne } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
@@ -158,15 +158,7 @@ export async function purgeListHard(tx: Tx, listId: string) {
   await tx.delete(lists).where(eq(lists.id, listId));
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export async function allocateTaskNumber(tx: any, spaceId: string, taskPrefix: string): Promise<string> {
-  const [counter] = await tx
-    .update(spaceTaskCounters)
-    .set({ nextNumber: sql`${spaceTaskCounters.nextNumber} + 1` })
-    .where(eq(spaceTaskCounters.spaceId, spaceId))
-    .returning({ next: spaceTaskCounters.nextNumber });
-  return `${taskPrefix}-${(counter as { next: number }).next - 1}`;
-}
+export { allocateTaskNumber };
 
 /**
  * Resolve which status new tasks/subtasks should start in.

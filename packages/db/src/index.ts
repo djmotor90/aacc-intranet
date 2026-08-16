@@ -5,9 +5,11 @@
  * Fingerprint: GURVER-KG-AITIM-2026-7F3C9E2A
  * License: Proprietary. All rights reserved. See LICENSE / COPYRIGHT.
  */
+import { eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
 import * as schema from "./schema/index";
+import { spaceTaskCounters } from "./schema/tasks";
 
 export * from "./schema/index";
 export { schema };
@@ -115,3 +117,21 @@ export function getPool(): Pool {
 
 export const db = drizzle({ client: getPool(), schema, casing: "snake_case" });
 export type Db = typeof db;
+
+/** Transaction-scoped handle accepted by helpers below. */
+export type DbTx = Parameters<Parameters<Db["transaction"]>[0]>[0];
+
+/**
+ * Atomically allocate the next task number for a space (e.g. "ENG-142").
+ * Shared by every domain that creates tasks — lives here (not in a single
+ * module's action file) so cross-domain callers don't need a cross-module import.
+ */
+export async function allocateTaskNumber(tx: DbTx, spaceId: string, taskPrefix: string): Promise<string> {
+  const [counter] = await tx
+    .update(spaceTaskCounters)
+    .set({ nextNumber: sql`${spaceTaskCounters.nextNumber} + 1` })
+    .where(eq(spaceTaskCounters.spaceId, spaceId))
+    .returning({ next: spaceTaskCounters.nextNumber });
+  if (!counter) throw new Error("Space task counter not found");
+  return `${taskPrefix}-${counter.next - 1}`;
+}
