@@ -78,8 +78,7 @@ export function TrackTimeButton() {
   const running = state?.running ?? null;
   const now = useNow(Boolean(running));
 
-  const load = useCallback(async () => {
-    const next = await getMyTimeTrackerState();
+  const applyState = useCallback((next: TimeTrackerState) => {
     setState(next);
     publishTimeTrackerSnapshot({
       userId: next.currentUser.id,
@@ -89,13 +88,34 @@ export function TrackTimeButton() {
     });
   }, []);
 
-  useEffect(() => {
-    void load().catch(() => {});
-  }, [load]);
+  const load = useCallback(async () => {
+    applyState(await getMyTimeTrackerState());
+  }, [applyState]);
 
   useEffect(() => {
-    if (open) void load().catch(() => {});
-  }, [open, load]);
+    let cancelled = false;
+    void getMyTimeTrackerState()
+      .then((next) => {
+        if (!cancelled) applyState(next);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [applyState]);
+
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    void getMyTimeTrackerState()
+      .then((next) => {
+        if (!cancelled) applyState(next);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [open, applyState]);
 
   const liveToday = useMemo(() => {
     if (!state) return 0;

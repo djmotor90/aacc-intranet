@@ -9,7 +9,7 @@
  */
 import { BarChart3, ChevronLeft, ChevronRight, Clock, Play, Trash2 } from "lucide-react";
 import Link from "next/link";
-import { useMemo, useState, useTransition } from "react";
+import { useState, useTransition } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { deleteTimeEntry, getMyTimesheet, startTimeTimer } from "../actions/time-entries";
@@ -41,13 +41,13 @@ export function TimesheetPage({ initialEntries, initialFrom }: { initialEntries:
   const [pending, startTransition] = useTransition();
   const to = addDays(from, 7);
 
-  const groups = useMemo(() => {
+  function buildGroups(weekStart: Date, weekEntries: TimeEntryRow[]) {
     const byDay = new Map<string, TimeEntryRow[]>();
     for (let i = 0; i < 7; i++) {
-      const day = addDays(from, i);
+      const day = addDays(weekStart, i);
       byDay.set(day.toDateString(), []);
     }
-    for (const entry of entries) {
+    for (const entry of weekEntries) {
       const key = new Date(entry.startedAt).toDateString();
       const list = byDay.get(key);
       if (list) list.push(entry);
@@ -59,7 +59,9 @@ export function TimesheetPage({ initialEntries, initialFrom }: { initialEntries:
       seconds: items.reduce((sum, e) => sum + entryDurationSeconds(e), 0),
       items,
     }));
-  }, [entries, from]);
+  }
+
+  const groups = buildGroups(from, entries);
 
   const weekTotal = groups.reduce((sum, g) => sum + g.seconds, 0);
 
