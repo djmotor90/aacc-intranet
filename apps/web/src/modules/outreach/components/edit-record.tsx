@@ -16,7 +16,15 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { updateAccount, updateLead, updateOpportunity, updatePriceBook, updateProduct, updateQuote } from "../actions";
+import {
+  deleteQuote,
+  updateAccount,
+  updateLead,
+  updateOpportunity,
+  updatePriceBook,
+  updateProduct,
+  updateQuote,
+} from "../actions";
 import { CONTEXT_LEVELS, type ContextLevel } from "../lib/stages";
 
 type Placement = "header" | "details";
@@ -72,7 +80,7 @@ function EditDialog({
           </Button>
         )}
       </DialogTrigger>
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
         </DialogHeader>
@@ -283,8 +291,16 @@ export function EditQuoteButton({
 }: {
   quote: {
     id: string;
+    name: string | null;
     validUntil: string | null;
+    details: string | null;
     notes: string | null;
+    discountBps: number;
+    taxCents: number;
+    shippingCents: number;
+    billToName: string | null;
+    shipToName: string | null;
+    shipToAddress: string | null;
   };
   placement?: Placement;
 }) {
@@ -296,20 +312,118 @@ export function EditQuoteButton({
       placement={placement}
       onSubmit={async (data) => {
         await updateQuote(quote.id, {
+          name: String(data.get("name") ?? ""),
           validUntil: String(data.get("validUntil") ?? "") || null,
+          details: String(data.get("details") ?? ""),
           notes: String(data.get("notes") ?? ""),
+          discountBps: Math.round(Number(data.get("discountPct") || 0) * 100),
+          taxCents: Math.round(Number(data.get("tax") || 0) * 100),
+          shippingCents: Math.round(Number(data.get("shipping") || 0) * 100),
+          billToName: String(data.get("billToName") ?? ""),
+          shipToName: String(data.get("shipToName") ?? ""),
+          shipToAddress: String(data.get("shipToAddress") ?? ""),
         });
       }}
     >
+      <Field id={`${prefix}-name`} name="name" label="Quote name" defaultValue={quote.name} required />
       <Field
         id={`${prefix}-validUntil`}
         name="validUntil"
-        label="Valid until"
+        label="Expiration date"
         type="date"
         defaultValue={quote.validUntil}
       />
+      <Field id={`${prefix}-billToName`} name="billToName" label="Bill to name" defaultValue={quote.billToName} />
+      <Field id={`${prefix}-shipToName`} name="shipToName" label="Ship to name" defaultValue={quote.shipToName} />
+      <Field
+        id={`${prefix}-shipToAddress`}
+        name="shipToAddress"
+        label="Ship to"
+        defaultValue={quote.shipToAddress}
+        className="sm:col-span-2"
+      />
+      <Field
+        id={`${prefix}-discountPct`}
+        name="discountPct"
+        label="Discount (%)"
+        type="number"
+        defaultValue={String((quote.discountBps ?? 0) / 100)}
+      />
+      <Field
+        id={`${prefix}-tax`}
+        name="tax"
+        label="Tax ($)"
+        type="number"
+        defaultValue={String((quote.taxCents ?? 0) / 100)}
+      />
+      <Field
+        id={`${prefix}-shipping`}
+        name="shipping"
+        label="Shipping ($)"
+        type="number"
+        defaultValue={String((quote.shippingCents ?? 0) / 100)}
+      />
+      <div className="grid gap-1.5 sm:col-span-2">
+        <Label htmlFor={`${prefix}-details`}>Details</Label>
+        <Textarea id={`${prefix}-details`} name="details" defaultValue={quote.details ?? ""} rows={3} />
+      </div>
       <NotesField id={`${prefix}-notes`} defaultValue={quote.notes} />
     </EditDialog>
+  );
+}
+
+export function DeleteQuoteButton({
+  quoteId,
+  label,
+}: {
+  quoteId: string;
+  label: string;
+}) {
+  const router = useRouter();
+  const [open, setOpen] = useState(false);
+  const [pending, startTransition] = useTransition();
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button type="button" size="sm" variant="outline">
+          Delete
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Delete quote {label}?</DialogTitle>
+        </DialogHeader>
+        <p className="text-sm text-muted-foreground">
+          This removes the quote, its line items, and any saved PDFs. Hub tasks stay in Tasks; only the link to this
+          quote is removed. This cannot be undone.
+        </p>
+        <div className="flex justify-end gap-2">
+          <Button type="button" variant="outline" disabled={pending} onClick={() => setOpen(false)}>
+            Cancel
+          </Button>
+          <Button
+            type="button"
+            variant="destructive"
+            disabled={pending}
+            onClick={() => {
+              startTransition(async () => {
+                try {
+                  await deleteQuote(quoteId);
+                  toast.success(`Deleted ${label}`);
+                  router.push("/outreach/quotes");
+                  router.refresh();
+                } catch (err) {
+                  toast.error(err instanceof Error ? err.message : "Could not delete quote");
+                }
+              });
+            }}
+          >
+            {pending ? "Deleting…" : "Delete quote"}
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 

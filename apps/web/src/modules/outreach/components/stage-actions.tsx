@@ -11,9 +11,10 @@ import { useRouter } from "next/navigation";
 import { useTransition } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { convertLead, createQuoteFromOpportunity, updateLeadStatus, updateOpportunityStage } from "../actions";
+import { convertLead, updateLeadStatus, updateOpportunityStage, updateQuoteStatus } from "../actions";
 import { PathBar } from "./path-bar";
-import { LEAD_STATUSES, OPP_STAGES, type LeadStatus, type OppStage } from "../lib/stages";
+import { LEAD_STATUSES, OPP_STAGES, QUOTE_STATUSES, type LeadStatus, type OppStage, type QuoteStatus } from "../lib/stages";
+import { NewQuoteDialog } from "./create-dialogs";
 
 export function LeadPath({ leadId, status }: { leadId: string; status: LeadStatus }) {
   const router = useRouter();
@@ -70,28 +71,38 @@ export function OpportunityPath({ opportunityId, stage }: { opportunityId: strin
   );
 }
 
-export function BuildQuoteButton({ opportunityId }: { opportunityId: string }) {
-  const router = useRouter();
-  const [pending, startTransition] = useTransition();
+export function BuildQuoteButton({
+  opportunityId,
+  opportunityName,
+  accountName,
+  lineSubtotalCents,
+}: {
+  opportunityId: string;
+  opportunityName: string;
+  accountName: string | null;
+  lineSubtotalCents: number;
+}) {
   return (
-    <Button
-      type="button"
-      size="sm"
-      variant="outline"
-      disabled={pending}
-      onClick={() => {
-        startTransition(async () => {
-          try {
-            const quote = await createQuoteFromOpportunity(opportunityId);
-            toast.success("Quote drafted");
-            router.push(`/outreach/quotes/${quote.id}`);
-          } catch (e) {
-            toast.error(e instanceof Error ? e.message : "Could not build quote");
-          }
-        });
+    <NewQuoteDialog
+      opportunityId={opportunityId}
+      opportunityName={opportunityName}
+      accountName={accountName}
+      lineSubtotalCents={lineSubtotalCents}
+    />
+  );
+}
+
+export function QuotePath({ quoteId, status }: { quoteId: string; status: QuoteStatus }) {
+  const router = useRouter();
+  return (
+    <PathBar
+      steps={QUOTE_STATUSES}
+      current={status}
+      onSelect={async (id) => {
+        await updateQuoteStatus(quoteId, id as QuoteStatus);
+        router.refresh();
       }}
-    >
-      New Quote
-    </Button>
+      completeLabel="Mark Status as Complete"
+    />
   );
 }

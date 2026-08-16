@@ -19,6 +19,7 @@ import {
   outreachPriceBooks,
   outreachOpportunityLines,
   outreachQuoteLines,
+  outreachQuotePdfs,
   outreachQuotes,
   outreachTaskLinks,
   spaces,
@@ -124,18 +125,35 @@ export async function getQuote(id: string) {
       quote: outreachQuotes,
       opportunityName: outreachOpportunities.name,
       accountName: outreachAccounts.name,
+      preparedByName: users.displayName,
+      preparedByEmail: users.email,
     })
     .from(outreachQuotes)
     .innerJoin(outreachOpportunities, eq(outreachQuotes.opportunityId, outreachOpportunities.id))
     .leftJoin(outreachAccounts, eq(outreachQuotes.accountId, outreachAccounts.id))
+    .leftJoin(users, eq(outreachQuotes.createdBy, users.id))
     .where(eq(outreachQuotes.id, id));
   if (!row) return null;
-  const lines = await db
-    .select()
-    .from(outreachQuoteLines)
-    .where(eq(outreachQuoteLines.quoteId, id))
-    .orderBy(outreachQuoteLines.createdAt);
-  return { ...row, lines };
+  const [lines, pdfs] = await Promise.all([
+    db
+      .select()
+      .from(outreachQuoteLines)
+      .where(eq(outreachQuoteLines.quoteId, id))
+      .orderBy(outreachQuoteLines.createdAt),
+    db
+      .select({
+        id: outreachQuotePdfs.id,
+        fileName: outreachQuotePdfs.fileName,
+        sizeBytes: outreachQuotePdfs.sizeBytes,
+        createdAt: outreachQuotePdfs.createdAt,
+        createdByName: users.displayName,
+      })
+      .from(outreachQuotePdfs)
+      .leftJoin(users, eq(outreachQuotePdfs.createdBy, users.id))
+      .where(eq(outreachQuotePdfs.quoteId, id))
+      .orderBy(desc(outreachQuotePdfs.createdAt)),
+  ]);
+  return { ...row, lines, pdfs };
 }
 
 export async function listCatalog() {

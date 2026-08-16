@@ -27,9 +27,13 @@ export const OPP_STAGES = [
 
 export const QUOTE_STATUSES = [
   { id: "draft", label: "Draft" },
-  { id: "sent", label: "Sent" },
+  { id: "needs_review", label: "Needs Review" },
+  { id: "in_review", label: "In Review" },
+  { id: "approved", label: "Approved" },
+  { id: "rejected", label: "Rejected" },
+  { id: "presented", label: "Presented" },
   { id: "accepted", label: "Accepted" },
-  { id: "declined", label: "Declined" },
+  { id: "denied", label: "Denied" },
 ] as const;
 
 export const OBJECT_ICON = {
@@ -64,6 +68,16 @@ export type OppStage = (typeof OPP_STAGES)[number]["id"];
 export type QuoteStatus = (typeof QUOTE_STATUSES)[number]["id"];
 export type ContextLevel = (typeof CONTEXT_LEVELS)[number]["id"];
 
+const LEGACY_QUOTE_STATUS: Record<string, QuoteStatus> = {
+  sent: "presented",
+  declined: "denied",
+};
+
+export function normalizeQuoteStatus(status: string): QuoteStatus {
+  if (LEGACY_QUOTE_STATUS[status]) return LEGACY_QUOTE_STATUS[status];
+  return QUOTE_STATUSES.some((s) => s.id === status) ? (status as QuoteStatus) : "draft";
+}
+
 export function labelFor<T extends { id: string; label: string }>(list: readonly T[], id: string) {
   return list.find((s) => s.id === id)?.label ?? id;
 }
@@ -75,3 +89,26 @@ export function formatMoney(cents: number) {
 export function lineTotalCents(quantity: number, unitPriceCents: number) {
   return Math.max(0, quantity) * Math.max(0, unitPriceCents);
 }
+
+export function quoteTotals(input: {
+  lines: { quantity: number; unitPriceCents: number }[];
+  discountBps?: number;
+  taxCents?: number;
+  shippingCents?: number;
+}) {
+  const subtotal = input.lines.reduce((sum, line) => sum + lineTotalCents(line.quantity, line.unitPriceCents), 0);
+  const discountBps = Math.min(10_000, Math.max(0, input.discountBps ?? 0));
+  const discount = Math.round((subtotal * discountBps) / 10_000);
+  const total = Math.max(0, subtotal - discount);
+  const tax = Math.max(0, input.taxCents ?? 0);
+  const shipping = Math.max(0, input.shippingCents ?? 0);
+  return { subtotal, discount, discountBps, total, tax, shipping, grand: total + tax + shipping };
+}
+
+export const QUOTE_ORG = {
+  title: "TRAINING & BUSINESS SERVICES QUOTE",
+  address: ["101 College Parkway", "CALT 121C", "Arnold, Maryland 21012"],
+  phone: "(410) 777-2087",
+  footer:
+    "p. 410.777.2732  |  e. ctg@aacc.edu  |  www.ctgaacc.com  |  7556 Teague Road, Suite 300  |  Hanover, MD 21076",
+} as const;

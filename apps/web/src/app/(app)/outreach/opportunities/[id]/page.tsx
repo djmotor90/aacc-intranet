@@ -55,7 +55,12 @@ export default async function OpportunityDetailPage(props: { params: Promise<{ i
         <>
           <FollowButton entityType="opportunity" entityId={opp.id} following={following} />
           <EditOpportunityButton opportunity={opp} />
-          <BuildQuoteButton opportunityId={opp.id} />
+          <BuildQuoteButton
+            opportunityId={opp.id}
+            opportunityName={opp.name}
+            accountName={row.accountName}
+            lineSubtotalCents={opp.amountCents}
+          />
         </>
       }
       highlights={[

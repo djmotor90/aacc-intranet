@@ -71,9 +71,10 @@ export function SettingsMainMenuPanel() {
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
 
   const load = useCallback(async () => {
-    setError(null);
     try {
-      setRows(await getSidebarNavAdmin());
+      const next = await getSidebarNavAdmin();
+      setError(null);
+      setRows(next);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load menu");
     } finally {
@@ -82,8 +83,22 @@ export function SettingsMainMenuPanel() {
   }, []);
 
   useEffect(() => {
-    void load();
-  }, [load]);
+    let cancelled = false;
+    void (async () => {
+      try {
+        const next = await getSidebarNavAdmin();
+        if (cancelled) return;
+        setRows(next);
+      } catch (e) {
+        if (!cancelled) setError(e instanceof Error ? e.message : "Failed to load menu");
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   function onDragEnd(event: DragEndEvent) {
     const { active, over } = event;
@@ -164,7 +179,6 @@ function MenuRow({
   const [editing, setEditing] = useState(false);
   const [label, setLabel] = useState(row.label);
   const [pending, startTransition] = useTransition();
-  const Icon = ICON_MAP[(NAV_ICONS as readonly string[]).includes(row.icon) ? (row.icon as NavIconKey) : "tasks"];
 
   function saveLabel() {
     const next = label.trim();

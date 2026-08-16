@@ -14,8 +14,8 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { createAccount, createLead, createOpportunity, createPriceBook, createProduct } from "../actions";
-import { CONTEXT_LEVELS } from "../lib/stages";
+import { createAccount, createLead, createOpportunity, createPriceBook, createProduct, createQuoteFromOpportunity } from "../actions";
+import { CONTEXT_LEVELS, formatMoney, QUOTE_STATUSES, quoteTotals } from "../lib/stages";
 
 export function CreateLeadForm({ accounts }: { accounts: { id: string; name: string }[] }) {
   const router = useRouter();
@@ -306,23 +306,186 @@ export function CreatePriceBookForm() {
   );
 }
 
+export function NewQuoteDialog({
+  opportunityId,
+  opportunityName,
+  accountName,
+  lineSubtotalCents,
+}: {
+  opportunityId: string;
+  opportunityName: string;
+  accountName: string | null;
+  lineSubtotalCents: number;
+}) {
+  const router = useRouter();
+  const [pending, startTransition] = useTransition();
+  const [open, setOpen] = useState(false);
+  const [discountPct, setDiscountPct] = useState("0");
+  const [tax, setTax] = useState("0");
+  const [shipping, setShipping] = useState("0");
+  const preview = quoteTotals({
+    lines: [{ quantity: 1, unitPriceCents: lineSubtotalCents }],
+    discountBps: Math.round(Number(discountPct || 0) * 100),
+    taxCents: Math.round(Number(tax || 0) * 100),
+    shippingCents: Math.round(Number(shipping || 0) * 100),
+  });
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button type="button" size="sm" variant="outline">
+          New Quote
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-3xl">
+        <DialogHeader>
+          <DialogTitle>New Quote</DialogTitle>
+        </DialogHeader>
+        <form
+          className="grid gap-3 sm:grid-cols-2"
+          onSubmit={(e) => {
+            e.preventDefault();
+            const data = new FormData(e.currentTarget);
+            startTransition(async () => {
+              try {
+                const row = await createQuoteFromOpportunity({
+                  opportunityId,
+                  name: String(data.get("name") ?? ""),
+                  details: String(data.get("details") ?? ""),
+                  notes: String(data.get("notes") ?? ""),
+                  validUntil: String(data.get("validUntil") ?? "") || null,
+                  status: String(data.get("status") || "draft") as (typeof QUOTE_STATUSES)[number]["id"],
+                  discountBps: Math.round(Number(data.get("discountPct") || 0) * 100),
+                  taxCents: Math.round(Number(data.get("tax") || 0) * 100),
+                  shippingCents: Math.round(Number(data.get("shipping") || 0) * 100),
+                  billToName: accountName,
+                  shipToName: String(data.get("shipToName") ?? "") || accountName,
+                  shipToAddress: String(data.get("shipToAddress") ?? ""),
+                });
+                toast.success("Quote drafted");
+                setOpen(false);
+                router.push(`/outreach/quotes/${row.id}`);
+              } catch (err) {
+                toast.error(err instanceof Error ? err.message : "Could not create quote");
+              }
+            });
+          }}
+        >
+          <p className="text-[11px] text-muted-foreground sm:col-span-2">* = Required Information</p>
+          <div className="rounded-lg border bg-muted/40 p-3 sm:col-span-2">
+            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Quote Information</p>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="grid gap-1.5">
+                <Label>Quote Number</Label>
+                <p className="text-sm text-muted-foreground">Assigned on save</p>
+              </div>
+              <Field name="validUntil" label="Expiration Date" type="date" />
+              <Field name="name" label="Quote Name" required defaultValue={opportunityName} />
+              <div className="grid gap-1.5">
+                <Label htmlFor="quote-status">Status</Label>
+                <select id="quote-status" name="status" defaultValue="draft" className="h-8 rounded-md border bg-transparent px-2 text-sm">
+                  {QUOTE_STATUSES.map((status) => (
+                    <option key={status.id} value={status.id}>
+                      {status.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="grid gap-1.5">
+                <Label>Opportunity Name</Label>
+                <p className="text-sm">{opportunityName}</p>
+              </div>
+              <div className="grid gap-1.5 sm:row-span-2">
+                <Label htmlFor="quote-notes">Description</Label>
+                <textarea id="quote-notes" name="notes" rows={3} className="rounded-md border bg-transparent px-2 py-1.5 text-sm" />
+              </div>
+              <div className="grid gap-1.5">
+                <Label>Account Name</Label>
+                <p className="text-sm">{accountName || "—"}</p>
+              </div>
+              <div className="grid gap-1.5 sm:col-span-2">
+                <Label htmlFor="quote-details">Details</Label>
+                <textarea id="quote-details" name="details" rows={2} className="rounded-md border bg-transparent px-2 py-1.5 text-sm" />
+              </div>
+              <Field name="shipToName" label="Ship To Name" defaultValue={accountName ?? ""} />
+              <Field name="shipToAddress" label="Ship To" />
+            </div>
+          </div>
+          <div className="rounded-lg border bg-muted/40 p-3 sm:col-span-2">
+            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Totals</p>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="grid gap-1.5">
+                <Label htmlFor="discountPct">Discount (%)</Label>
+                <Input
+                  id="discountPct"
+                  name="discountPct"
+                  type="number"
+                  min={0}
+                  max={100}
+                  step="0.01"
+                  value={discountPct}
+                  onChange={(e) => setDiscountPct(e.target.value)}
+                />
+              </div>
+              <div className="grid gap-1.5">
+                <Label htmlFor="tax">Tax ($)</Label>
+                <Input id="tax" name="tax" type="number" min={0} step="0.01" value={tax} onChange={(e) => setTax(e.target.value)} />
+              </div>
+              <div className="grid gap-1.5">
+                <Label htmlFor="shipping">Shipping and Handling ($)</Label>
+                <Input
+                  id="shipping"
+                  name="shipping"
+                  type="number"
+                  min={0}
+                  step="0.01"
+                  value={shipping}
+                  onChange={(e) => setShipping(e.target.value)}
+                />
+              </div>
+              <div className="grid gap-1.5">
+                <Label>Grand Total</Label>
+                <p className="text-sm font-semibold tabular-nums">{formatMoney(preview.grand)}</p>
+                <p className="text-[11px] text-muted-foreground">Includes products currently on the opportunity.</p>
+              </div>
+            </div>
+          </div>
+          <div className="flex justify-end gap-2 sm:col-span-2">
+            <Button type="button" variant="outline" onClick={() => setOpen(false)}>
+              Cancel
+            </Button>
+            <Button type="submit" disabled={pending}>
+              Save
+            </Button>
+          </div>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function Field({
   name,
   label,
   type = "text",
   required,
   className,
+  defaultValue,
 }: {
   name: string;
   label: string;
   type?: string;
   required?: boolean;
   className?: string;
+  defaultValue?: string;
 }) {
   return (
     <div className={`grid gap-1.5 ${className ?? ""}`}>
-      <Label htmlFor={name}>{label}</Label>
-      <Input id={name} name={name} type={type} required={required} />
+      <Label htmlFor={name}>
+        {required ? <span className="text-destructive">* </span> : null}
+        {label}
+      </Label>
+      <Input id={name} name={name} type={type} required={required} defaultValue={defaultValue} />
     </div>
   );
 }

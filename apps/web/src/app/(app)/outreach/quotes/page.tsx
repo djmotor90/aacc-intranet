@@ -8,7 +8,7 @@
 import { FileText } from "lucide-react";
 import { requireUser } from "@/lib/rbac";
 import { ListWorkspace } from "@/modules/outreach/components/list-workspace";
-import { labelFor, OBJECT_ICON, QUOTE_STATUSES } from "@/modules/outreach/lib/stages";
+import { labelFor, normalizeQuoteStatus, OBJECT_ICON, QUOTE_STATUSES } from "@/modules/outreach/lib/stages";
 import { listQuotes } from "@/modules/outreach/queries";
 
 export default async function QuotesPage() {
@@ -23,6 +23,7 @@ export default async function QuotesPage() {
       count={quotes.length}
       columns={[
         { key: "number", label: "Quote Number" },
+        { key: "name", label: "Quote Name" },
         { key: "opportunity", label: "Opportunity" },
         { key: "account", label: "Account" },
         { key: "status", label: "Status" },
@@ -30,12 +31,13 @@ export default async function QuotesPage() {
       rows={quotes.map((row) => ({
         id: row.quote.id,
         href: `/outreach/quotes/${row.quote.id}`,
-        searchText: `${row.quote.number} ${row.opportunityName} ${row.accountName ?? ""}`,
+        searchText: `${row.quote.number} ${row.quote.name ?? ""} ${row.opportunityName} ${row.accountName ?? ""}`,
         cells: {
           number: row.quote.number,
+          name: row.quote.name ?? row.quote.number,
           opportunity: row.opportunityName,
           account: row.accountName ?? "—",
-          status: labelFor(QUOTE_STATUSES, row.quote.status),
+          status: labelFor(QUOTE_STATUSES, normalizeQuoteStatus(row.quote.status)),
         },
       }))}
     />

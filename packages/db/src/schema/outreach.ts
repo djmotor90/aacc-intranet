@@ -67,6 +67,12 @@ export const outreachQuoteStatus = pgEnum("outreach_quote_status", [
   "sent",
   "accepted",
   "declined",
+  "needs_review",
+  "in_review",
+  "approved",
+  "rejected",
+  "presented",
+  "denied",
 ]);
 
 export const outreachContextLevel = pgEnum("outreach_context_level", [
@@ -224,9 +230,17 @@ export const outreachQuotes = pgTable(
       .notNull()
       .references(() => outreachOpportunities.id, { onDelete: "cascade" }),
     accountId: uuid("account_id").references(() => outreachAccounts.id, { onDelete: "set null" }),
+    name: text("name"),
     status: outreachQuoteStatus("status").notNull().default("draft"),
     validUntil: date("valid_until"),
+    details: text("details"),
     notes: text("notes"),
+    discountBps: integer("discount_bps").notNull().default(0),
+    taxCents: integer("tax_cents").notNull().default(0),
+    shippingCents: integer("shipping_cents").notNull().default(0),
+    billToName: text("bill_to_name"),
+    shipToName: text("ship_to_name"),
+    shipToAddress: text("ship_to_address"),
     createdBy: uuid("created_by").references(() => users.id),
     ...timestamps,
   },
@@ -246,11 +260,28 @@ export const outreachQuoteLines = pgTable(
     name: text("name").notNull(),
     quantity: integer("quantity").notNull().default(1),
     hours: integer("hours").notNull().default(0),
+    listPriceCents: integer("list_price_cents").notNull().default(0),
     unitPriceCents: integer("unit_price_cents").notNull().default(0),
     contextLevel: outreachContextLevel("context_level").notNull().default("none"),
     ...timestamps,
   },
   (t) => [index("outreach_quote_lines_quote_idx").on(t.quoteId)],
+);
+
+export const outreachQuotePdfs = pgTable(
+  "outreach_quote_pdfs",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    quoteId: uuid("quote_id")
+      .notNull()
+      .references(() => outreachQuotes.id, { onDelete: "cascade" }),
+    fileName: text("file_name").notNull(),
+    content: text("content").notNull(),
+    sizeBytes: integer("size_bytes").notNull().default(0),
+    createdBy: uuid("created_by").references(() => users.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("outreach_quote_pdfs_quote_idx").on(t.quoteId)],
 );
 
 export const outreachTaskLinks = pgTable(

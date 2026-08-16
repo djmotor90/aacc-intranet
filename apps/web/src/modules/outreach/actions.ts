@@ -22,6 +22,7 @@ import {
   outreachOpportunities,
   outreachOpportunityLines,
   outreachQuoteLines,
+  outreachQuotePdfs,
   outreachQuotes,
   outreachTaskLinks,
   spaces,
@@ -33,7 +34,9 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { assertListRole, requireUser } from "@/lib/rbac";
 import type { ContextLevel, LeadStatus, OppStage, OutreachEntity, QuoteStatus } from "./lib/stages";
-import { entityPath, lineTotalCents } from "./lib/stages";
+import { entityPath, lineTotalCents, normalizeQuoteStatus, QUOTE_ORG } from "./lib/stages";
+import { buildQuotePdf, quotePdfFileName, type QuotePdfModel } from "./lib/quote-pdf";
+import { getQuote } from "./queries";
 
 const uuid = z.string().uuid();
 const money = z.coerce.number().int().min(0).max(100_000_000);
@@ -135,7 +138,7 @@ export async function createProduct(input: {
   unitPriceCents?: number;
   contextLevel?: ContextLevel;
 }) {
-  const user = await requireUser();
+  await requireUser();
   const [row] = await db
     .insert(outreachCatalogItems)
     .values({
@@ -391,15 +394,34 @@ export async function updateAccount(
 
 export async function updateQuote(
   id: string,
-  input: { validUntil?: string | null; notes?: string | null },
+  input: {
+    name?: string;
+    validUntil?: string | null;
+    details?: string | null;
+    notes?: string | null;
+    discountBps?: number;
+    taxCents?: number;
+    shippingCents?: number;
+    billToName?: string | null;
+    shipToName?: string | null;
+    shipToAddress?: string | null;
+  },
 ) {
   const user = await requireUser();
   const quoteId = uuid.parse(id);
   await db
     .update(outreachQuotes)
     .set({
+      name: input.name === undefined ? undefined : z.string().min(1).max(200).parse(input.name.trim()),
       validUntil: input.validUntil === undefined ? undefined : input.validUntil || null,
+      details: input.details === undefined ? undefined : input.details?.trim() || null,
       notes: input.notes === undefined ? undefined : input.notes?.trim() || null,
+      discountBps: input.discountBps === undefined ? undefined : z.number().int().min(0).max(10_000).parse(input.discountBps),
+      taxCents: input.taxCents === undefined ? undefined : money.parse(input.taxCents),
+      shippingCents: input.shippingCents === undefined ? undefined : money.parse(input.shippingCents),
+      billToName: input.billToName === undefined ? undefined : input.billToName?.trim() || null,
+      shipToName: input.shipToName === undefined ? undefined : input.shipToName?.trim() || null,
+      shipToAddress: input.shipToAddress === undefined ? undefined : input.shipToAddress?.trim() || null,
     })
     .where(eq(outreachQuotes.id, quoteId));
   await note("quote", quoteId, user.id, "updated", "Updated quote details");
@@ -535,11 +557,64 @@ export async function removeOpportunityLine(lineId: string) {
   refresh(`/outreach/opportunities/${line.opportunityId}`);
 }
 
-export async function createQuoteFromOpportunity(opportunityId: string) {
+export async function updateOpportunityLine(
+  lineId: string,
+  input: {
+    name?: string;
+    quantity?: number;
+    hours?: number;
+    unitPriceCents?: number;
+    contextLevel?: ContextLevel;
+  },
+) {
   const user = await requireUser();
-  const oppId = uuid.parse(opportunityId);
+  const id = uuid.parse(lineId);
+  const [line] = await db.select().from(outreachOpportunityLines).where(eq(outreachOpportunityLines.id, id));
+  if (!line) throw new Error("Product line not found");
+  await db
+    .update(outreachOpportunityLines)
+    .set({
+      name: input.name === undefined ? undefined : z.string().min(1).max(200).parse(input.name.trim()),
+      quantity: input.quantity === undefined ? undefined : qty.parse(input.quantity),
+      hours: input.hours === undefined ? undefined : hours.parse(input.hours),
+      unitPriceCents: input.unitPriceCents === undefined ? undefined : money.parse(input.unitPriceCents),
+      contextLevel: input.contextLevel,
+    })
+    .where(eq(outreachOpportunityLines.id, id));
+  const lines = await db
+    .select()
+    .from(outreachOpportunityLines)
+    .where(eq(outreachOpportunityLines.opportunityId, line.opportunityId));
+  const amount = lines.reduce((sum, row) => sum + lineTotalCents(row.quantity, row.unitPriceCents), 0);
+  await db
+    .update(outreachOpportunities)
+    .set({ amountCents: amount })
+    .where(eq(outreachOpportunities.id, line.opportunityId));
+  await note("opportunity", line.opportunityId, user.id, "product", `Updated ${input.name ?? line.name}`);
+  refresh(`/outreach/opportunities/${line.opportunityId}`);
+}
+
+export async function createQuoteFromOpportunity(input: {
+  opportunityId: string;
+  name: string;
+  details?: string | null;
+  notes?: string | null;
+  validUntil?: string | null;
+  status?: QuoteStatus;
+  discountBps?: number;
+  taxCents?: number;
+  shippingCents?: number;
+  billToName?: string | null;
+  shipToName?: string | null;
+  shipToAddress?: string | null;
+}) {
+  const user = await requireUser();
+  const oppId = uuid.parse(input.opportunityId);
   const [opp] = await db.select().from(outreachOpportunities).where(eq(outreachOpportunities.id, oppId));
   if (!opp) throw new Error("Opportunity not found");
+  const account = opp.accountId
+    ? (await db.select({ name: outreachAccounts.name }).from(outreachAccounts).where(eq(outreachAccounts.id, opp.accountId)))[0]
+    : null;
   const lines = await db
     .select()
     .from(outreachOpportunityLines)
@@ -550,15 +625,28 @@ export async function createQuoteFromOpportunity(opportunityId: string) {
     await db.execute<{ next: string }>(sql`select nextval('outreach_quote_number_seq') as next`)
   ).rows;
   const next = `Q-${String(seqNext).padStart(4, "0")}`;
-  const valid = new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10);
+  const valid =
+    input.validUntil || new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10);
+  const status = input.status ? normalizeQuoteStatus(input.status) : "draft";
+  const billTo = input.billToName?.trim() || account?.name || null;
   const [quote] = await db
     .insert(outreachQuotes)
     .values({
       number: next,
+      name: z.string().min(1).max(200).parse(input.name.trim()),
       opportunityId: oppId,
       accountId: opp.accountId,
+      status,
       createdBy: user.id,
       validUntil: valid,
+      details: input.details?.trim() || null,
+      notes: input.notes?.trim() || null,
+      discountBps: z.number().int().min(0).max(10_000).parse(input.discountBps ?? 0),
+      taxCents: money.parse(input.taxCents ?? 0),
+      shippingCents: money.parse(input.shippingCents ?? 0),
+      billToName: billTo,
+      shipToName: input.shipToName?.trim() || billTo,
+      shipToAddress: input.shipToAddress?.trim() || null,
     })
     .returning();
   if (lines.length > 0) {
@@ -568,6 +656,7 @@ export async function createQuoteFromOpportunity(opportunityId: string) {
         name: line.name,
         quantity: line.quantity,
         hours: line.hours,
+        listPriceCents: line.unitPriceCents,
         unitPriceCents: line.unitPriceCents,
         contextLevel: line.contextLevel,
       })),
@@ -582,8 +671,9 @@ export async function createQuoteFromOpportunity(opportunityId: string) {
 export async function updateQuoteStatus(id: string, status: QuoteStatus) {
   const user = await requireUser();
   const quoteId = uuid.parse(id);
-  await db.update(outreachQuotes).set({ status }).where(eq(outreachQuotes.id, quoteId));
-  await note("quote", quoteId, user.id, "status", status);
+  const next = normalizeQuoteStatus(status);
+  await db.update(outreachQuotes).set({ status: next }).where(eq(outreachQuotes.id, quoteId));
+  await note("quote", quoteId, user.id, "status", next);
   refresh(`/outreach/quotes/${quoteId}`);
 }
 
@@ -597,12 +687,14 @@ export async function addQuoteLine(input: {
 }) {
   await requireUser();
   const quoteId = uuid.parse(input.quoteId);
+  const sales = money.parse(input.unitPriceCents);
   await db.insert(outreachQuoteLines).values({
     quoteId,
     name: z.string().min(1).max(200).parse(input.name.trim()),
     quantity: qty.parse(input.quantity),
     hours: hours.parse(input.hours),
-    unitPriceCents: money.parse(input.unitPriceCents),
+    listPriceCents: sales,
+    unitPriceCents: sales,
     contextLevel: input.contextLevel,
   });
   refresh(`/outreach/quotes/${quoteId}`);
@@ -615,6 +707,67 @@ export async function removeQuoteLine(lineId: string) {
   if (!line) return;
   await db.delete(outreachQuoteLines).where(eq(outreachQuoteLines.id, id));
   refresh(`/outreach/quotes/${line.quoteId}`);
+}
+
+export async function updateQuoteLine(
+  lineId: string,
+  input: {
+    name?: string;
+    quantity?: number;
+    hours?: number;
+    unitPriceCents?: number;
+    listPriceCents?: number;
+    contextLevel?: ContextLevel;
+  },
+) {
+  await requireUser();
+  const id = uuid.parse(lineId);
+  const [line] = await db.select().from(outreachQuoteLines).where(eq(outreachQuoteLines.id, id));
+  if (!line) throw new Error("Quote line not found");
+  const sales = input.unitPriceCents === undefined ? undefined : money.parse(input.unitPriceCents);
+  await db
+    .update(outreachQuoteLines)
+    .set({
+      name: input.name === undefined ? undefined : z.string().min(1).max(200).parse(input.name.trim()),
+      quantity: input.quantity === undefined ? undefined : qty.parse(input.quantity),
+      hours: input.hours === undefined ? undefined : hours.parse(input.hours),
+      unitPriceCents: sales,
+      listPriceCents: input.listPriceCents === undefined ? sales : money.parse(input.listPriceCents),
+      contextLevel: input.contextLevel,
+    })
+    .where(eq(outreachQuoteLines.id, id));
+  refresh(`/outreach/quotes/${line.quoteId}`);
+}
+
+export async function deleteQuote(id: string) {
+  const user = await requireUser();
+  const quoteId = uuid.parse(id);
+  const [quote] = await db.select().from(outreachQuotes).where(eq(outreachQuotes.id, quoteId));
+  if (!quote) throw new Error("Quote not found");
+  await db.transaction(async (tx) => {
+    await tx
+      .delete(outreachFollowers)
+      .where(and(eq(outreachFollowers.entityType, "quote"), eq(outreachFollowers.entityId, quoteId)));
+    await tx
+      .delete(outreachEvents)
+      .where(and(eq(outreachEvents.entityType, "quote"), eq(outreachEvents.entityId, quoteId)));
+    await tx
+      .delete(outreachTaskLinks)
+      .where(and(eq(outreachTaskLinks.entityType, "quote"), eq(outreachTaskLinks.entityId, quoteId)));
+    await tx
+      .delete(outreachActivities)
+      .where(and(eq(outreachActivities.entityType, "quote"), eq(outreachActivities.entityId, quoteId)));
+    await tx.delete(outreachQuotes).where(eq(outreachQuotes.id, quoteId));
+    await tx.insert(outreachActivities).values({
+      entityType: "opportunity",
+      entityId: quote.opportunityId,
+      actorId: user.id,
+      kind: "quote",
+      body: `Deleted ${quote.number}`,
+    });
+  });
+  refresh(`/outreach/quotes`);
+  refresh(`/outreach/opportunities/${quote.opportunityId}`);
 }
 
 export async function toggleOutreachFollow(entityType: OutreachEntity, entityId: string) {
@@ -820,4 +973,65 @@ export async function unlinkTask(linkId: string) {
   await requireUser();
   await db.delete(outreachTaskLinks).where(eq(outreachTaskLinks.id, uuid.parse(linkId)));
   refresh();
+}
+
+function toQuotePdfModel(
+  row: NonNullable<Awaited<ReturnType<typeof getQuote>>>,
+  fallback?: { name?: string | null; email?: string | null },
+): QuotePdfModel {
+  return {
+    number: row.quote.number,
+    createdAt: row.quote.createdAt,
+    preparedBy: row.preparedByName || fallback?.name || "—",
+    preparedEmail: row.preparedByEmail || fallback?.email,
+    preparedPhone: QUOTE_ORG.phone,
+    billToName: row.quote.billToName || row.accountName,
+    shipToName: row.quote.shipToName || row.quote.billToName || row.accountName,
+    shipToAddress: row.quote.shipToAddress,
+    lines: row.lines.map((line) => ({
+      name: line.name,
+      listPriceCents: line.listPriceCents || line.unitPriceCents,
+      unitPriceCents: line.unitPriceCents,
+      quantity: line.quantity,
+    })),
+    discountBps: row.quote.discountBps,
+    taxCents: row.quote.taxCents,
+    shippingCents: row.quote.shippingCents,
+  };
+}
+
+async function generateQuotePdfBytes(quoteId: string, user: { name?: string | null; email?: string | null }) {
+  const row = await getQuote(quoteId);
+  if (!row) throw new Error("Quote not found");
+  const bytes = buildQuotePdf(toQuotePdfModel(row, user));
+  return { row, bytes, fileName: quotePdfFileName(row.quote.number) };
+}
+
+export async function saveQuotePdf(quoteId: string) {
+  const user = await requireUser();
+  const id = uuid.parse(quoteId);
+  const { row, bytes, fileName } = await generateQuotePdfBytes(id, { name: user.name, email: user.email });
+  const [pdf] = await db
+    .insert(outreachQuotePdfs)
+    .values({
+      quoteId: id,
+      fileName,
+      content: Buffer.from(bytes).toString("base64"),
+      sizeBytes: bytes.byteLength,
+      createdBy: user.id,
+    })
+    .returning({ id: outreachQuotePdfs.id });
+  await note("quote", id, user.id, "pdf", fileName);
+  refresh(`/outreach/quotes/${id}`);
+  return { id: pdf.id, fileName, quoteNumber: row.quote.number };
+}
+
+export async function deleteQuotePdf(pdfId: string) {
+  const user = await requireUser();
+  const id = uuid.parse(pdfId);
+  const [pdf] = await db.select().from(outreachQuotePdfs).where(eq(outreachQuotePdfs.id, id));
+  if (!pdf) throw new Error("PDF not found");
+  await db.delete(outreachQuotePdfs).where(eq(outreachQuotePdfs.id, id));
+  await note("quote", pdf.quoteId, user.id, "pdf", `Deleted ${pdf.fileName}`);
+  refresh(`/outreach/quotes/${pdf.quoteId}`);
 }

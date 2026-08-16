@@ -49,8 +49,9 @@ export function ListWorkspace({
             <p className="text-[11px] text-muted-foreground">{objectLabel}</p>
             <h1 className="text-lg font-bold text-foreground">{viewName}</h1>
             <p className="text-[11px] text-muted-foreground">
-              {filtered.length} item{filtered.length === 1 ? "" : "s"}
-              {q ? " · Filtered" : ""} · Sorted by name
+              {q
+                ? `${filtered.length} of ${count} item${count === 1 ? "" : "s"} · Filtered`
+                : `${count} item${count === 1 ? "" : "s"} · Sorted by name`}
             </p>
           </div>
         </div>
