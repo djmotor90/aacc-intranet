@@ -17,14 +17,16 @@ import { signOut } from "@/lib/auth";
 import { requireUser, userOwnsAnySpace } from "@/lib/rbac";
 import { navItemsFor, workspaceModulesToNavItems } from "@/modules/registry";
 import { listEnabledWorkspaceModules } from "@/modules/shell/actions/modules";
+import { getSidebarNavForUser } from "@/modules/shell/actions/sidebar-nav";
 import { getTaskNavTreeForUser } from "@/modules/tasks/queries";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const user = await requireUser();
   const isAdmin = user.platformRole === "admin";
-  const [workspaceModules, taskNavTree, photoRow, ownsSpace, hasTrashPermission] =
+  const [workspaceModules, configuredNav, taskNavTree, photoRow, ownsSpace, hasTrashPermission] =
     await Promise.all([
       listEnabledWorkspaceModules(),
+      getSidebarNavForUser(),
       getTaskNavTreeForUser(user),
       withDbRetry(() =>
         db
@@ -39,11 +41,14 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             userHasPermission(user, "manage_trash"),
           ),
     ]);
-  const items = [
-    { label: "Home", href: "/", icon: "home" as const },
-    ...workspaceModulesToNavItems(workspaceModules),
-    ...navItemsFor(user),
-  ];
+  const items =
+    configuredNav.length > 0
+      ? configuredNav
+      : [
+          { label: "Home", href: "/", icon: "home" as const },
+          ...workspaceModulesToNavItems(workspaceModules),
+          ...navItemsFor(user),
+        ];
   const canManageTrash = isAdmin || ownsSpace || hasTrashPermission;
 
   async function signOutAction() {

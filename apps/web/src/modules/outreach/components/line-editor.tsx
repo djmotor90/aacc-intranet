@@ -14,7 +14,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { addOpportunityLine, addQuoteLine, removeOpportunityLine, removeQuoteLine } from "../actions";
-import { CONTEXT_LEVELS, formatMoney, lineTotalCents, type ContextLevel } from "../lib/stages";
+import { CONTEXT_LEVELS, formatMoney, labelFor, lineTotalCents, type ContextLevel } from "../lib/stages";
 
 type Line = {
   id: string;
@@ -39,12 +39,12 @@ export function OpportunityLines({
   const total = lines.reduce((sum, line) => sum + lineTotalCents(line.quantity, line.unitPriceCents), 0);
 
   return (
-    <section className="rounded-2xl border bg-card p-4" aria-labelledby="products-heading">
-      <div className="flex items-center justify-between">
-        <h2 id="products-heading" className="text-sm font-semibold">
+    <section aria-labelledby="products-heading">
+      <div className="mb-2 flex items-center justify-between">
+        <h2 id="products-heading" className="sr-only">
           Products ({lines.length})
         </h2>
-        <span className="text-sm font-medium">{formatMoney(total)}</span>
+        <span className="text-sm font-medium tabular-nums">{formatMoney(total)}</span>
       </div>
       <LineTable
         lines={lines}
@@ -87,10 +87,10 @@ export function QuoteLinesEditor({
   const [pending, startTransition] = useTransition();
   const total = lines.reduce((sum, line) => sum + lineTotalCents(line.quantity, line.unitPriceCents), 0);
   return (
-    <section className="rounded-2xl border bg-card p-4">
-      <div className="flex items-center justify-between">
-        <h2 className="text-sm font-semibold">Quote lines</h2>
-        <span className="text-sm font-medium">{formatMoney(total)}</span>
+    <section>
+      <div className="mb-2 flex items-center justify-between">
+        <h2 className="sr-only">Quote lines</h2>
+        <span className="text-sm font-medium tabular-nums">{formatMoney(total)}</span>
       </div>
       <LineTable
         lines={lines}
@@ -126,26 +126,26 @@ function LineTable({
   onRemove: (id: string) => void;
 }) {
   return (
-    <div className="mt-3 overflow-auto">
+    <div className="overflow-auto">
       <table className="w-full min-w-[36rem] text-left text-sm">
-        <thead className="text-xs text-muted-foreground">
+        <thead className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
           <tr>
-            <th className="py-1 font-medium">Name</th>
-            <th className="py-1 font-medium">Qty</th>
-            <th className="py-1 font-medium">Hours</th>
-            <th className="py-1 font-medium">Context</th>
-            <th className="py-1 font-medium">Price</th>
-            <th className="py-1 font-medium"> </th>
+            <th className="py-1.5 pr-3 font-medium">Name</th>
+            <th className="w-16 whitespace-nowrap py-1.5 pr-3 font-medium">Qty</th>
+            <th className="w-20 whitespace-nowrap py-1.5 pr-3 font-medium">Hours</th>
+            <th className="whitespace-nowrap py-1.5 pr-3 font-medium">Context</th>
+            <th className="w-28 whitespace-nowrap py-1.5 pr-3 font-medium">Price</th>
+            <th className="w-10 py-1.5 font-medium"> </th>
           </tr>
         </thead>
         <tbody>
           {lines.map((line) => (
-            <tr key={line.id} className="border-t">
-              <td className="py-2 pr-2">{line.name}</td>
-              <td className="py-2">{line.quantity}</td>
-              <td className="py-2">{line.hours}</td>
-              <td className="py-2 capitalize">{line.contextLevel}</td>
-              <td className="py-2">{formatMoney(lineTotalCents(line.quantity, line.unitPriceCents))}</td>
+            <tr key={line.id} className="border-t border-border">
+              <td className="py-2.5 pr-3 font-medium">{line.name}</td>
+              <td className="whitespace-nowrap py-2.5 pr-3 tabular-nums">{line.quantity}</td>
+              <td className="whitespace-nowrap py-2.5 pr-3 tabular-nums">{line.hours}</td>
+              <td className="py-2.5 pr-3 text-muted-foreground">{labelFor(CONTEXT_LEVELS, line.contextLevel)}</td>
+              <td className="whitespace-nowrap py-2.5 pr-3 tabular-nums">{formatMoney(lineTotalCents(line.quantity, line.unitPriceCents))}</td>
               <td className="py-2 text-right">
                 <button
                   type="button"
@@ -190,7 +190,7 @@ function AddLine({
 }) {
   return (
     <form
-      className="mt-4 grid gap-2 sm:grid-cols-6"
+      className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-6"
       onSubmit={(e) => {
         e.preventDefault();
         const data = new FormData(e.currentTarget);

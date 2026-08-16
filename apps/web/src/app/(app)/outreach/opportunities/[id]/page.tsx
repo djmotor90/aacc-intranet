@@ -110,6 +110,7 @@ export default async function OpportunityDetailPage(props: { params: Promise<{ i
         {
           title: "Products",
           count: row.lines.length,
+          wide: true,
           icon: <Package className="size-4 text-brand-orange" />,
           children: <OpportunityLines opportunityId={opp.id} lines={row.lines} catalog={catalog} />,
         },

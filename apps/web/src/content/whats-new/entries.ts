@@ -19,6 +19,28 @@ export const whatsNewFeed: WhatsNewFeed = {
   schemaVersion: 1,
   entries: [
     {
+      id: "2026-08-16-outreach-products",
+      date: "2026-08-16",
+      publishedAt: "2026-08-16T18:00:00.000Z",
+      kind: "new",
+      module: "platform",
+      title: "Outreach products and price books",
+      body: "Corporate Outreach now has Products and Price Books, the Salesforce catalog objects. Create training products, group them into priced collections, and add those lines to opportunities and quotes.",
+      href: "/outreach/products",
+      tags: ["outreach", "products", "quotes"],
+    },
+    {
+      id: "2026-08-16-admin-main-menu",
+      date: "2026-08-16",
+      publishedAt: "2026-08-16T16:00:00.000Z",
+      kind: "new",
+      module: "admin",
+      title: "Arrange the main sidebar menu",
+      body: "Super Admins can open Settings → Main menu to rename sidebar items, change their icons, hide them, and drag them into a new order. Home stays visible.",
+      href: "/?settings=menu",
+      tags: ["admin", "sidebar", "navigation"],
+    },
+    {
       id: "2026-08-16-task-group-select",
       date: "2026-08-16",
       publishedAt: "2026-08-16T12:00:00.000Z",

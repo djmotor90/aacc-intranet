@@ -16,7 +16,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { updateAccount, updateLead, updateOpportunity, updateQuote } from "../actions";
+import { updateAccount, updateLead, updateOpportunity, updatePriceBook, updateProduct, updateQuote } from "../actions";
+import { CONTEXT_LEVELS, type ContextLevel } from "../lib/stages";
 
 type Placement = "header" | "details";
 
@@ -308,6 +309,124 @@ export function EditQuoteButton({
         defaultValue={quote.validUntil}
       />
       <NotesField id={`${prefix}-notes`} defaultValue={quote.notes} />
+    </EditDialog>
+  );
+}
+
+export function EditProductButton({
+  product,
+  placement = "header",
+}: {
+  product: {
+    id: string;
+    name: string;
+    productCode: string | null;
+    family: string | null;
+    description: string | null;
+    defaultHours: number;
+    defaultUnitPriceCents: number;
+    defaultContext: ContextLevel;
+    isActive: boolean;
+  };
+  placement?: Placement;
+}) {
+  const prefix = `${placement}-product-${product.id}`;
+  return (
+    <EditDialog
+      objectLabel="Product"
+      title="Edit Product"
+      placement={placement}
+      onSubmit={async (data) => {
+        await updateProduct(product.id, {
+          name: String(data.get("name") ?? ""),
+          productCode: String(data.get("productCode") ?? ""),
+          family: String(data.get("family") ?? ""),
+          description: String(data.get("notes") ?? data.get("description") ?? ""),
+          hours: Number(data.get("hours") || 0),
+          unitPriceCents: Math.round(Number(data.get("price") || 0) * 100),
+          contextLevel: String(data.get("contextLevel") || "none") as ContextLevel,
+          isActive: String(data.get("isActive") ?? "true") === "true",
+        });
+      }}
+    >
+      <Field id={`${prefix}-name`} name="name" label="Product name" required defaultValue={product.name} className="sm:col-span-2" />
+      <Field id={`${prefix}-productCode`} name="productCode" label="Product code" defaultValue={product.productCode} />
+      <Field id={`${prefix}-family`} name="family" label="Family" defaultValue={product.family} />
+      <Field id={`${prefix}-hours`} name="hours" label="Hours" type="number" defaultValue={String(product.defaultHours)} />
+      <Field
+        id={`${prefix}-price`}
+        name="price"
+        label="List price ($)"
+        type="number"
+        defaultValue={(product.defaultUnitPriceCents / 100).toFixed(2)}
+      />
+      <div className="grid gap-1.5">
+        <Label htmlFor={`${prefix}-context`}>Contextualization</Label>
+        <select
+          id={`${prefix}-context`}
+          name="contextLevel"
+          defaultValue={product.defaultContext}
+          className="h-8 rounded-md border bg-transparent px-2 text-sm"
+        >
+          {CONTEXT_LEVELS.map((level) => (
+            <option key={level.id} value={level.id}>
+              {level.label}
+            </option>
+          ))}
+        </select>
+      </div>
+      <div className="grid gap-1.5">
+        <Label htmlFor={`${prefix}-active`}>Active</Label>
+        <select
+          id={`${prefix}-active`}
+          name="isActive"
+          defaultValue={product.isActive ? "true" : "false"}
+          className="h-8 rounded-md border bg-transparent px-2 text-sm"
+        >
+          <option value="true">Active</option>
+          <option value="false">Inactive</option>
+        </select>
+      </div>
+      <NotesField id={`${prefix}-description`} defaultValue={product.description} />
+    </EditDialog>
+  );
+}
+
+export function EditPriceBookButton({
+  book,
+  placement = "header",
+}: {
+  book: { id: string; name: string; description: string | null; isActive: boolean; isStandard: boolean };
+  placement?: Placement;
+}) {
+  const prefix = `${placement}-book-${book.id}`;
+  return (
+    <EditDialog
+      objectLabel="Price Book"
+      title="Edit Price Book"
+      placement={placement}
+      onSubmit={async (data) => {
+        await updatePriceBook(book.id, {
+          name: String(data.get("name") ?? ""),
+          description: String(data.get("notes") ?? ""),
+          isActive: String(data.get("isActive") ?? "true") === "true",
+        });
+      }}
+    >
+      <Field id={`${prefix}-name`} name="name" label="Price book name" required defaultValue={book.name} className="sm:col-span-2" />
+      <div className="grid gap-1.5">
+        <Label htmlFor={`${prefix}-active`}>Active</Label>
+        <select
+          id={`${prefix}-active`}
+          name="isActive"
+          defaultValue={book.isActive ? "true" : "false"}
+          className="h-8 rounded-md border bg-transparent px-2 text-sm"
+        >
+          <option value="true">Active</option>
+          <option value="false">Inactive</option>
+        </select>
+      </div>
+      <NotesField id={`${prefix}-description`} defaultValue={book.description} />
     </EditDialog>
   );
 }

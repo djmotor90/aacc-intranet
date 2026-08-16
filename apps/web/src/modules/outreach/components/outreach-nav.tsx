@@ -17,13 +17,18 @@ const ITEMS = [
   { href: "/outreach/opportunities", label: "Opportunities", match: (p: string) => p.startsWith("/outreach/opportunities") },
   { href: "/outreach/quotes", label: "Quotes", match: (p: string) => p.startsWith("/outreach/quotes") },
   { href: "/outreach/accounts", label: "Accounts", match: (p: string) => p.startsWith("/outreach/accounts") },
+  { href: "/outreach/products", label: "Products", match: (p: string) => p.startsWith("/outreach/products") },
+  { href: "/outreach/price-books", label: "Price Books", match: (p: string) => p.startsWith("/outreach/price-books") },
 ];
 
 export function OutreachNav() {
   const pathname = usePathname();
   return (
-    <nav aria-label="Outreach" className="flex flex-wrap items-end gap-0 bg-brand-teal-deep px-3">
-      <span className="mr-3 hidden py-2 text-sm font-semibold text-white sm:inline">Outreach</span>
+    <nav
+      aria-label="Outreach"
+      className="flex flex-nowrap items-end gap-0 overflow-x-auto bg-brand-teal-deep px-3 [scrollbar-width:thin]"
+    >
+      <span className="mr-3 hidden shrink-0 py-2 text-sm font-semibold text-white sm:inline">Outreach</span>
       {ITEMS.map((item) => {
         const active = item.match(pathname);
         return (
@@ -32,7 +37,7 @@ export function OutreachNav() {
             href={item.href}
             aria-current={active ? "page" : undefined}
             className={cn(
-              "border-b-[3px] px-3 py-2.5 text-sm text-white/85 hover:bg-white/10",
+              "shrink-0 border-b-[3px] px-3 py-2.5 text-sm text-white/85 hover:bg-white/10",
               active ? "border-brand-orange font-semibold text-white" : "border-transparent",
             )}
           >

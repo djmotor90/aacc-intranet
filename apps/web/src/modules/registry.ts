@@ -40,6 +40,7 @@ export function resolveNavIcon(icon: string | null | undefined): NavIcon {
     "home",
     "docs",
     "chat",
+    "database",
   ];
   if (icon && (allowed as string[]).includes(icon)) return icon as NavIcon;
   return "tasks";

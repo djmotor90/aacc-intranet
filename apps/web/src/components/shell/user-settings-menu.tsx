@@ -12,6 +12,7 @@ import {
   Cpu,
   KeyRound,
   LogOut,
+  Menu,
   Monitor,
   Moon,
   Settings,
@@ -29,6 +30,7 @@ import {
   SettingsAdminGroupsPanel,
   SettingsAdminUsersPanel,
 } from "@/components/shell/settings-admin-panels";
+import { SettingsMainMenuPanel } from "@/components/shell/settings-main-menu-panel";
 import { SettingsModulesPanel } from "@/components/shell/settings-modules-panel";
 import { SettingsAuditPanel } from "@/components/shell/settings-audit-panel";
 import { SettingsAiUsagePanel } from "@/components/shell/settings-ai-usage-panel";
@@ -59,6 +61,7 @@ type SectionId =
   | "admin-users"
   | "admin-groups"
   | "admin-security"
+  | "admin-main-menu"
   | "admin-modules"
   | "admin-ai"
   | "admin-trash"
@@ -236,6 +239,8 @@ export function UserSettingsMenu({
       users: "admin-users",
       groups: "admin-groups",
       security: "admin-security",
+      menu: "admin-main-menu",
+      "main-menu": "admin-main-menu",
       modules: "admin-modules",
       "super-agents": "admin-security",
       agents: "admin-security",
@@ -264,6 +269,12 @@ export function UserSettingsMenu({
       items.push(
         { id: "admin-users", label: "Users", icon: Users, group: "admin" },
         { id: "admin-groups", label: "Teams & Groups", icon: Shield, group: "admin" },
+        {
+          id: "admin-main-menu",
+          label: "Main menu",
+          icon: Menu,
+          group: "admin",
+        },
         {
           id: "admin-modules",
           label: "Apps & menus",
@@ -450,6 +461,7 @@ export function UserSettingsMenu({
               )}
               {section === "admin-users" && isAdmin && <SettingsAdminUsersPanel />}
               {section === "admin-groups" && isAdmin && <SettingsAdminGroupsPanel />}
+              {section === "admin-main-menu" && isAdmin && <SettingsMainMenuPanel />}
               {section === "admin-modules" && isAdmin && <SettingsModulesPanel />}
               {section === "admin-security" && isAdmin && (
                 <div className="flex h-full min-h-[560px] flex-col">

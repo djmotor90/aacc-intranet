@@ -15,6 +15,8 @@ import {
   outreachFollowers,
   outreachLeads,
   outreachOpportunities,
+  outreachPriceBookEntries,
+  outreachPriceBooks,
   outreachOpportunityLines,
   outreachQuoteLines,
   outreachQuotes,
@@ -142,6 +144,58 @@ export async function listCatalog() {
     .from(outreachCatalogItems)
     .where(eq(outreachCatalogItems.isActive, true))
     .orderBy(outreachCatalogItems.name);
+}
+
+export async function listProducts() {
+  return db.select().from(outreachCatalogItems).orderBy(outreachCatalogItems.name);
+}
+
+export async function getProduct(id: string) {
+  const [row] = await db.select().from(outreachCatalogItems).where(eq(outreachCatalogItems.id, id));
+  return row ?? null;
+}
+
+export async function listPriceBooks() {
+  return db.select().from(outreachPriceBooks).orderBy(desc(outreachPriceBooks.isStandard), outreachPriceBooks.name);
+}
+
+export async function getPriceBook(id: string) {
+  const [book] = await db.select().from(outreachPriceBooks).where(eq(outreachPriceBooks.id, id));
+  if (!book) return null;
+  const entries = await db
+    .select({
+      entry: outreachPriceBookEntries,
+      product: outreachCatalogItems,
+    })
+    .from(outreachPriceBookEntries)
+    .innerJoin(outreachCatalogItems, eq(outreachPriceBookEntries.catalogItemId, outreachCatalogItems.id))
+    .where(eq(outreachPriceBookEntries.priceBookId, id))
+    .orderBy(outreachCatalogItems.name);
+  return { book, entries };
+}
+
+export async function listPriceBookEntries(priceBookId: string) {
+  return db
+    .select({
+      entry: outreachPriceBookEntries,
+      product: outreachCatalogItems,
+    })
+    .from(outreachPriceBookEntries)
+    .innerJoin(outreachCatalogItems, eq(outreachPriceBookEntries.catalogItemId, outreachCatalogItems.id))
+    .where(eq(outreachPriceBookEntries.priceBookId, priceBookId))
+    .orderBy(outreachCatalogItems.name);
+}
+
+export async function listProductPriceBooks(productId: string) {
+  return db
+    .select({
+      entry: outreachPriceBookEntries,
+      book: outreachPriceBooks,
+    })
+    .from(outreachPriceBookEntries)
+    .innerJoin(outreachPriceBooks, eq(outreachPriceBookEntries.priceBookId, outreachPriceBooks.id))
+    .where(eq(outreachPriceBookEntries.catalogItemId, productId))
+    .orderBy(outreachPriceBooks.name);
 }
 
 export async function isFollowing(userId: string, entityType: OutreachEntity, entityId: string) {

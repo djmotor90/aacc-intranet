@@ -50,7 +50,7 @@ export function RecordWorkspace({
   path,
   activity,
   details,
-  related,
+  related = [],
 }: {
   objectLabel: string;
   title: string;
@@ -59,11 +59,14 @@ export function RecordWorkspace({
   actions?: ReactNode;
   highlights: { label: string; value: ReactNode }[];
   path?: ReactNode;
-  activity: ReactNode;
+  activity?: ReactNode;
   details: ReactNode;
-  related: { title: string; count: number; icon?: ReactNode; children: ReactNode }[];
+  related?: { title: string; count: number; icon?: ReactNode; wide?: boolean; children: ReactNode }[];
 }) {
-  const [tab, setTab] = useState<"activity" | "details">("activity");
+  const [tab, setTab] = useState<"activity" | "details">(activity ? "activity" : "details");
+  const sideRelated = related.filter((card) => !card.wide);
+  const wideRelated = related.filter((card) => card.wide);
+  const showTabs = Boolean(activity);
 
   return (
     <div className="grid gap-3">
@@ -82,9 +85,9 @@ export function RecordWorkspace({
         </div>
         <dl className="grid gap-4 border-t border-border px-4 py-3 sm:grid-cols-2 lg:grid-cols-4">
           {highlights.map((field) => (
-            <div key={field.label}>
+            <div key={field.label} className="min-w-0">
               <dt className="text-[11px] text-muted-foreground">{field.label}</dt>
-              <dd className="text-sm text-primary">{field.value || "—"}</dd>
+              <dd className="truncate text-sm text-primary">{field.value || "—"}</dd>
             </div>
           ))}
         </dl>
@@ -94,40 +97,48 @@ export function RecordWorkspace({
         <section className="rounded-xl border border-border bg-card px-3 py-3 shadow-sm">{path}</section>
       )}
 
-      <div className="grid items-start gap-3 lg:grid-cols-[minmax(0,1fr)_22rem]">
-        <section className="rounded-xl border border-border bg-card shadow-sm">
-          <div className="flex gap-4 border-b border-border px-4">
-            {(
-              [
-                ["activity", "Activity"],
-                ["details", "Details"],
-              ] as const
-            ).map(([id, label]) => (
-              <button
-                key={id}
-                type="button"
-                onClick={() => setTab(id)}
-                className={cn(
-                  "border-b-2 py-2.5 text-sm",
-                  tab === id
-                    ? "border-primary font-semibold text-primary"
-                    : "border-transparent text-muted-foreground",
-                )}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-          <div className="p-4">{tab === "activity" ? activity : details}</div>
+      <div className={cn("grid items-start gap-3", sideRelated.length > 0 && "lg:grid-cols-[minmax(0,1fr)_minmax(0,20rem)]")}>
+        <section className="min-w-0 rounded-xl border border-border bg-card shadow-sm">
+          {showTabs && (
+            <div className="flex gap-4 border-b border-border px-4">
+              {(
+                [
+                  ["activity", "Activity"],
+                  ["details", "Details"],
+                ] as const
+              ).map(([id, label]) => (
+                <button
+                  key={id}
+                  type="button"
+                  onClick={() => setTab(id)}
+                  className={cn(
+                    "border-b-2 py-2.5 text-sm",
+                    tab === id
+                      ? "border-primary font-semibold text-primary"
+                      : "border-transparent text-muted-foreground",
+                  )}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          )}
+          <div className="p-4">{showTabs && tab === "activity" ? activity : details}</div>
         </section>
 
-        <aside className="grid gap-3">
-          <h2 className="px-1 text-sm font-bold text-brand-teal-deep">Related</h2>
-          {related.map((card) => (
-            <RelatedCard key={card.title} {...card} />
-          ))}
-        </aside>
+        {sideRelated.length > 0 && (
+          <aside className="grid min-w-0 gap-3">
+            <h2 className="px-1 text-sm font-bold text-brand-teal-deep">Related</h2>
+            {sideRelated.map((card) => (
+              <RelatedCard key={card.title} {...card} />
+            ))}
+          </aside>
+        )}
       </div>
+
+      {wideRelated.map((card) => (
+        <RelatedCard key={card.title} {...card} />
+      ))}
     </div>
   );
 }
@@ -136,16 +147,18 @@ function RelatedCard({
   title,
   count,
   icon,
+  wide,
   children,
 }: {
   title: string;
   count: number;
   icon?: ReactNode;
+  wide?: boolean;
   children: ReactNode;
 }) {
   const [open, setOpen] = useState(count > 0);
   return (
-    <section className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+    <section className="min-w-0 overflow-hidden rounded-xl border border-border bg-card shadow-sm">
       <button
         type="button"
         className="flex w-full items-center gap-2 bg-muted px-3 py-2 text-left"
@@ -156,9 +169,9 @@ function RelatedCard({
         <span className="min-w-0 flex-1 truncate text-sm font-semibold text-foreground">
           {title} ({count})
         </span>
-        <ChevronDown className={cn("size-4 text-muted-foreground transition", open && "rotate-180")} aria-hidden />
+        <ChevronDown className={cn("size-4 shrink-0 text-muted-foreground transition", open && "rotate-180")} aria-hidden />
       </button>
-      {open && <div className="p-3">{children}</div>}
+      {open && <div className={cn("min-w-0 p-3", wide && "overflow-x-auto")}>{children}</div>}
     </section>
   );
 }

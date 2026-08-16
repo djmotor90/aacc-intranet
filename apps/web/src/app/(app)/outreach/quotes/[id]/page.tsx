@@ -103,6 +103,7 @@ export default async function QuoteDetailPage(props: { params: Promise<{ id: str
         {
           title: "Quote Lines",
           count: row.lines.length,
+          wide: true,
           children: <QuoteLinesEditor quoteId={row.quote.id} lines={row.lines} catalog={catalog} />,
         },
         {

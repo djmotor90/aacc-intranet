@@ -148,6 +148,9 @@ export const outreachCatalogItems = pgTable(
   {
     id: uuid("id").primaryKey().defaultRandom(),
     name: text("name").notNull(),
+    productCode: text("product_code"),
+    family: text("family"),
+    description: text("description"),
     defaultHours: integer("default_hours").notNull().default(0),
     defaultUnitPriceCents: integer("default_unit_price_cents").notNull().default(0),
     defaultContext: outreachContextLevel("default_context").notNull().default("none"),
@@ -155,6 +158,41 @@ export const outreachCatalogItems = pgTable(
     ...timestamps,
   },
   (t) => [index("outreach_catalog_active_idx").on(t.isActive)],
+);
+
+export const outreachPriceBooks = pgTable(
+  "outreach_price_books",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    name: text("name").notNull(),
+    description: text("description"),
+    isStandard: boolean("is_standard").notNull().default(false),
+    isActive: boolean("is_active").notNull().default(true),
+    createdBy: uuid("created_by").references(() => users.id),
+    ...timestamps,
+  },
+  (t) => [index("outreach_price_books_active_idx").on(t.isActive)],
+);
+
+export const outreachPriceBookEntries = pgTable(
+  "outreach_price_book_entries",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    priceBookId: uuid("price_book_id")
+      .notNull()
+      .references(() => outreachPriceBooks.id, { onDelete: "cascade" }),
+    catalogItemId: uuid("catalog_item_id")
+      .notNull()
+      .references(() => outreachCatalogItems.id, { onDelete: "cascade" }),
+    hours: integer("hours").notNull().default(0),
+    unitPriceCents: integer("unit_price_cents").notNull().default(0),
+    contextLevel: outreachContextLevel("context_level").notNull().default("none"),
+    ...timestamps,
+  },
+  (t) => [
+    uniqueIndex("outreach_price_book_entry_unique_idx").on(t.priceBookId, t.catalogItemId),
+    index("outreach_price_book_entries_book_idx").on(t.priceBookId),
+  ],
 );
 
 export const outreachOpportunityLines = pgTable(

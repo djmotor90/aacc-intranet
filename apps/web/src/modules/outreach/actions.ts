@@ -17,6 +17,8 @@ import {
   outreachEvents,
   outreachFollowers,
   outreachLeads,
+  outreachPriceBookEntries,
+  outreachPriceBooks,
   outreachOpportunities,
   outreachOpportunityLines,
   outreachQuoteLines,
@@ -55,33 +57,209 @@ async function note(
 
 export async function ensureCatalogSeeded() {
   const existing = await db.select({ id: outreachCatalogItems.id }).from(outreachCatalogItems).limit(1);
-  if (existing.length > 0) return;
-  await db.insert(outreachCatalogItems).values([
-    {
-      name: "16 Hour Training — No contextualization",
-      defaultHours: 16,
-      defaultUnitPriceCents: 480000,
-      defaultContext: "none",
-    },
-    {
-      name: "4 Hour Training — No contextualization",
-      defaultHours: 4,
-      defaultUnitPriceCents: 120000,
-      defaultContext: "none",
-    },
-    {
-      name: "4 Hour Training — Light contextualization",
-      defaultHours: 4,
-      defaultUnitPriceCents: 150000,
-      defaultContext: "light",
-    },
-    {
-      name: "Workforce custom workshop",
-      defaultHours: 8,
-      defaultUnitPriceCents: 280000,
-      defaultContext: "full",
-    },
-  ]);
+  if (existing.length === 0) {
+    await db.insert(outreachCatalogItems).values([
+      {
+        name: "16 Hour Training — No contextualization",
+        productCode: "TRN-16",
+        family: "Training",
+        defaultHours: 16,
+        defaultUnitPriceCents: 480000,
+        defaultContext: "none",
+      },
+      {
+        name: "4 Hour Training — No contextualization",
+        productCode: "TRN-4",
+        family: "Training",
+        defaultHours: 4,
+        defaultUnitPriceCents: 120000,
+        defaultContext: "none",
+      },
+      {
+        name: "4 Hour Training — Light contextualization",
+        productCode: "TRN-4L",
+        family: "Training",
+        defaultHours: 4,
+        defaultUnitPriceCents: 150000,
+        defaultContext: "light",
+      },
+      {
+        name: "Workforce custom workshop",
+        productCode: "WS-CUST",
+        family: "Workshop",
+        defaultHours: 8,
+        defaultUnitPriceCents: 280000,
+        defaultContext: "full",
+      },
+    ]);
+  }
+  await ensureStandardPriceBook();
+}
+
+export async function ensureStandardPriceBook() {
+  const products = await db.select().from(outreachCatalogItems);
+  let [book] = await db.select().from(outreachPriceBooks).where(eq(outreachPriceBooks.isStandard, true)).limit(1);
+  if (!book) {
+    [book] = await db
+      .insert(outreachPriceBooks)
+      .values({ name: "Standard Price Book", description: "Default training prices", isStandard: true })
+      .returning();
+  }
+  if (!book || products.length === 0) return book;
+  const existing = await db
+    .select({ catalogItemId: outreachPriceBookEntries.catalogItemId })
+    .from(outreachPriceBookEntries)
+    .where(eq(outreachPriceBookEntries.priceBookId, book.id));
+  const have = new Set(existing.map((row) => row.catalogItemId));
+  const missing = products.filter((product) => !have.has(product.id));
+  if (missing.length > 0) {
+    await db.insert(outreachPriceBookEntries).values(
+      missing.map((product) => ({
+        priceBookId: book.id,
+        catalogItemId: product.id,
+        hours: product.defaultHours,
+        unitPriceCents: product.defaultUnitPriceCents,
+        contextLevel: product.defaultContext,
+      })),
+    );
+  }
+  return book;
+}
+
+export async function createProduct(input: {
+  name: string;
+  productCode?: string;
+  family?: string;
+  description?: string;
+  hours?: number;
+  unitPriceCents?: number;
+  contextLevel?: ContextLevel;
+}) {
+  const user = await requireUser();
+  const [row] = await db
+    .insert(outreachCatalogItems)
+    .values({
+      name: z.string().min(1).max(200).parse(input.name.trim()),
+      productCode: input.productCode?.trim() || null,
+      family: input.family?.trim() || null,
+      description: input.description?.trim() || null,
+      defaultHours: hours.parse(input.hours ?? 0),
+      defaultUnitPriceCents: money.parse(input.unitPriceCents ?? 0),
+      defaultContext: input.contextLevel ?? "none",
+    })
+    .returning();
+  const book = await ensureStandardPriceBook();
+  if (book) {
+    await db.insert(outreachPriceBookEntries).values({
+      priceBookId: book.id,
+      catalogItemId: row.id,
+      hours: row.defaultHours,
+      unitPriceCents: row.defaultUnitPriceCents,
+      contextLevel: row.defaultContext,
+    }).onConflictDoNothing();
+  }
+  refresh("/outreach/products");
+  return row;
+}
+
+export async function updateProduct(
+  id: string,
+  input: {
+    name?: string;
+    productCode?: string | null;
+    family?: string | null;
+    description?: string | null;
+    hours?: number;
+    unitPriceCents?: number;
+    contextLevel?: ContextLevel;
+    isActive?: boolean;
+  },
+) {
+  await requireUser();
+  const productId = uuid.parse(id);
+  const name = input.name === undefined ? undefined : z.string().min(1).max(200).parse(input.name.trim());
+  await db
+    .update(outreachCatalogItems)
+    .set({
+      name,
+      productCode: input.productCode === undefined ? undefined : input.productCode?.trim() || null,
+      family: input.family === undefined ? undefined : input.family?.trim() || null,
+      description: input.description === undefined ? undefined : input.description?.trim() || null,
+      defaultHours: input.hours === undefined ? undefined : hours.parse(input.hours),
+      defaultUnitPriceCents: input.unitPriceCents === undefined ? undefined : money.parse(input.unitPriceCents),
+      defaultContext: input.contextLevel,
+      isActive: input.isActive,
+    })
+    .where(eq(outreachCatalogItems.id, productId));
+  refresh(`/outreach/products/${productId}`);
+}
+
+export async function createPriceBook(input: { name: string; description?: string }) {
+  const user = await requireUser();
+  const [row] = await db
+    .insert(outreachPriceBooks)
+    .values({
+      name: z.string().min(1).max(160).parse(input.name.trim()),
+      description: input.description?.trim() || null,
+      createdBy: user.id,
+    })
+    .returning();
+  refresh("/outreach/price-books");
+  return row;
+}
+
+export async function updatePriceBook(
+  id: string,
+  input: { name?: string; description?: string | null; isActive?: boolean },
+) {
+  await requireUser();
+  const bookId = uuid.parse(id);
+  const [book] = await db.select().from(outreachPriceBooks).where(eq(outreachPriceBooks.id, bookId));
+  if (!book) throw new Error("Price book not found");
+  const name = input.name === undefined ? undefined : z.string().min(1).max(160).parse(input.name.trim());
+  await db
+    .update(outreachPriceBooks)
+    .set({
+      name,
+      description: input.description === undefined ? undefined : input.description?.trim() || null,
+      isActive: input.isActive,
+    })
+    .where(eq(outreachPriceBooks.id, bookId));
+  refresh(`/outreach/price-books/${bookId}`);
+}
+
+export async function addPriceBookEntry(input: {
+  priceBookId: string;
+  catalogItemId: string;
+  hours?: number;
+  unitPriceCents?: number;
+  contextLevel?: ContextLevel;
+}) {
+  await requireUser();
+  const priceBookId = uuid.parse(input.priceBookId);
+  const catalogItemId = uuid.parse(input.catalogItemId);
+  const [product] = await db.select().from(outreachCatalogItems).where(eq(outreachCatalogItems.id, catalogItemId));
+  if (!product) throw new Error("Product not found");
+  await db
+    .insert(outreachPriceBookEntries)
+    .values({
+      priceBookId,
+      catalogItemId,
+      hours: hours.parse(input.hours ?? product.defaultHours),
+      unitPriceCents: money.parse(input.unitPriceCents ?? product.defaultUnitPriceCents),
+      contextLevel: input.contextLevel ?? product.defaultContext,
+    })
+    .onConflictDoNothing();
+  refresh(`/outreach/price-books/${priceBookId}`);
+}
+
+export async function removePriceBookEntry(entryId: string) {
+  await requireUser();
+  const id = uuid.parse(entryId);
+  const [entry] = await db.select().from(outreachPriceBookEntries).where(eq(outreachPriceBookEntries.id, id));
+  if (!entry) return;
+  await db.delete(outreachPriceBookEntries).where(eq(outreachPriceBookEntries.id, id));
+  refresh(`/outreach/price-books/${entry.priceBookId}`);
 }
 
 export async function createAccount(input: { name: string; website?: string; phone?: string; notes?: string }) {

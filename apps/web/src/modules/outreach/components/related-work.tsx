@@ -56,30 +56,30 @@ export function RelatedTasks({
   const [hits, setHits] = useState<{ id: string; number: string; title: string }[]>([]);
 
   return (
-    <section className="rounded-2xl border bg-card p-4" aria-labelledby="related-tasks-heading">
-      <h2 id="related-tasks-heading" className="text-sm font-semibold">
+    <section aria-labelledby="related-tasks-heading" className="min-w-0">
+      <h2 id="related-tasks-heading" className="sr-only">
         Related tasks ({tasks.length})
       </h2>
-      <p className="mt-1 text-xs text-muted-foreground">
+      <p className="text-xs text-pretty text-muted-foreground">
         Create a Hub task or connect one that already exists.
       </p>
 
       <ul className="mt-3 grid gap-2">
         {tasks.length === 0 && <li className="text-sm text-muted-foreground">No tasks linked yet.</li>}
         {tasks.map((task) => (
-          <li key={task.linkId} className="flex items-start justify-between gap-2 rounded-xl border px-3 py-2">
+          <li key={task.linkId} className="flex min-w-0 items-start justify-between gap-2 rounded-xl border px-3 py-2">
             <div className="min-w-0">
               <Link href={`/tasks/task/${task.number}`} className="block truncate text-sm font-medium hover:underline">
                 {task.title}
               </Link>
-              <div className="text-xs text-muted-foreground">
+              <div className="truncate text-xs text-muted-foreground">
                 {task.number}
                 {task.dueDate ? ` · due ${task.dueDate}` : ""} · {task.statusName}
               </div>
             </div>
             <button
               type="button"
-              className="rounded-full p-1 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+              className="shrink-0 rounded-full p-1 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
               aria-label={`Unlink ${task.number}`}
               onClick={() => {
                 startTransition(async () => {
@@ -96,7 +96,7 @@ export function RelatedTasks({
 
       {lists.length > 0 && (
         <form
-          className="mt-4 grid gap-2"
+          className="mt-4 grid min-w-0 gap-2"
           onSubmit={(e) => {
             e.preventDefault();
             if (!title.trim() || !listId) return;
@@ -115,7 +115,13 @@ export function RelatedTasks({
           <label className="text-xs font-medium" htmlFor="new-task-title">
             New task
           </label>
-          <Input id="new-task-title" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Follow up with contact" />
+          <Input
+            id="new-task-title"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder="Follow up with contact"
+            className="min-w-0"
+          />
           <label className="sr-only" htmlFor="new-task-list">
             List
           </label>
@@ -123,7 +129,7 @@ export function RelatedTasks({
             id="new-task-list"
             value={listId}
             onChange={(e) => setListId(e.target.value)}
-            className="h-8 rounded-md border bg-transparent px-2 text-sm"
+            className="h-8 w-full min-w-0 max-w-full rounded-md border bg-transparent px-2 text-sm"
           >
             {lists.map((list) => (
               <option key={list.id} value={list.id}>
@@ -131,14 +137,14 @@ export function RelatedTasks({
               </option>
             ))}
           </select>
-          <Button type="submit" size="sm" disabled={pending || !title.trim()}>
+          <Button type="submit" size="sm" disabled={pending || !title.trim()} className="w-full">
             <Plus className="size-3.5" aria-hidden />
             Create task
           </Button>
         </form>
       )}
 
-      <div className="mt-4 grid gap-2">
+      <div className="mt-4 grid min-w-0 gap-2">
         <label className="text-xs font-medium" htmlFor="link-task-search">
           Connect existing task
         </label>
@@ -146,6 +152,7 @@ export function RelatedTasks({
           id="link-task-search"
           value={query}
           placeholder="Search by title or number"
+          className="min-w-0"
           onChange={(e) => {
             const next = e.target.value;
             setQuery(next);
@@ -314,7 +321,7 @@ export function ActivityFeed({
             <textarea
               id="event-description"
               name="description"
-              className="min-h-16 rounded-lg border border-input bg-transparent px-3 py-2 text-sm"
+              className="min-h-16 w-full min-w-0 rounded-lg border border-input bg-transparent px-3 py-2 text-sm"
             />
           </div>
           <Button type="submit" size="sm" disabled={pending} className="w-fit">
@@ -342,7 +349,7 @@ export function ActivityFeed({
             value={note}
             onChange={(e) => setNote(e.target.value)}
             placeholder={placeholders[kind]}
-            className="min-h-20 rounded-lg border border-input bg-transparent px-3 py-2 text-sm"
+            className="min-h-20 w-full min-w-0 rounded-lg border border-input bg-transparent px-3 py-2 text-sm"
           />
           <Button type="submit" size="sm" disabled={pending || !note.trim()} className="w-fit">
             Save

@@ -37,6 +37,8 @@ export const OBJECT_ICON = {
   opportunity: "bg-brand-orange text-white",
   account: "bg-brand-teal text-white",
   quote: "bg-brand-teal-deep text-white",
+  product: "bg-primary text-primary-foreground",
+  priceBook: "bg-brand-teal-deep text-white",
 } as const;
 
 export type OutreachEntity = "account" | "lead" | "opportunity" | "quote";

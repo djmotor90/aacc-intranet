@@ -7,12 +7,13 @@
  * Fingerprint: GURVER-KG-AITIM-2026-7F3C9E2A
  * License: Proprietary. All rights reserved. See LICENSE / COPYRIGHT.
  */
-import { db, modules, spaces } from "@aitim/db";
+import { db, modules, sidebarNavItems, spaces } from "@aitim/db";
 import { and, asc, eq, inArray, isNull, ne, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireAdmin } from "@/lib/rbac";
 import { MODULE_ICONS, type WorkspaceModuleRow } from "@/modules/shell/module-types";
+import { moduleNavKey } from "../nav-catalog";
 
 function slugify(name: string): string {
   return (
@@ -234,6 +235,8 @@ export async function createWorkspaceModule(params: {
     .returning({ id: modules.id, slug: modules.slug });
 
   revalidatePath("/");
+  const { syncModuleToSidebarNav } = await import("./sidebar-nav");
+  await syncModuleToSidebarNav(created!.id);
   return created!;
 }
 
@@ -277,6 +280,14 @@ export async function updateWorkspaceModule(params: {
     .where(eq(modules.id, moduleId));
 
   revalidatePath("/");
+  await db
+    .update(sidebarNavItems)
+    .set({
+      label: name,
+      ...(icon !== undefined ? { icon } : {}),
+      ...(isEnabled !== undefined ? { hidden: !isEnabled } : {}),
+    })
+    .where(eq(sidebarNavItems.key, moduleNavKey(moduleId)));
 }
 
 export async function deleteWorkspaceModule(moduleId: string) {

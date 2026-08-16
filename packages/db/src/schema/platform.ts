@@ -10,6 +10,7 @@ import {
   bigserial,
   boolean,
   index,
+  integer,
   jsonb,
   pgEnum,
   pgTable,
@@ -199,6 +200,32 @@ export const modules = pgTable(
     ...timestamps,
   },
   (t) => [index("modules_position_idx").on(t.position)],
+);
+
+/**
+ * Admin-controlled top-level sidebar items (Home, Docs, Chat, workspace apps).
+ * Built-ins are seeded by key; workspace apps use key `module:<id>`.
+ */
+export const sidebarNavItems = pgTable(
+  "sidebar_nav_items",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    key: text("key").notNull().unique(),
+    kind: text("kind").notNull().default("builtin"),
+    label: text("label").notNull(),
+    href: text("href").notNull(),
+    icon: text("icon").notNull().default("tasks"),
+    hidden: boolean("hidden").notNull().default(false),
+    adminOnly: boolean("admin_only").notNull().default(false),
+    locked: boolean("locked").notNull().default(false),
+    moduleId: uuid("module_id").references(() => modules.id, { onDelete: "cascade" }),
+    position: integer("position").notNull().default(0),
+    ...timestamps,
+  },
+  (t) => [
+    index("sidebar_nav_items_position_idx").on(t.position),
+    index("sidebar_nav_items_module_idx").on(t.moduleId),
+  ],
 );
 
 /**

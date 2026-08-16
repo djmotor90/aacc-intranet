@@ -435,6 +435,20 @@
       "when": 1789000000000,
       "tag": "0061_woozy_phalanx",
       "breakpoints": true
+    },
+    {
+      "idx": 62,
+      "version": "7",
+      "when": 1789100000000,
+      "tag": "0062_silly_shaman",
+      "breakpoints": true
+    },
+    {
+      "idx": 63,
+      "version": "7",
+      "when": 1789200000000,
+      "tag": "0063_happy_ironclad",
+      "breakpoints": true
     }
   ]
 }

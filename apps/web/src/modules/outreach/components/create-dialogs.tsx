@@ -14,7 +14,8 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { createAccount, createLead, createOpportunity } from "../actions";
+import { createAccount, createLead, createOpportunity, createPriceBook, createProduct } from "../actions";
+import { CONTEXT_LEVELS } from "../lib/stages";
 
 export function CreateLeadForm({ accounts }: { accounts: { id: string; name: string }[] }) {
   const router = useRouter();
@@ -188,6 +189,117 @@ export function CreateAccountForm() {
               Save
             </Button>
           </div>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+export function CreateProductForm() {
+  const router = useRouter();
+  const [pending, startTransition] = useTransition();
+  const [open, setOpen] = useState(false);
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button type="button" size="sm" variant="outline">
+          New
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle>New Product</DialogTitle>
+        </DialogHeader>
+        <form
+          className="grid gap-2 sm:grid-cols-2"
+          onSubmit={(e) => {
+            e.preventDefault();
+            const data = new FormData(e.currentTarget);
+            startTransition(async () => {
+              try {
+                const row = await createProduct({
+                  name: String(data.get("name") ?? ""),
+                  productCode: String(data.get("productCode") ?? ""),
+                  family: String(data.get("family") ?? ""),
+                  description: String(data.get("description") ?? ""),
+                  hours: Number(data.get("hours") || 0),
+                  unitPriceCents: Math.round(Number(data.get("price") || 0) * 100),
+                  contextLevel: (String(data.get("contextLevel") || "none") as "none" | "light" | "full"),
+                });
+                toast.success("Product created");
+                router.push(`/outreach/products/${row.id}`);
+              } catch (err) {
+                toast.error(err instanceof Error ? err.message : "Could not create product");
+              }
+            });
+          }}
+        >
+          <Field name="name" label="Product name" required className="sm:col-span-2" />
+          <Field name="productCode" label="Product code" />
+          <Field name="family" label="Family" />
+          <Field name="hours" label="Hours" type="number" />
+          <Field name="price" label="List price ($)" type="number" />
+          <div className="grid gap-1.5 sm:col-span-2">
+            <Label htmlFor="contextLevel">Contextualization</Label>
+            <select id="contextLevel" name="contextLevel" className="h-8 rounded-md border bg-transparent px-2 text-sm">
+              {CONTEXT_LEVELS.map((level) => (
+                <option key={level.id} value={level.id}>
+                  {level.label}
+                </option>
+              ))}
+            </select>
+          </div>
+          <Field name="description" label="Description" className="sm:col-span-2" />
+          <div className="sm:col-span-2">
+            <Button type="submit" disabled={pending}>
+              Save
+            </Button>
+          </div>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+export function CreatePriceBookForm() {
+  const router = useRouter();
+  const [pending, startTransition] = useTransition();
+  const [open, setOpen] = useState(false);
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button type="button" size="sm" variant="outline">
+          New
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle>New Price Book</DialogTitle>
+        </DialogHeader>
+        <form
+          className="grid gap-2"
+          onSubmit={(e) => {
+            e.preventDefault();
+            const data = new FormData(e.currentTarget);
+            startTransition(async () => {
+              try {
+                const row = await createPriceBook({
+                  name: String(data.get("name") ?? ""),
+                  description: String(data.get("description") ?? ""),
+                });
+                toast.success("Price book created");
+                router.push(`/outreach/price-books/${row.id}`);
+              } catch (err) {
+                toast.error(err instanceof Error ? err.message : "Could not create price book");
+              }
+            });
+          }}
+        >
+          <Field name="name" label="Price book name" required />
+          <Field name="description" label="Description" />
+          <Button type="submit" disabled={pending}>
+            Save
+          </Button>
         </form>
       </DialogContent>
     </Dialog>

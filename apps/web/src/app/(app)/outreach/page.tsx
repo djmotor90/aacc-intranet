@@ -32,10 +32,11 @@ export default async function OutreachHomePage() {
         <p className="text-[11px] text-white/75">Home</p>
         <h1 className="text-lg font-bold">Corporate Outreach</h1>
       </section>
-      <div className="grid gap-3 sm:grid-cols-3">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <Stat href="/outreach/leads" label="Open leads" value={String(openLeads.length)} />
         <Stat href="/outreach/opportunities" label="Open opportunities" value={String(openOpps.length)} />
         <Stat href="/outreach/opportunities" label="Pipeline" value={formatMoney(pipeline)} />
+        <Stat href="/outreach/quotes" label="Quotes" value={String(quotes.length)} />
       </div>
       <section className="grid gap-3 lg:grid-cols-2">
         <Panel title="Recent leads">
@@ -109,7 +110,7 @@ export default async function OutreachHomePage() {
         </Panel>
       </section>
       <p className="text-sm text-muted-foreground">
-        {quotes.length} quote{quotes.length === 1 ? "" : "s"} on file.
+        Use Products and Price Books to keep training offerings ready for quotes.
       </p>
     </div>
   );

@@ -63,7 +63,7 @@ export function ListWorkspace({
               value={q}
               onChange={(e) => setQ(e.target.value)}
               placeholder={searchPlaceholder}
-              className="h-8 w-56 pl-7 text-sm"
+              className="h-8 w-full max-w-56 pl-7 text-sm"
             />
           </label>
         </div>
