@@ -27,6 +27,7 @@ import {
 } from "react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   TableBody,
   TableCell,
@@ -70,6 +71,7 @@ import {
   PRIORITY_LABELS,
 } from "./task-card";
 import { TaskActionsMenu, TaskContextMenu } from "./task-context-menu";
+import { TaskSelectionBar, type SelectedTask } from "./task-selection-bar";
 import { TimeTrackedCell } from "./time-tracked-field";
 import { TaskStatusPicker } from "./task-status-circle";
 import {
@@ -259,7 +261,7 @@ const ROW_H = 37;
 const HEADER_H = 42;
 
 /** Fixed leading gutter for the reorder handle and subtask expand/collapse chevron. */
-const EXPANDER_COL_WIDTH = 48;
+const EXPANDER_COL_WIDTH = 84;
 /** Per-depth-level indent for nested subtask rows (px). */
 const INDENT_PER_DEPTH = 20;
 
@@ -300,6 +302,9 @@ interface TaskRowProps {
   onRowDragOver?: (event: DragEvent<HTMLTableRowElement>, taskId: string, groupKey: string | null) => void;
   onRowDrop?: (event: DragEvent<HTMLTableRowElement>, taskId: string, groupKey: string | null) => void;
   onRowDragEnd?: () => void;
+  selected?: boolean;
+  selectionActive?: boolean;
+  onToggleSelect?: (taskId: string, opts: { shift: boolean }) => void;
 }
 
 const TaskRow = memo(function TaskRow({
@@ -330,6 +335,9 @@ const TaskRow = memo(function TaskRow({
   onRowDragOver,
   onRowDrop,
   onRowDragEnd,
+  selected = false,
+  selectionActive = false,
+  onToggleSelect,
 }: TaskRowProps) {
   const task = item.task;
   const assignees = item.assignees;
@@ -846,15 +854,36 @@ const TaskRow = memo(function TaskRow({
       }
       className={cn(
         "group/task-row h-[37px] transition-none hover:bg-muted/40",
+        selected && "bg-primary/10",
         isDragging && "opacity-40",
         dropPlacement === "before" && "[&>td]:border-t-2 [&>td]:border-t-primary",
         dropPlacement === "after" && "[&>td]:border-b-2 [&>td]:border-b-primary",
       )}
       style={{ contentVisibility: "auto", containIntrinsicSize: `auto ${ROW_H}px` }}
     >
-      <TableCell className="p-0 text-center">
-        <div className="flex h-full items-center justify-center">
-          {reorderEnabled && (
+      <TableCell className="p-0">
+        <div
+          className="flex h-full items-center justify-start gap-0.5 pl-1.5"
+          style={depth > 0 ? { paddingLeft: 6 + depth * INDENT_PER_DEPTH } : undefined}
+        >
+          <Checkbox
+            checked={selected}
+            aria-label={`Select ${task.title}`}
+            className={cn(
+              selected || selectionActive
+                ? "opacity-100"
+                : "opacity-0 group-hover/task-row:opacity-100 focus-visible:opacity-100",
+            )}
+            onClick={(event) => event.stopPropagation()}
+            onCheckedChange={() => onToggleSelect?.(task.id, { shift: false })}
+            onPointerDown={(event) => {
+              if (event.shiftKey) {
+                event.preventDefault();
+                onToggleSelect?.(task.id, { shift: true });
+              }
+            }}
+          />
+          {reorderEnabled ? (
             <button
               type="button"
               draggable
@@ -862,22 +891,26 @@ const TaskRow = memo(function TaskRow({
               aria-label={`Reorder ${task.title}`}
               onDragStart={(event) => onRowDragStart?.(event, task.id, reorderGroupKey)}
               onDragEnd={onRowDragEnd}
-              className="flex size-5 cursor-grab items-center justify-center rounded text-muted-foreground/40 opacity-40 hover:bg-muted hover:text-foreground group-hover/task-row:opacity-100 active:cursor-grabbing focus-visible:opacity-100"
+              className="flex size-5 shrink-0 cursor-grab items-center justify-center rounded text-muted-foreground/40 opacity-40 hover:bg-muted hover:text-foreground group-hover/task-row:opacity-100 active:cursor-grabbing focus-visible:opacity-100"
             >
               <GripVertical className="size-3.5" />
             </button>
+          ) : (
+            <span className="size-5 shrink-0" aria-hidden />
           )}
-          {subtaskCount > 0 && (
-            <button
-              type="button"
-              onClick={onToggleExpand}
-              aria-label={expanded ? "Collapse subtasks" : "Expand subtasks"}
-              aria-expanded={expanded}
-              className="flex size-5 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
-            >
-              <ChevronRight className={cn("size-3.5 transition-transform", expanded && "rotate-90")} />
-            </button>
-          )}
+          <span className="flex size-5 shrink-0 items-center justify-center">
+            {subtaskCount > 0 ? (
+              <button
+                type="button"
+                onClick={onToggleExpand}
+                aria-label={expanded ? "Collapse subtasks" : "Expand subtasks"}
+                aria-expanded={expanded}
+                className="flex size-5 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
+              >
+                <ChevronRight className={cn("size-3.5 transition-transform", expanded && "rotate-90")} />
+              </button>
+            ) : null}
+          </span>
         </div>
       </TableCell>
       {orderedColumns.map((col) => renderCell(col.id))}
@@ -962,6 +995,8 @@ export function TaskTable({
     () => new Map(items.map((it, i) => [i, it])),
   );
   const requestedPages = useRef<Set<number>>(new Set([0]));
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const lastSelectedId = useRef<string | null>(null);
   useEffect(() => {
     setRowsByOffset(new Map(items.map((it, i) => [i, it])));
     requestedPages.current = new Set([0]);
@@ -1490,6 +1525,95 @@ export function TaskTable({
     [fieldDefs],
   );
 
+  const loadedTasks = useMemo(() => {
+    const out: SelectedTask[] = [];
+    const seen = new Set<string>();
+    for (const item of rowsByOffset.values()) {
+      if (seen.has(item.task.id)) continue;
+      seen.add(item.task.id);
+      out.push({ id: item.task.id, number: item.task.number, title: item.task.title });
+    }
+    return out;
+  }, [rowsByOffset]);
+
+  const loadedIdOrder = useMemo(() => loadedTasks.map((task) => task.id), [loadedTasks]);
+
+  const offsetByTaskId = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const [offset, item] of rowsByOffset) map.set(item.task.id, offset);
+    return map;
+  }, [rowsByOffset]);
+
+  const groupOffsetRanges = useMemo(() => {
+    if (!groupBy || !groupCounts?.length) return null;
+    let offset = 0;
+    return groupCounts.map((group) => {
+      const range = { key: group.key, start: offset, end: offset + group.count };
+      offset += group.count;
+      return range;
+    });
+  }, [groupBy, groupCounts]);
+
+  const idsInOffsetRange = useCallback(
+    (start: number, end: number) => {
+      const ids: string[] = [];
+      for (let offset = start; offset < end; offset++) {
+        const item = rowsByOffset.get(offset);
+        if (item) ids.push(item.task.id);
+      }
+      return ids;
+    },
+    [rowsByOffset],
+  );
+
+  const rangeForOffset = useCallback(
+    (offset: number) => {
+      if (!groupOffsetRanges) return { start: 0, end: totalCount };
+      return groupOffsetRanges.find((range) => offset >= range.start && offset < range.end) ?? null;
+    },
+    [groupOffsetRanges, totalCount],
+  );
+
+  const toggleSelect = useCallback(
+    (taskId: string, opts: { shift: boolean }) => {
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        if (opts.shift && lastSelectedId.current) {
+          const from = offsetByTaskId.get(lastSelectedId.current);
+          const to = offsetByTaskId.get(taskId);
+          if (from != null && to != null) {
+            let lo = Math.min(from, to);
+            let hi = Math.max(from, to);
+            const range = rangeForOffset(to);
+            if (range) {
+              lo = Math.max(lo, range.start);
+              hi = Math.min(hi, range.end - 1);
+            }
+            for (let offset = lo; offset <= hi; offset++) {
+              const item = rowsByOffset.get(offset);
+              if (item) next.add(item.task.id);
+            }
+            lastSelectedId.current = taskId;
+            return next;
+          }
+        }
+        if (next.has(taskId)) next.delete(taskId);
+        else next.add(taskId);
+        lastSelectedId.current = taskId;
+        return next;
+      });
+    },
+    [offsetByTaskId, rangeForOffset, rowsByOffset],
+  );
+
+  const allLoadedSelected = !groupOffsetRanges && loadedIdOrder.length > 0 && loadedIdOrder.every((id) => selectedIds.has(id));
+  const someLoadedSelected = !groupOffsetRanges && loadedIdOrder.some((id) => selectedIds.has(id));
+
+  const selectedTasks = useMemo(() => {
+    const byId = new Map(loadedTasks.map((task) => [task.id, task]));
+    return [...selectedIds].map((id) => byId.get(id) ?? { id, number: "", title: "Task" });
+  }, [selectedIds, loadedTasks]);
+
   function renderTaskRow(
     vIndex: number,
     item: TaskWithMeta,
@@ -1530,6 +1654,9 @@ export function TaskTable({
         onRowDragOver={handleRowDragOver}
         onRowDrop={handleRowDrop}
         onRowDragEnd={clearRowDrag}
+        selected={selectedIds.has(item.task.id)}
+        selectionActive={selectedIds.size > 0}
+        onToggleSelect={toggleSelect}
       />
     );
   }
@@ -1645,6 +1772,35 @@ export function TaskTable({
   // the subscription would never attach.
   const [scrollEl, setScrollEl] = useState<HTMLDivElement | null>(null);
   const tbodyRef = useRef<HTMLTableSectionElement | null>(null);
+
+  useEffect(() => {
+    function onKey(event: KeyboardEvent) {
+      if (event.key === "Escape" && selectedIds.size > 0) {
+        const openMenu = document.querySelector("[data-state='open'][data-slot='dropdown-menu-content'], [data-state='open'][data-slot='popover-content']");
+        if (openMenu) return;
+        setSelectedIds(new Set());
+        return;
+      }
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "a") {
+        const target = event.target as HTMLElement | null;
+        if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable)) {
+          return;
+        }
+        if (scrollEl && (scrollEl === document.activeElement || scrollEl.contains(document.activeElement))) {
+          event.preventDefault();
+          if (groupOffsetRanges && lastSelectedId.current != null) {
+            const offset = offsetByTaskId.get(lastSelectedId.current);
+            const range = offset != null ? rangeForOffset(offset) : null;
+            setSelectedIds(range ? new Set(idsInOffsetRange(range.start, range.end)) : new Set());
+          } else if (!groupOffsetRanges) {
+            setSelectedIds(new Set(loadedIdOrder));
+          }
+        }
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [selectedIds.size, loadedIdOrder, scrollEl, groupOffsetRanges, lastSelectedId, offsetByTaskId, rangeForOffset, idsInOffsetRange]);
 
   // A task row's virtual slot grows to fit its (recursively) expanded, loaded
   // descendants — they render as extra sibling <tr>s riding along with the
@@ -1777,7 +1933,7 @@ export function TaskTable({
 
   // ─────────────────────────────────────────────────────────────────────────
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-3">
+    <div className={cn("flex min-h-0 flex-1 flex-col gap-3", selectedIds.size > 0 && "pb-16")}>
       {/* toolbar */}
       <div className="flex justify-end">
         <DropdownMenu>
@@ -1847,7 +2003,20 @@ export function TaskTable({
           </colgroup>
           <TableHeader className="sticky top-0 z-10 border-b border-border bg-background">
             <TableRow className="transition-none hover:bg-transparent">
-              <TableHead className="p-0" />
+              <TableHead className="p-0">
+                {!groupOffsetRanges && (
+                  <div className="flex h-full items-center justify-start pl-1.5">
+                    <Checkbox
+                      checked={allLoadedSelected ? true : someLoadedSelected ? "indeterminate" : false}
+                      aria-label="Select all loaded tasks"
+                      disabled={loadedIdOrder.length === 0}
+                      onCheckedChange={(value) => {
+                        setSelectedIds(value ? new Set(loadedIdOrder) : new Set());
+                      }}
+                    />
+                  </div>
+                )}
+              </TableHead>
               {orderedColumns.map((col) => {
                 const isCustom = col.id.startsWith("field-");
                 const defId = isCustom ? col.id.slice(6) : null;
@@ -1920,6 +2089,9 @@ export function TaskTable({
               if (entry.kind === "header") {
                 const seg = entry.seg;
                 const collapsed = collapsedGroups.has(seg.key);
+                const groupIds = idsInOffsetRange(seg.startOffset, seg.startOffset + seg.count);
+                const groupAll = groupIds.length > 0 && groupIds.every((id) => selectedIds.has(id));
+                const groupSome = groupIds.some((id) => selectedIds.has(id));
                 return (
                   <TableRow
                     key={`h-${seg.key}`}
@@ -1927,7 +2099,31 @@ export function TaskTable({
                     className="cursor-pointer bg-muted/40 transition-none hover:bg-muted/60"
                     onClick={() => toggleGroup(seg.key)}
                   >
-                    <TableCell colSpan={colSpan} className="py-2">
+                    <TableCell className="p-0">
+                      <div
+                        className="flex h-full items-center justify-start pl-1.5"
+                        onClick={(event) => event.stopPropagation()}
+                      >
+                        <Checkbox
+                          checked={groupAll ? true : groupSome ? "indeterminate" : false}
+                          aria-label={`Select ${seg.label}`}
+                          disabled={groupIds.length === 0}
+                          onCheckedChange={(value) => {
+                            setSelectedIds((prev) => {
+                              const next = new Set(prev);
+                              if (value) {
+                                for (const id of groupIds) next.add(id);
+                                lastSelectedId.current = groupIds[groupIds.length - 1] ?? lastSelectedId.current;
+                              } else {
+                                for (const id of groupIds) next.delete(id);
+                              }
+                              return next;
+                            });
+                          }}
+                        />
+                      </div>
+                    </TableCell>
+                    <TableCell colSpan={orderedColumns.length} className="py-2">
                       <div className="flex items-center gap-2">
                         <ChevronRight
                           className={cn(
@@ -2065,6 +2261,19 @@ export function TaskTable({
       </div>
 
       {/* context menu — native columns + custom fields */}
+      <TaskSelectionBar
+        selected={selectedTasks}
+        onClear={() => setSelectedIds(new Set())}
+        canEdit={canEdit}
+        statuses={statuses}
+        fieldDefs={fieldDefs}
+        activeUsers={activeUsers}
+        spaceTags={spaceTags}
+        writableLists={writableLists}
+        taskTypes={taskTypes}
+        currentListId={listId}
+      />
+
       {ctxMenu && (
         <TaskTableColumnMenu
           menu={ctxMenu}

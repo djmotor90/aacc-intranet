@@ -19,6 +19,28 @@ export const whatsNewFeed: WhatsNewFeed = {
   schemaVersion: 1,
   entries: [
     {
+      id: "2026-08-16-task-group-select",
+      date: "2026-08-16",
+      publishedAt: "2026-08-16T12:00:00.000Z",
+      kind: "improved",
+      module: "tasks",
+      title: "Select a group of tasks at a time",
+      body: "When a list is grouped, the checkbox on each group header selects only that group. Shift-click and Select All stay inside the same group instead of grabbing every task on the page.",
+      href: "/tasks",
+      tags: ["tasks", "bulk", "list"],
+    },
+    {
+      id: "2026-08-15-task-bulk-select",
+      date: "2026-08-15",
+      publishedAt: "2026-08-15T23:30:00.000Z",
+      kind: "new",
+      module: "tasks",
+      title: "Select tasks and act on them together",
+      body: "Check one task or many in a list, then use the bar at the bottom to set status, assignees, dates, tags, custom fields, move or copy, convert to subtasks, duplicate, archive, or trash — without opening each task.",
+      href: "/tasks",
+      tags: ["tasks", "bulk", "list"],
+    },
+    {
       id: "2026-08-15-outreach-aacc-colors",
       date: "2026-08-15",
       publishedAt: "2026-08-15T23:00:00.000Z",
