@@ -255,6 +255,8 @@ function describeActivity(a: ActivityEvent): string {
       return `${who} moved the task${p.toList ? ` to ${p.toList}` : ""}`;
     case "task.subtask_created":
       return `${who} created subtask${p.number ? ` ${p.number}` : ""}${p.title ? ` “${p.title}”` : ""}`;
+    case "task.parent_changed":
+      return `${who} converted this to a subtask${p.parentNumber ? ` of ${p.parentNumber}` : ""}`;
     case "time.logged":
       return `${who} logged ${formatActivityDuration(p.seconds)}`;
     case "time.started":

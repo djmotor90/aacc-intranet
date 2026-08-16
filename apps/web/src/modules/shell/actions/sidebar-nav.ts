@@ -12,7 +12,8 @@ import { asc, eq, inArray } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireAdmin, requireUser } from "@/lib/rbac";
-import { resolveNavIcon, type NavItem } from "@/modules/registry";
+import { resolveNavIcon } from "@/modules/registry";
+import type { NavItem } from "@/modules/types";
 import { BUILTIN_NAV, moduleNavKey, NAV_ICONS } from "../nav-catalog";
 
 export type SidebarNavAdminRow = {

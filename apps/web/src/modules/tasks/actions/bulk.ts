@@ -158,8 +158,8 @@ export async function bulkSetCustomField(taskIds: string[], defId: string, value
         spaceId: space.id,
         taskId: row.id,
         actorId: user.id,
-        verb: "task.custom_field_changed",
-        payload: { fieldId, bulk: true },
+        verb: "task.field_changed",
+        payload: { field: def.label, from: before[fieldId] ?? null, to: parsed.data ?? null, bulk: true },
       });
     }
   });

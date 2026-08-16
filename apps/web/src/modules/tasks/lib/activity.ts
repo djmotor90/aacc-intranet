@@ -35,6 +35,7 @@ export interface ActivityEntry {
     | "task.purged"
     | "task.moved"
     | "task.subtask_created"
+    | "task.parent_changed"
     | "task.type_changed"
     | "task_type.created"
     | "task_type.updated"
