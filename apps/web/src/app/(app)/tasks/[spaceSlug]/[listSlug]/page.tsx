@@ -129,7 +129,7 @@ export default async function ListPage(props: {
     const submissionCount = form ? await countFormSubmissions(form.id) : 0;
 
     return (
-      <div className="flex h-full flex-col">
+      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto p-6">
         <ListLiveRefresh listId={list.id} />
         <div className="mb-3 flex flex-col gap-2">
           <div className="flex items-start gap-3">
@@ -139,7 +139,7 @@ export default async function ListPage(props: {
                   {space.name}
                 </Link>
                 {" · "}
-                <Link href="/tasks/forms" className="hover:underline">
+                <Link href="/forms" className="hover:underline">
                   Forms Hub
                 </Link>
               </div>

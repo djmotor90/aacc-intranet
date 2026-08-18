@@ -942,6 +942,7 @@ export function TaskTable({
   viewId,
   onGroupByChange,
   currentUserId,
+  fillViewport = true,
 }: {
   /** First page of tasks (server-filtered and ordered). */
   items: TaskWithMeta[];
@@ -973,6 +974,8 @@ export function TaskTable({
   /** Soft group-by (no full navigation). */
   onGroupByChange?: (value: string) => void;
   currentUserId: string;
+  /** When false, the table grows with rows and only scrolls sideways (space/folder stack). */
+  fillViewport?: boolean;
 }) {
   const statusById = useMemo(() => new Map(statuses.map((s) => [s.id, s])), [statuses]);
   const router = useRouter();
@@ -1933,7 +1936,7 @@ export function TaskTable({
 
   // ─────────────────────────────────────────────────────────────────────────
   return (
-    <div className={cn("flex min-h-0 flex-1 flex-col gap-3", selectedIds.size > 0 && "pb-16")}>
+    <div className={cn("flex flex-col gap-3", fillViewport && "min-h-0 flex-1", selectedIds.size > 0 && "pb-16")}>
       {/* toolbar */}
       <div className="flex justify-end">
         <DropdownMenu>
@@ -1984,7 +1987,12 @@ export function TaskTable({
         ref={setScrollEl}
         tabIndex={0}
         aria-label="Task table"
-        className="min-h-0 flex-1 overflow-auto overscroll-contain [scrollbar-gutter:stable] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        className={cn(
+          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+          fillViewport
+            ? "min-h-0 flex-1 overflow-auto overscroll-contain [scrollbar-gutter:stable]"
+            : "overflow-x-auto overflow-y-clip",
+        )}
         style={{
           WebkitOverflowScrolling: "touch",
           // Hint the browser this surface is scroll-driven (compositor-friendly).

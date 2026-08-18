@@ -23,7 +23,9 @@ import {
   ChevronDown,
   ChevronRight,
   Database,
+  ClipboardList,
   FileText,
+  FolderOpen,
   Home,
   type LucideIcon,
   MessageCircle,
@@ -93,6 +95,8 @@ const ICONS: Record<NavIcon, LucideIcon> = {
   tasks: SquareCheckBig,
   home: Home,
   docs: FileText,
+  forms: ClipboardList,
+  files: FolderOpen,
   chat: MessageCircle,
   database: Database,
 };
@@ -367,9 +371,7 @@ export function SidebarNav({
           // Task detail / trash / forms hub: keep under the system Tasks app
           const onTasksGlobal =
             item.moduleSlug === "tasks" &&
-            (pathname.startsWith("/tasks/task/") ||
-              pathname.startsWith("/tasks/trash") ||
-              pathname.startsWith("/tasks/forms"));
+            (pathname.startsWith("/tasks/task/") || pathname.startsWith("/tasks/trash"));
           const isActive =
             item.href === "/"
               ? pathname === "/"

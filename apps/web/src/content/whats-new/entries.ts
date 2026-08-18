@@ -19,6 +19,28 @@ export const whatsNewFeed: WhatsNewFeed = {
   schemaVersion: 1,
   entries: [
     {
+      id: "2026-08-18-space-folder-tables",
+      date: "2026-08-18",
+      publishedAt: "2026-08-18T12:00:00.000Z",
+      kind: "improved",
+      module: "tasks",
+      title: "Open a space or folder to see every list",
+      body: "Clicking a space or folder in the sidebar now shows all lists inside it as stacked tables — name, assignees, due date, and status groups — like ClickUp. Open a list name to go to the full list.",
+      href: "/tasks",
+      tags: ["tasks", "lists"],
+    },
+    {
+      id: "2026-08-17-forms-files-hubs",
+      date: "2026-08-17",
+      publishedAt: "2026-08-17T12:00:00.000Z",
+      kind: "new",
+      module: "shell",
+      title: "Forms and Files in the main menu",
+      body: "Forms is a hub like Docs: search, live or paused, grid or list, templates, and a copy-link button. Files is a shared team library — folders live in a space, not a personal drive — with search, Recent, Starred, task files, and Trash.",
+      href: "/files",
+      tags: ["forms", "files", "docs"],
+    },
+    {
       id: "2026-08-16-edit-quote-lines",
       date: "2026-08-16",
       publishedAt: "2026-08-16T23:00:00.000Z",

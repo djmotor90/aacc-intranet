@@ -168,8 +168,8 @@ export function ListTasksShell({
   const userNames = new Map(activeUsers.map((u) => [u.id, u.displayName]));
 
   return (
-    <>
-      <div className="mb-4 flex items-center gap-2">
+    <div className="flex min-h-0 flex-1 flex-col">
+      <div className="mb-4 flex shrink-0 items-center gap-2">
         <Badge variant="secondary" className={cn(busy && "opacity-70")}>
           {total} tasks
         </Badge>
@@ -214,6 +214,6 @@ export function ListTasksShell({
         onGroupByChange={applyGroupBy}
         currentUserId={currentUserId}
       />
-    </>
+    </div>
   );
 }

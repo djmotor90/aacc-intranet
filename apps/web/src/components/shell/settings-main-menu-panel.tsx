@@ -24,7 +24,9 @@ import {
   Database,
   Eye,
   EyeOff,
+  ClipboardList,
   FileText,
+  FolderOpen,
   GripVertical,
   Home,
   type LucideIcon,
@@ -58,6 +60,8 @@ const ICON_MAP: Record<NavIconKey, LucideIcon> = {
   shield: Shield,
   building: Building2,
   docs: FileText,
+  forms: ClipboardList,
+  files: FolderOpen,
   chat: MessageCircle,
   database: Database,
 };

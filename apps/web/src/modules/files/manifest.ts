@@ -5,12 +5,12 @@
  * Fingerprint: GURVER-KG-AITIM-2026-7F3C9E2A
  * License: Proprietary. All rights reserved. See LICENSE / COPYRIGHT.
  */
-export * from "./platform";
-export * from "./tasks";
-export * from "./forms";
-export * from "./secrets";
-export * from "./docs";
-export * from "./chat";
-export * from "./ee-dictionary";
-export * from "./outreach";
-export * from "./files";
+import type { ModuleManifest } from "../types";
+
+export const filesManifest: ModuleManifest = {
+  slug: "files",
+  name: "Files",
+  basePath: "/files",
+  navItems: [{ label: "Files", href: "/files", icon: "files" }],
+  access: () => true,
+};

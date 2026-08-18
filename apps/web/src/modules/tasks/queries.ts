@@ -68,6 +68,21 @@ export const getFoldersForSpace = cache(async (spaceId: string) => {
     .orderBy(asc(folders.position), asc(folders.createdAt));
 });
 
+export const getFolderBySlug = cache(async (spaceId: string, slug: string) => {
+  const [folder] = await db
+    .select()
+    .from(folders)
+    .where(
+      and(
+        eq(folders.spaceId, spaceId),
+        eq(folders.slug, slug),
+        eq(folders.isArchived, false),
+        isNull(folders.deletedAt),
+      ),
+    );
+  return folder ?? null;
+});
+
 export interface ListNavNode {
   id: string;
   name: string;
@@ -538,6 +553,46 @@ export async function getFormsHubForUser(user: SessionUserLike): Promise<FormsHu
     });
   }
   return accessible;
+}
+
+export type FormDestination = {
+  listId: string;
+  listName: string;
+  listSlug: string;
+  spaceName: string;
+  spaceSlug: string;
+};
+
+/** Lists the user can put a new form on (member+). */
+export async function listFormDestinations(user: SessionUserLike): Promise<FormDestination[]> {
+  const rows = await db
+    .select({
+      listId: lists.id,
+      listName: lists.name,
+      listSlug: lists.slug,
+      spaceName: spaces.name,
+      spaceSlug: spaces.slug,
+    })
+    .from(lists)
+    .innerJoin(spaces, eq(lists.spaceId, spaces.id))
+    .where(
+      and(
+        isNull(lists.deletedAt),
+        eq(lists.isArchived, false),
+        isNull(spaces.deletedAt),
+        eq(spaces.isArchived, false),
+      ),
+    )
+    .orderBy(asc(spaces.name), asc(lists.name));
+
+  const out: FormDestination[] = [];
+  for (const row of rows) {
+    const role = await getListRole(user.id, row.listId, user.platformRole);
+    if (role === "member" || role === "owner" || user.platformRole === "admin") {
+      out.push(row);
+    }
+  }
+  return out;
 }
 
 /**

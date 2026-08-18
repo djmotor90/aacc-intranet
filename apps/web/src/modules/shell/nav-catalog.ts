@@ -15,6 +15,8 @@ export const NAV_ICONS = [
   "shield",
   "building",
   "docs",
+  "forms",
+  "files",
   "chat",
   "database",
 ] as const;
@@ -36,6 +38,8 @@ export const BUILTIN_NAV: BuiltinNavSeed[] = [
   { key: "directory", label: "Directory", href: "/directory", icon: "users" },
   { key: "notifications", label: "Notifications", href: "/notifications", icon: "bell" },
   { key: "docs", label: "Docs", href: "/docs", icon: "docs" },
+  { key: "forms", label: "Forms", href: "/forms", icon: "forms" },
+  { key: "files", label: "Files", href: "/files", icon: "files" },
   { key: "chat", label: "Chat", href: "/chat", icon: "chat" },
   {
     key: "ee-dictionary",

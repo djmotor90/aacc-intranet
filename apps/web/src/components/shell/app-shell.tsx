@@ -65,6 +65,19 @@ function maxWidthPx(): number {
   return Math.min(MAX_PX_CAP, Math.floor(window.innerWidth * MAX_FRACTION));
 }
 
+/** List table/board/grid need one bounded pane so the table can scroll vertically. */
+function isTaskListWorkspacePath(pathname: string): boolean {
+  const match = pathname.match(/^\/tasks\/([^/]+)\/([^/]+)(?:\/(.*))?$/);
+  if (!match) return false;
+  const [, space, second, rest] = match;
+  if (space === "task" || space === "forms" || space === "trash" || space === "timesheet") {
+    return false;
+  }
+  if (second === "folder") return false;
+  if (rest === "settings" || rest?.startsWith("settings/")) return false;
+  return true;
+}
+
 export function AppShell({
   items,
   taskNavTree,
@@ -83,7 +96,8 @@ export function AppShell({
   // Chat threads are full-bleed fixed panes; agent builder pages use normal scroll + padding.
   const fullBleedMain =
     pathname === "/chat" ||
-    (pathname.startsWith("/chat/") && !pathname.startsWith("/chat/agents"));
+    (pathname.startsWith("/chat/") && !pathname.startsWith("/chat/agents")) ||
+    isTaskListWorkspacePath(pathname);
   const [width, setWidth] = useState(DEFAULT_WIDTH);
   const [collapsed, setCollapsed] = useState(false);
   const [hydrated, setHydrated] = useState(false);

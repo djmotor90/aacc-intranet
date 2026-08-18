@@ -7,6 +7,7 @@
  */
 import { chatManifest } from "./chat/manifest";
 import { docsManifest } from "./docs/manifest";
+import { filesManifest } from "./files/manifest";
 import { eeDictionaryManifest } from "./ee-dictionary/manifest";
 import { outreachManifest } from "./outreach/manifest";
 import { shellManifest } from "./shell/manifest";
@@ -16,6 +17,7 @@ import type { ModuleManifest, NavIcon, NavItem, SessionUserLike } from "./types"
 export const moduleRegistry: ModuleManifest[] = [
   shellManifest,
   docsManifest,
+  filesManifest,
   chatManifest,
   eeDictionaryManifest,
   outreachManifest,
@@ -39,6 +41,8 @@ export function resolveNavIcon(icon: string | null | undefined): NavIcon {
     "tasks",
     "home",
     "docs",
+    "forms",
+    "files",
     "chat",
     "database",
   ];
@@ -50,7 +54,7 @@ export function resolveNavIcon(icon: string | null | undefined): NavIcon {
  * Built-in product apps that must never appear as `/w/:slug` workspace nav.
  * Real Docs/Chat come from module manifests (`/docs`, `/chat`).
  */
-const BUILTIN_APP_SLUGS = new Set(["docs", "chat", "outreach"]);
+const BUILTIN_APP_SLUGS = new Set(["docs", "chat", "outreach", "files"]);
 
 export function workspaceModulesToNavItems(
   rows: { id: string; slug: string; name: string; icon: string }[],

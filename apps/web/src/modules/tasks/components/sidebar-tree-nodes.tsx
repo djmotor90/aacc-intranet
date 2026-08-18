@@ -29,6 +29,8 @@ export function folderContainsPath(
   spaceSlug: string,
   pathname: string,
 ): boolean {
+  const folderHref = `/tasks/${spaceSlug}/folder/${node.slug}`;
+  if (pathname === folderHref || pathname.startsWith(`${folderHref}/`)) return true;
   for (const list of node.lists) {
     const href = `/tasks/${spaceSlug}/${list.slug}`;
     if (pathname === href || pathname.startsWith(`${href}/`)) return true;
@@ -156,20 +158,23 @@ function FolderRowImpl({
           isPrivate={node.isPrivate}
           canManage={canManage}
         >
-          <div
+          <Link
             ref={setRefs}
+            href={`/tasks/${spaceSlug}/folder/${node.slug}`}
             {...attributes}
             {...listeners}
             className={cn(
-              "flex min-w-0 flex-1 cursor-grab items-center gap-2 rounded-md px-1.5 py-1.5 text-sm text-muted-foreground transition-colors active:cursor-grabbing",
+              "flex min-w-0 flex-1 cursor-grab items-center gap-2 rounded-md px-1.5 py-1.5 text-sm transition-colors active:cursor-grabbing",
               isDragging && "opacity-40",
-              containsActive && "text-foreground",
-              isOver ? "bg-muted ring-2 ring-primary/30" : "hover:bg-muted hover:text-foreground",
+              containsActive
+                ? "bg-muted font-medium text-foreground"
+                : "text-muted-foreground hover:bg-muted hover:text-foreground",
+              isOver && "bg-muted ring-2 ring-primary/30",
             )}
           >
-            <EntityIcon color={node.color} fallback="folder" size="xs" />
+            <EntityIcon icon={node.icon} color={node.color} fallback="folder" size="xs" />
             <span className="truncate">{node.name}</span>
-          </div>
+          </Link>
         </FolderNavContextMenu>
       </div>
 

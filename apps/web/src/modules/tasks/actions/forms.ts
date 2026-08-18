@@ -185,6 +185,7 @@ export async function createFormView(params: {
 
   revalidatePath(listPath(space.slug, list.slug));
   revalidatePath("/tasks/forms");
+  revalidatePath("/forms");
   return result;
 }
 
@@ -397,6 +398,7 @@ export async function updateFormSettings(params: {
   revalidatePath(listPath(space.slug, list.slug));
   revalidatePath(`/forms/${form.slug}`);
   revalidatePath("/tasks/forms");
+  revalidatePath("/forms");
 }
 
 /** Upload a logo image for the public form (stored in S3 attachments bucket). */
@@ -518,6 +520,7 @@ export async function updateFormFields(formId: string, fields: unknown) {
   revalidatePath(listPath(space.slug, list.slug));
   revalidatePath(`/forms/${form.slug}`);
   revalidatePath("/tasks/forms");
+  revalidatePath("/forms");
 }
 
 export async function regenerateFormSlug(formId: string): Promise<{ slug: string }> {
@@ -533,6 +536,7 @@ export async function regenerateFormSlug(formId: string): Promise<{ slug: string
   revalidatePath(`/forms/${form.slug}`);
   revalidatePath(`/forms/${slug}`);
   revalidatePath("/tasks/forms");
+  revalidatePath("/forms");
   return { slug };
 }
 
@@ -546,6 +550,7 @@ export async function deleteFormForView(viewId: string) {
   await db.delete(formSubmissions).where(eq(formSubmissions.formId, form.id));
   await db.delete(publicForms).where(eq(publicForms.id, form.id));
   revalidatePath("/tasks/forms");
+  revalidatePath("/forms");
 }
 
 export type FormUploadFile = {
@@ -999,6 +1004,7 @@ export async function submitPublicForm(params: {
   await pingListUpdate(list.id);
   revalidatePath(listPath(space.slug, list.slug));
   revalidatePath("/tasks/forms");
+  revalidatePath("/forms");
 
   return { ok: true, taskNumber, taskId };
 }

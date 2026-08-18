@@ -19,6 +19,8 @@ export type NavIcon =
   | "tasks"
   | "home"
   | "docs"
+  | "forms"
+  | "files"
   | "chat"
   | "database";
 

@@ -97,7 +97,7 @@ export function TasksRootContextMenu({
             </ContextMenuItem>
           )}
           <ContextMenuItem asChild className="gap-2">
-            <Link href="/tasks/forms">
+            <Link href="/forms">
               <ClipboardList className="size-4" />
               Forms Hub
             </Link>
