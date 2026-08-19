@@ -7,10 +7,12 @@
  */
 /** Client helpers: upload images & files to a task for embedding in the editor. */
 
+import type { JSONContent } from "@tiptap/react";
 import {
   MAX_ATTACHMENT_BYTES,
   MAX_ATTACHMENT_LABEL,
 } from "@/lib/upload-limits";
+import { dataUrlToFile } from "./paste-utils";
 
 export type UploadedFile = {
   id: string;
@@ -176,6 +178,64 @@ export async function uploadEditorFile(
   if (target.type === "page") return uploadDocPageFile(target.id, file);
   if (target.type === "chat") return uploadChatFile(target.id, file);
   return uploadTaskFile(target.id, file);
+}
+
+const DATA_IMAGE_SRC =
+  /^data:image\/(png|jpe?g|gif|webp|bmp|heic);base64,/i;
+
+/** True when a TipTap doc still has inlined data-URL images (compose-before-save). */
+export function docHasDataImages(doc: JSONContent | null | undefined): boolean {
+  if (!doc) return false;
+  let found = false;
+  function walk(node: JSONContent) {
+    if (found) return;
+    if (node.type === "image" && typeof node.attrs?.src === "string") {
+      if (DATA_IMAGE_SRC.test(node.attrs.src)) found = true;
+    }
+    if (node.content) for (const child of node.content) walk(child);
+  }
+  walk(doc);
+  return found;
+}
+
+/**
+ * Upload inlined `data:image…` nodes to the given target and rewrite `src`
+ * to the permanent attachment URL. Used after creating a task from a compose
+ * editor that had no id to upload against yet.
+ */
+export async function uploadEmbeddedDataImages(
+  target: EditorUploadTarget,
+  doc: JSONContent,
+): Promise<{ doc: JSONContent; changed: boolean }> {
+  let changed = false;
+  async function walk(node: JSONContent): Promise<JSONContent> {
+    const next: JSONContent = { ...node };
+    if (node.type === "image") {
+      const src = typeof node.attrs?.src === "string" ? node.attrs.src : "";
+      if (DATA_IMAGE_SRC.test(src)) {
+        const mimeMatch = /^data:(image\/[a-zA-Z0-9.+-]+);base64,/i.exec(src);
+        const mime = mimeMatch?.[1] ?? "image/png";
+        const file = dataUrlToFile(src, mime, 0);
+        if (file) {
+          const uploaded = await uploadEditorFile(target, file);
+          changed = true;
+          next.attrs = {
+            ...node.attrs,
+            src: uploaded.url,
+            alt:
+              (typeof node.attrs?.alt === "string" && node.attrs.alt) ||
+              uploaded.fileName,
+            title: uploaded.fileName,
+          };
+        }
+      }
+    }
+    if (node.content?.length) {
+      next.content = await Promise.all(node.content.map(walk));
+    }
+    return next;
+  }
+  return { doc: await walk(doc), changed };
 }
 
 /** @deprecated use uploadTaskFile */

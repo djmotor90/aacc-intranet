@@ -148,6 +148,23 @@ export function extractDataUrlImages(html: string): {
   return { html: nextHtml, images };
 }
 
+export function fileToDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = reader.result;
+      if (typeof result === "string" && result.startsWith("data:")) {
+        resolve(result);
+        return;
+      }
+      reject(new Error("Could not read image"));
+    };
+    reader.onerror = () =>
+      reject(reader.error ?? new Error("Could not read image"));
+    reader.readAsDataURL(file);
+  });
+}
+
 export function dataUrlToFile(dataUrl: string, mime: string, index: number): File | null {
   try {
     const comma = dataUrl.indexOf(",");

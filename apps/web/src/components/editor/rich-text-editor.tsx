@@ -112,6 +112,7 @@ import {
   classifyPasteWithFiles,
   dataUrlToFile,
   escapeRegExp,
+  fileToDataUrl,
   sanitizePastedHtml,
   uploadingPlaceholderDataUrl,
 } from "./paste-utils";
@@ -937,7 +938,9 @@ export function RichTextEditor({
   }, [expanded]);
 
   const hasMentions = Boolean(mentionUsers && mentionUsers.length > 0);
-  const canUploadImages = Boolean(uploadTarget && editable);
+  /** Images can be pasted/dropped as data URLs even before a task exists. */
+  const canInsertImages = Boolean(editable);
+  const canUploadFiles = Boolean(uploadTarget && editable);
 
   // Opens an OS file picker at event time. Fully stable (no deps): the editor
   // and insertFiles are reached through refs inside the change handler, so
@@ -971,8 +974,8 @@ export function RichTextEditor({
     // These callbacks only read editor/upload refs after a user-triggered DOM event.
     // eslint-disable-next-line react-hooks/refs
     const slash = createSlashCommand({
-      onInsertImage: canUploadImages ? () => pickFiles(true) : undefined,
-      onAttachFile: canUploadImages ? () => pickFiles(false) : undefined,
+      onInsertImage: canInsertImages ? () => pickFiles(true) : undefined,
+      onAttachFile: canUploadFiles ? () => pickFiles(false) : undefined,
       onInsertTaskEmbed: taskEmbedEnabled ? insertTaskEmbed : undefined,
     });
 
@@ -1102,7 +1105,7 @@ export function RichTextEditor({
     return base;
     // mentionUsers / canUpload / collab captured on mount; remount via key when needed.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hasMentions, placeholder, editable, canUploadImages, taskEmbedEnabled, isCollab]);
+  }, [hasMentions, placeholder, editable, canInsertImages, canUploadFiles, taskEmbedEnabled, isCollab]);
 
   /** Swap a pending image by stable id (placeholder → permanent URL). */
   const replacePendingImage = useCallback(
@@ -1168,8 +1171,37 @@ export function RichTextEditor({
    */
   const insertFiles = useCallback(
     async (files: File[], ed: Editor) => {
-      if (!uploadTarget || files.length === 0) return;
+      if (files.length === 0) return;
       setFileError(null);
+
+      // Compose-before-save (New task): keep images as data URLs until create.
+      if (!uploadTarget) {
+        const images = files.filter((file) => isImageFile(file));
+        const skipped = files.length - images.length;
+        const errors: string[] = [];
+        for (const file of images) {
+          try {
+            const src = await fileToDataUrl(file);
+            ed.chain()
+              .focus()
+              .setImage({ src, alt: file.name, title: file.name })
+              .run();
+          } catch (err) {
+            errors.push(err instanceof Error ? err.message : "Could not insert image");
+          }
+        }
+        if (skipped > 0) {
+          errors.push(
+            skipped === 1
+              ? "That file can be attached after the task is created"
+              : "Those files can be attached after the task is created",
+          );
+        }
+        if (errors.length) {
+          setFileError(errors.length === 1 ? errors[0]! : `${errors.length} files could not be added`);
+        }
+        return;
+      }
 
       type Job =
         | { kind: "image"; file: File; uploadId: string }
@@ -1275,7 +1307,57 @@ export function RichTextEditor({
       extraFiles: File[],
       droppedImageCount = 0,
     ) => {
-      if (!uploadTarget) return;
+      if (!uploadTarget) {
+        setFileError(null);
+        let html = sanitizedHtml;
+        for (const img of dataImages) {
+          html = html.replace(new RegExp(escapeRegExp(img.marker), "g"), img.dataUrl);
+        }
+        if (html.trim()) {
+          ed.chain().focus().insertContent(html).run();
+        }
+
+        const extraImages: File[] = [];
+        let skippedNonImages = 0;
+        for (const file of extraFiles) {
+          const alreadyQueued = dataImages.some((img) => {
+            const asFile = dataUrlToFile(img.dataUrl, img.mime, 0);
+            return Boolean(asFile && asFile.size === file.size && asFile.type === file.type);
+          });
+          if (alreadyQueued) continue;
+          if (isImageFile(file)) extraImages.push(file);
+          else skippedNonImages += 1;
+        }
+        for (const file of extraImages) {
+          try {
+            const src = await fileToDataUrl(file);
+            ed.chain()
+              .focus()
+              .setImage({ src, alt: file.name, title: file.name })
+              .run();
+          } catch {
+            skippedNonImages += 1;
+          }
+        }
+
+        const missingImageCount = Math.max(0, droppedImageCount - extraImages.length);
+        const errors: string[] = [];
+        if (missingImageCount > 0) {
+          errors.push(
+            missingImageCount === 1
+              ? "1 image from your paste couldn't be inserted. Copy and paste that image on its own, or drag its file in."
+              : `${missingImageCount} images from your paste couldn't be inserted. Copy and paste each image on its own, or drag its file in.`,
+          );
+        }
+        if (skippedNonImages > 0) {
+          errors.push("Other files can be attached after the task is created");
+        }
+        if (errors.length) {
+          setFileError(errors.length === 1 ? errors[0]! : errors.join(" "));
+        }
+        return;
+      }
+
       setFileError(null);
 
       type Pending = {
@@ -1526,10 +1608,7 @@ export function RichTextEditor({
         },
         handlePaste: (_view, event) => {
           const ed = editorRef.current;
-          if (!ed || !uploadTargetRef.current) {
-            // No upload target — still sanitize via transformPastedHTML
-            return false;
-          }
+          if (!ed) return false;
 
           const files = collectFiles(event.clipboardData);
           const classified = classifyPasteWithFiles(event.clipboardData, files);
@@ -1562,7 +1641,6 @@ export function RichTextEditor({
         handleDrop: (view, event, _slice, moved) => {
           // Internal block drag (from the 6-dot handle) — let ProseMirror move it
           if (moved || view.dragging) return false;
-          if (!uploadTargetRef.current) return false;
           const files = collectFiles(event.dataTransfer);
           if (files.length === 0) return false;
           // Don't steal drops that aren't file uploads
@@ -1705,8 +1783,8 @@ export function RichTextEditor({
             editor={editor}
             hasMentions={hasMentions}
             fileUploading={fileUploading}
-            onInsertImage={canUploadImages ? () => pickFiles(true) : undefined}
-            onAttachFile={canUploadImages ? () => pickFiles(false) : undefined}
+            onInsertImage={canInsertImages ? () => pickFiles(true) : undefined}
+            onAttachFile={canUploadFiles ? () => pickFiles(false) : undefined}
           />
           <div className="ml-auto flex items-center gap-1 pr-0.5">
             {expandToggle}
@@ -1724,7 +1802,7 @@ export function RichTextEditor({
                 /
               </kbd>
               <span>commands</span>
-              {canUploadImages && (
+              {canInsertImages && (
                 <>
                   <span className="text-border">·</span>
                   <span>drop files</span>
@@ -1870,7 +1948,7 @@ export function RichTextEditor({
             </kbd>
             blocks
           </span>
-          {canUploadImages && (
+          {canInsertImages && (
             <span className="inline-flex items-center gap-1">
               paste / drop files
             </span>

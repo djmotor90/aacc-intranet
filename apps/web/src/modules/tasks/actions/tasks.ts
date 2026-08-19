@@ -24,6 +24,7 @@ import { and, asc, desc, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
+import { docHasContent, type StoredRichDoc } from "@/components/editor/doc-utils";
 import { notifyUsers, pingListUpdate } from "@/lib/notify";
 import { assertListRole, requireUser } from "@/lib/rbac";
 import { logActivity } from "../lib/activity";
@@ -35,6 +36,36 @@ import {
   resolveListDefaultStatusId,
   revalidateTrashAndTasks,
 } from "./shared";
+
+/** TipTap hybrid JSON `{ text, doc }` or legacy plain string from a form field. */
+function parseTaskDescriptionField(raw: string): { text: string; doc?: unknown } | null {
+  const descriptionRaw = String(raw ?? "");
+  if (!descriptionRaw.trim()) return null;
+  try {
+    const parsed = JSON.parse(descriptionRaw) as StoredRichDoc & { text?: string; doc?: unknown };
+    if (parsed && typeof parsed === "object" && (parsed.text || parsed.doc)) {
+      const descriptionValue: { text: string; doc?: unknown } = {
+        text: String(parsed.text ?? "").slice(0, 50_000),
+        doc: parsed.doc,
+      };
+      if (!descriptionValue.text && !parsed.doc) return null;
+      if (!descriptionValue.text.trim() && !descriptionValue.doc) return null;
+      return descriptionValue;
+    }
+  } catch {
+    // Plain text from older forms / integrations
+  }
+  return { text: descriptionRaw.slice(0, 50_000) };
+}
+
+function descriptionHasContent(value: { text: string; doc?: unknown } | null): boolean {
+  if (!value) return false;
+  if (value.text.trim()) return true;
+  if (value.doc && typeof value.doc === "object") {
+    return docHasContent(value.doc as Parameters<typeof docHasContent>[0]);
+  }
+  return false;
+}
 
 function parseCustomFieldsFromForm(
   formData: FormData,
@@ -111,8 +142,7 @@ export async function createTask(formData: FormData) {
   const startDate = startDateRaw
     ? z.string().regex(/^\d{4}-\d{2}-\d{2}$/).parse(startDateRaw)
     : null;
-  const descriptionRaw = String(formData.get("description") ?? "").trim();
-  const description = descriptionRaw ? descriptionRaw.slice(0, 50_000) : null;
+  const descriptionValue = parseTaskDescriptionField(String(formData.get("description") ?? ""));
   const assigneeIds = [...new Set(formData.getAll("assignees").map((v) => z.string().uuid().parse(v)))];
   const teamAssigneeIds = [
     ...new Set(formData.getAll("teamAssignees").map((v) => z.string().uuid().parse(v))),
@@ -153,7 +183,7 @@ export async function createTask(formData: FormData) {
   if (requiredCore.includes("assignees") && assigneeIds.length + teamAssigneeIds.length === 0) {
     throw new Error(`${CORE_FIELD_LABELS.assignees} is required`);
   }
-  if (requiredCore.includes("description") && !description) {
+  if (requiredCore.includes("description") && !descriptionHasContent(descriptionValue)) {
     throw new Error(`${CORE_FIELD_LABELS.description} is required`);
   }
   if (requiredCore.includes("tags") && tagIds.length === 0) {
@@ -187,7 +217,7 @@ export async function createTask(formData: FormData) {
         listId,
         number,
         title,
-        description: description ? { text: description } : null,
+        description: descriptionHasContent(descriptionValue) ? descriptionValue : null,
         statusId,
         priority,
         dueDate,
@@ -240,6 +270,27 @@ export async function createTask(formData: FormData) {
   }
   await pingListUpdate(listId);
   revalidatePath(listPath(space.slug, list.slug));
+  if (!createdTaskId || !createdTaskNumber) throw new Error("Failed to create task");
+  return { id: createdTaskId, number: createdTaskNumber };
+}
+
+/** Persist a rewritten description (e.g. after uploading pasted images on create). */
+export async function setTaskDescription(
+  taskId: string,
+  description: { text: string; doc?: unknown } | null,
+) {
+  const id = z.string().uuid().parse(taskId);
+  const { task, list, space } = await requireTask(id);
+  const user = await requireUser();
+  const { assertPermission } = await import("@/lib/permissions");
+  await assertPermission(user, "edit_tasks");
+  await assertListRole(list.id, "member");
+
+  const next = descriptionHasContent(description) ? description : null;
+  await db.update(tasks).set({ description: next }).where(eq(tasks.id, id));
+  await pingListUpdate(task.listId);
+  revalidatePath(listPath(space.slug, list.slug));
+  revalidatePath(`/tasks/task/${task.number}`);
 }
 
 const taskPosition = (index: number) => `m${index.toString().padStart(10, "0")}`;
@@ -492,28 +543,7 @@ export async function updateTaskCore(formData: FormData) {
   await assertListRole(list.id, "member");
 
   const title = z.string().min(1).max(300).parse(formData.get("title"));
-  // Description: TipTap hybrid JSON `{ text, doc }` or legacy plain string.
-  const descriptionRaw = String(formData.get("description") ?? "");
-  let descriptionValue: { text: string; doc?: unknown } | null = null;
-  if (descriptionRaw.trim()) {
-    try {
-      const parsed = JSON.parse(descriptionRaw) as { text?: string; doc?: unknown };
-      if (parsed && typeof parsed === "object" && (parsed.text || parsed.doc)) {
-        descriptionValue = {
-          text: String(parsed.text ?? "").slice(0, 50_000),
-          doc: parsed.doc,
-        };
-        if (!descriptionValue.text && !parsed.doc) descriptionValue = null;
-      } else {
-        descriptionValue = { text: descriptionRaw.slice(0, 50_000) };
-      }
-    } catch {
-      descriptionValue = { text: descriptionRaw.slice(0, 50_000) };
-    }
-    if (descriptionValue && !descriptionValue.text?.trim() && !descriptionValue.doc) {
-      descriptionValue = null;
-    }
-  }
+  const descriptionValue = parseTaskDescriptionField(String(formData.get("description") ?? ""));
   const priorityRaw = String(formData.get("priority") ?? "");
   const priority = priorityRaw
     ? z.enum(["urgent", "high", "normal", "low"]).parse(priorityRaw)
@@ -543,7 +573,7 @@ export async function updateTaskCore(formData: FormData) {
       .update(tasks)
       .set({
         title,
-        description: descriptionValue,
+        description: descriptionHasContent(descriptionValue) ? descriptionValue : null,
         priority,
         dueDate,
         startDate,

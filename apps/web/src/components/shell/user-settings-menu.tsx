@@ -24,7 +24,7 @@ import {
   X,
 } from "lucide-react";
 import { useTheme } from "next-themes";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import {
   SettingsAdminGroupsPanel,
@@ -226,12 +226,14 @@ export function UserSettingsMenu({
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [section, setSection] = useState<SectionId>("account");
   const displayName = user.name ?? "Account";
-  const searchParams = useSearchParams();
   const router = useRouter();
 
-  // Deep link: /?settings=trash (and other admin sections)
+  // Deep link: /?settings=trash (and other admin sections).
+  // Read the URL after mount — useSearchParams() would suspend this header
+  // control behind <Suspense> and hydrate later than sibling dialogs, which
+  // then stamp aria-hidden onto this button and trip a hydration warning.
   useEffect(() => {
-    const s = searchParams.get("settings");
+    const s = new URLSearchParams(window.location.search).get("settings");
     if (!s) return;
     const map: Record<string, SectionId> = {
       trash: "admin-trash",
@@ -261,7 +263,7 @@ export function UserSettingsMenu({
     const url = new URL(window.location.href);
     url.searchParams.delete("settings");
     router.replace(url.pathname + url.search, { scroll: false });
-  }, [searchParams, isAdmin, canManageTrash, router]);
+  }, [isAdmin, canManageTrash, router]);
 
   const menuItems = useMemo<MenuItem[]>(() => {
     const items: MenuItem[] = [{ id: "account", label: "Account", icon: UserRound }];
@@ -333,6 +335,7 @@ export function UserSettingsMenu({
             className="size-9 rounded-full p-0"
             aria-label="User menu"
             title={displayName}
+            suppressHydrationWarning
           >
             <UserAvatar
               userId={user.id}

@@ -5,7 +5,6 @@
  * Fingerprint: GURVER-KG-AITIM-2026-7F3C9E2A
  * License: Proprietary. All rights reserved. See LICENSE / COPYRIGHT.
  */
-import { Suspense } from "react";
 import { db, users, withDbRetry } from "@aitim/db";
 import { eq } from "drizzle-orm";
 import { AppShell } from "@/components/shell/app-shell";
@@ -66,20 +65,18 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           <TrackTimeButton />
           <WhatsNewButton isAdmin={isAdmin} />
           <NotificationBell />
-          <Suspense fallback={null}>
-            <UserSettingsMenu
-              user={{
-                id: user.id,
-                name: user.name ?? null,
-                email: user.email ?? null,
-                platformRole: user.platformRole,
-                photoKey: photoRow?.photoKey ?? null,
-              }}
-              isAdmin={isAdmin}
-              canManageTrash={canManageTrash}
-              signOutAction={signOutAction}
-            />
-          </Suspense>
+          <UserSettingsMenu
+            user={{
+              id: user.id,
+              name: user.name ?? null,
+              email: user.email ?? null,
+              platformRole: user.platformRole,
+              photoKey: photoRow?.photoKey ?? null,
+            }}
+            isAdmin={isAdmin}
+            canManageTrash={canManageTrash}
+            signOutAction={signOutAction}
+          />
         </div>
       }
     >

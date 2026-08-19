@@ -9,6 +9,16 @@
  */
 import { Plus, UsersRound } from "lucide-react";
 import { useState, useTransition } from "react";
+import {
+  docToPlainText,
+  storedToDoc,
+  type StoredRichDoc,
+} from "@/components/editor/doc-utils";
+import { RichTextEditor } from "@/components/editor/rich-text-editor";
+import {
+  docHasDataImages,
+  uploadEmbeddedDataImages,
+} from "@/components/editor/upload-file";
 import { UserAvatar } from "@/components/shell/user-avatar";
 import { Button } from "@/components/ui/button";
 import {
@@ -28,13 +38,12 @@ import {
 import { Input } from "@/components/ui/input";
 import { solidChipStyle } from "@/lib/color-contrast";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import {
   CORE_FIELD_LABELS,
   type CoreFieldKey,
   isCoreFieldRequired,
 } from "@/modules/tasks/lib/required-fields";
-import { createTask } from "../actions";
+import { createTask, setTaskDescription } from "../actions";
 import {
   AssigneeAvatarStack,
   type TeamAssigneeOption,
@@ -136,6 +145,7 @@ function FormAssigneePicker({
               teams={selectedTeams}
               size="md"
               emptyLabel="Add assignee"
+              enableProfile={false}
             />
           </button>
         </DropdownMenuTrigger>
@@ -232,6 +242,12 @@ export function NewTaskDialog({
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   const [formKey, setFormKey] = useState(0);
+  const [descriptionEmpty, setDescriptionEmpty] = useState(true);
+  const [prevFormKey, setPrevFormKey] = useState(formKey);
+  if (prevFormKey !== formKey) {
+    setPrevFormKey(formKey);
+    setDescriptionEmpty(true);
+  }
 
   const req = (key: CoreFieldKey) => isCoreFieldRequired(requiredCoreFields, key);
   const showTags = spaceTags.length > 0 || req("tags");
@@ -252,7 +268,7 @@ export function NewTaskDialog({
           <Plus className="size-4" /> New task
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-lg">
+      <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-xl">
         <DialogHeader>
           <DialogTitle>New task</DialogTitle>
         </DialogHeader>
@@ -263,7 +279,28 @@ export function NewTaskDialog({
             setError(null);
             startTransition(async () => {
               try {
-                await createTask(formData);
+                const created = await createTask(formData);
+                const raw = String(formData.get("description") ?? "");
+                if (created.id && raw) {
+                  try {
+                    const parsed = JSON.parse(raw) as StoredRichDoc;
+                    const doc = storedToDoc(parsed);
+                    if (docHasDataImages(doc)) {
+                      const { doc: next, changed } = await uploadEmbeddedDataImages(
+                        { type: "task", id: created.id },
+                        doc,
+                      );
+                      if (changed) {
+                        await setTaskDescription(created.id, {
+                          text: docToPlainText(next),
+                          doc: next,
+                        });
+                      }
+                    }
+                  } catch {
+                    // Keep the created description (including data-URL images).
+                  }
+                }
                 setOpen(false);
                 setFormKey((k) => k + 1);
               } catch (err) {
@@ -282,16 +319,34 @@ export function NewTaskDialog({
           </div>
 
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="description">
+            <Label id="new-task-description-label">
               {CORE_FIELD_LABELS.description} {req("description") && <ReqMark />}
             </Label>
-            <Textarea
-              id="description"
-              name="description"
-              rows={3}
-              required={req("description")}
-              placeholder={req("description") ? "Required…" : "Optional description…"}
-            />
+            <div role="group" aria-labelledby="new-task-description-label">
+              <RichTextEditor
+                name="description"
+                variant="default"
+                expandable
+                expandTitle="Description"
+                placeholder={
+                  req("description")
+                    ? "Required… paste text, screenshots, or formatted content"
+                    : "Optional description… paste text, screenshots, or formatted content"
+                }
+                editorClassName="min-h-[6.5rem]"
+                onChange={({ empty }) => setDescriptionEmpty(empty)}
+              />
+            </div>
+            {req("description") && descriptionEmpty && (
+              <input
+                tabIndex={-1}
+                className="sr-only"
+                required
+                value=""
+                onChange={() => {}}
+                aria-hidden
+              />
+            )}
           </div>
 
           <div className="grid grid-cols-2 gap-3">

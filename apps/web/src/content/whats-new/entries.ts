@@ -19,6 +19,17 @@ export const whatsNewFeed: WhatsNewFeed = {
   schemaVersion: 1,
   entries: [
     {
+      id: "2026-08-19-new-task-paste-images",
+      date: "2026-08-19",
+      publishedAt: "2026-08-19T12:00:00.000Z",
+      kind: "fixed",
+      module: "tasks",
+      title: "Paste text and pictures into a new task",
+      body: "When you create a task, the description now keeps formatted text and images from a paste instead of turning a picture into the word “image”. Screenshots and pictures from a document or webpage stay in the description.",
+      href: "/tasks",
+      tags: ["tasks", "description"],
+    },
+    {
       id: "2026-08-18-space-folder-tables",
       date: "2026-08-18",
       publishedAt: "2026-08-18T12:00:00.000Z",

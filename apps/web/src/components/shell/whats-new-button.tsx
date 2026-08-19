@@ -53,21 +53,24 @@ export function WhatsNewButton({ isAdmin = false }: { isAdmin?: boolean }) {
   const unseenCount = unseen.length;
 
   // Auto-open once when there are unseen entries (product "what's new" moment).
+  // Must be a macrotask (setTimeout), not a microtask: Radix hideOthers writes
+  // aria-hidden onto the rest of the document, and a microtask can run while
+  // later header/page components are still hydrating — React then reports a
+  // mismatch on those nodes (user menu, etc.).
   useEffect(() => {
     if (!seen) return;
     if (unseenCount === 0) return;
-    if (typeof window === "undefined") return;
     try {
       if (window.sessionStorage.getItem(AUTO_OPEN_SESSION_KEY) === "1") return;
       window.sessionStorage.setItem(AUTO_OPEN_SESSION_KEY, "1");
     } catch {
       // sessionStorage blocked — still open once this mount.
     }
-    // Defer out of the effect body (same pattern as AppShell localStorage hydrate).
-    queueMicrotask(() => {
+    const id = window.setTimeout(() => {
       setMode("unseen");
       setOpen(true);
-    });
+    }, 0);
+    return () => window.clearTimeout(id);
   }, [seen, unseenCount]);
 
   const onAcknowledge = useCallback(() => {
