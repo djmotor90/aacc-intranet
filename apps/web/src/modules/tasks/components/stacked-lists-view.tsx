@@ -22,7 +22,15 @@ export type StackedListBundle = {
   total: number;
   groupCounts: { key: string; count: number }[] | null;
   statuses: { id: string; name: string; color: string; category?: string }[];
-  fieldDefs: { id: string; key: string; label: string; type: string; options: unknown; isRequired: boolean }[];
+  fieldDefs: {
+    id: string;
+    key: string;
+    label: string;
+    type: string;
+    options: unknown;
+    optionColorDisplay?: string | null;
+    isRequired: boolean;
+  }[];
   canEdit: boolean;
 };
 

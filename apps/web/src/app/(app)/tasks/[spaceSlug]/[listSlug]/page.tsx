@@ -241,7 +241,7 @@ export default async function ListPage(props: {
       <ListLiveRefresh listId={list.id} />
 
       {/* ── header: title + actions, then view tabs under the list name ── */}
-      <div className="mb-3 flex flex-col gap-2">
+      <div className="mb-3 flex flex-col gap-2 px-6 pt-6">
         <div className="flex items-start gap-3">
           <div className="min-w-0 flex-1">
             <div className="text-sm text-muted-foreground">

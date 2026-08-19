@@ -303,7 +303,7 @@ export function Board({
 
   return (
     <DndContext sensors={sensors} onDragStart={onDragStart} onDragEnd={onDragEnd}>
-      <div className="mb-4 flex flex-wrap items-center gap-2">
+      <div className="mb-4 flex flex-wrap items-center gap-2 px-6">
         {toolbar}
         {canEdit && fieldDefs.length > 0 && (
           <DropdownMenu>

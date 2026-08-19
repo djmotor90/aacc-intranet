@@ -18,8 +18,9 @@ import {
   DropdownMenuContent,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { tintedChipStyle } from "@/lib/color-contrast";
+import { optionTagStyle, tintedChipStyle } from "@/lib/color-contrast";
 import { cn } from "@/lib/utils";
+import { normalizeOptionColorDisplay } from "../lib/custom-field-presentation";
 import {
   updateTaskCustomField,
   updateTaskDate,
@@ -628,33 +629,56 @@ export function SelectEditCell({
   value,
   options,
   onCommit,
+  fill = false,
+  defaultOpen,
+  onOpenChange,
 }: {
   value: string;
   options: { id: string; label: string; color?: string }[];
   onCommit: (value: string) => Promise<void> | void;
+  fill?: boolean;
+  defaultOpen?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }) {
   const [, startTransition] = useTransition();
   const current = options.find((o) => o.id === value);
+  const fillColor = fill && current?.color ? current.color : null;
   return (
     <LazyPicker
       display={
         current ? (
-          <span className="inline-flex min-w-0 items-center gap-1.5">
-            {current.color && (
-              <span
-                className="size-3.5 shrink-0 rounded-full border border-border"
-                style={{ backgroundColor: current.color }}
-              />
-            )}
-            <span className="truncate">{current.label}</span>
-          </span>
+          fillColor ? (
+            <span
+              className="inline-flex max-w-full items-center rounded-full px-2.5 py-[3px] text-[12px] font-medium"
+              style={optionTagStyle(fillColor)}
+            >
+              <span className="truncate">{current.label}</span>
+            </span>
+          ) : (
+            <span className="inline-flex min-w-0 items-center gap-1.5">
+              {current.color && (
+                <span
+                  className="size-3.5 shrink-0 rounded-full border border-border"
+                  style={{ backgroundColor: current.color }}
+                />
+              )}
+              <span className="truncate">{current.label}</span>
+            </span>
+          )
         ) : (
           <span className="text-muted-foreground">—</span>
         )
       }
+      displayClassName={
+        fillColor
+          ? "inline-flex h-7 w-auto max-w-full items-center px-0.5 hover:bg-transparent"
+          : undefined
+      }
       options={options}
       selectedId={value || null}
       clearable
+      defaultOpen={defaultOpen}
+      onOpenChange={onOpenChange}
       onSelect={(next) => {
         const v = next ?? "";
         if (v === value) return;
@@ -671,17 +695,21 @@ export function ColorEditCell({
   onCommit,
   defaultOpen,
   onOpenChange,
+  fill = false,
 }: {
   value: string;
   options: { id: string; label: string; color?: string }[];
   onCommit: (value: string) => Promise<void> | void;
   defaultOpen?: boolean;
   onOpenChange?: (open: boolean) => void;
+  fill?: boolean;
 }) {
   const [, startTransition] = useTransition();
   const current = options.find((o) => o.id === value);
   const swatch = current?.color ?? null;
   const unlabeled = Boolean(current && swatch && !current.label?.trim());
+  const tag = Boolean(fill && swatch && !unlabeled);
+  const fillCell = Boolean(swatch && unlabeled);
   // Menu options: unlabeled colors show hex so the list stays scannable.
   const menuOptions = options.map((o) => ({
     ...o,
@@ -692,9 +720,15 @@ export function ColorEditCell({
     <LazyPicker
       display={
         current ? (
-          unlabeled ? (
-            // Full-bleed fill — leave empty content so the button color shows through.
+          fillCell ? (
             <span className="sr-only">{swatch}</span>
+          ) : tag && swatch ? (
+            <span
+              className="inline-flex max-w-full items-center rounded-full px-2.5 py-[3px] text-[12px] font-medium"
+              style={optionTagStyle(swatch)}
+            >
+              <span className="truncate">{current.label}</span>
+            </span>
           ) : (
             <span
               className="inline-flex min-w-0 items-center gap-1.5"
@@ -712,11 +746,13 @@ export function ColorEditCell({
         )
       }
       displayClassName={
-        unlabeled
+        fillCell
           ? "h-7 rounded-sm border border-border/40 p-0 hover:bg-transparent hover:brightness-95"
-          : undefined
+          : tag
+            ? "inline-flex h-7 w-auto max-w-full items-center px-0.5 hover:bg-transparent"
+            : undefined
       }
-      displayStyle={unlabeled && swatch ? { backgroundColor: swatch } : undefined}
+      displayStyle={fillCell && swatch ? { backgroundColor: swatch } : undefined}
       options={menuOptions}
       selectedId={value || null}
       clearable
@@ -737,10 +773,12 @@ export function MultiSelectEditCell({
   values,
   options,
   onCommit,
+  fill = false,
 }: {
   values: string[];
   options: { id: string; label: string; color?: string }[];
   onCommit: (values: string[]) => Promise<void> | void;
+  fill?: boolean;
 }) {
   const [, startTransition] = useTransition();
   const selectedOptions = values
@@ -764,8 +802,18 @@ export function MultiSelectEditCell({
             selectedOptions.map((o) => (
               <span
                 key={o.id}
-                className="rounded px-1.5 py-0.5 text-xs font-medium"
-                style={o.color ? tintedChipStyle(o.color) : { backgroundColor: "var(--muted)" }}
+                className={
+                  fill && o.color
+                    ? "inline-flex items-center rounded-full px-2.5 py-[3px] text-[12px] font-medium"
+                    : "rounded px-1.5 py-0.5 text-xs font-medium"
+                }
+                style={
+                  o.color
+                    ? fill
+                      ? optionTagStyle(o.color)
+                      : tintedChipStyle(o.color)
+                    : { backgroundColor: "var(--muted)" }
+                }
               >
                 {o.label}
               </span>
@@ -802,6 +850,7 @@ export interface FieldDefLike {
   label: string;
   type: string;
   options: unknown;
+  optionColorDisplay?: string | null;
 }
 
 export function CustomFieldEditCell({
@@ -810,14 +859,19 @@ export function CustomFieldEditCell({
   value,
   users,
   onSaved,
+  defaultOpen,
+  onOpenChange,
 }: {
   taskId: string;
   def: FieldDefLike;
   value: unknown;
   users: { id: string; displayName: string }[];
   onSaved: (value: unknown) => void;
+  defaultOpen?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }) {
   const options = (def.options ?? []) as { id: string; label: string; color?: string }[];
+  const fill = normalizeOptionColorDisplay(def.optionColorDisplay) === "fill";
 
   async function commit(next: unknown) {
     onSaved(next);
@@ -828,9 +882,27 @@ export function CustomFieldEditCell({
     case "checkbox":
       return <CheckboxEditCell checked={value === true} onCommit={commit} />;
     case "dropdown":
-      return <SelectEditCell value={(value as string) ?? ""} options={options} onCommit={commit} />;
+      return (
+        <SelectEditCell
+          value={(value as string) ?? ""}
+          options={options}
+          onCommit={commit}
+          fill={fill}
+          defaultOpen={defaultOpen}
+          onOpenChange={onOpenChange}
+        />
+      );
     case "color":
-      return <ColorEditCell value={(value as string) ?? ""} options={options} onCommit={commit} />;
+      return (
+        <ColorEditCell
+          value={(value as string) ?? ""}
+          options={options}
+          onCommit={commit}
+          fill={fill}
+          defaultOpen={defaultOpen}
+          onOpenChange={onOpenChange}
+        />
+      );
     case "user": {
       const peopleIds = Array.isArray(value)
         ? (value as string[])
@@ -851,6 +923,7 @@ export function CustomFieldEditCell({
           values={Array.isArray(value) ? (value as string[]) : []}
           options={options}
           onCommit={commit}
+          fill={fill}
         />
       );
     case "date":

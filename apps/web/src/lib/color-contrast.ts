@@ -118,6 +118,22 @@ export function onColorText(bg: string): string {
   return ensureContrast(white >= ink ? "#ffffff" : "#111827", hex, 4.5);
 }
 
+/**
+ * ClickUp-style option tag: pastel wash of the option color, with that color
+ * as text (nudged to 4.5:1). The chip is only as wide as its label.
+ */
+export function optionTagStyle(color: string): { backgroundColor: string; color: string } {
+  const rgb = parseHex(color);
+  if (!rgb) return { backgroundColor: `${color}33`, color };
+  const wash = mix({ r: 255, g: 255, b: 255 }, rgb, 0.24);
+  const washHex = toHex(wash);
+  const ink = toHex(rgb);
+  return {
+    backgroundColor: washHex,
+    color: ensureContrast(ink, washHex, 4.5),
+  };
+}
+
 /** Solid chip (tags, status pills filled with the raw color). */
 export function solidChipStyle(bg: string): { backgroundColor: string; color: string } {
   const parsed = parseHex(bg);

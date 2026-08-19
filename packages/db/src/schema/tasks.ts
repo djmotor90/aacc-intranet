@@ -497,6 +497,8 @@ export const customFieldDefinitions = pgTable(
     description: text("description"),
     /** Label presentation in task create/detail forms. */
     labelPosition: text("label_position").notNull().default("top"),
+    /** How option colors paint in list/board: circle next to the name, or the whole cell. */
+    optionColorDisplay: text("option_color_display").notNull().default("dot"),
     type: customFieldType("type").notNull(),
     /** dropdown/multi_select/color: [{ id, label, color? }] */
     options: jsonb("options"),

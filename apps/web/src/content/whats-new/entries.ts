@@ -19,6 +19,28 @@ export const whatsNewFeed: WhatsNewFeed = {
   schemaVersion: 1,
   entries: [
     {
+      id: "2026-08-19-custom-field-full-cell-color",
+      date: "2026-08-19",
+      publishedAt: "2026-08-19T20:00:00.000Z",
+      kind: "new",
+      module: "tasks",
+      title: "Colored tags on custom fields",
+      body: "Dropdown, multi-select, and color fields can show a circle next to the name, or a ClickUp-style colored tag. Choose “Color in the list” when you add or edit the field, and set a color on each option.",
+      href: "/tasks",
+      tags: ["tasks", "custom fields"],
+    },
+    {
+      id: "2026-08-19-activity-image-preview",
+      date: "2026-08-19",
+      publishedAt: "2026-08-19T18:00:00.000Z",
+      kind: "fixed",
+      module: "tasks",
+      title: "Open pictures in comments and activity",
+      body: "Click a picture in a comment or the activity feed to see it full size. Close it with the X, Escape, or by clicking outside.",
+      href: "/tasks",
+      tags: ["tasks", "comments"],
+    },
+    {
       id: "2026-08-19-new-task-paste-images",
       date: "2026-08-19",
       publishedAt: "2026-08-19T12:00:00.000Z",

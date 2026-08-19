@@ -25,6 +25,7 @@ type FieldDefLike = {
   label: string;
   type: string;
   options: unknown;
+  optionColorDisplay?: string | null;
 };
 type TagOption = { id: string; name: string; color: string };
 type WritableListOption = {
@@ -169,7 +170,7 @@ export function ListTasksShell({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="mb-4 flex shrink-0 items-center gap-2">
+      <div className="mb-4 flex shrink-0 items-center gap-2 px-6">
         <Badge variant="secondary" className={cn(busy && "opacity-70")}>
           {total} tasks
         </Badge>

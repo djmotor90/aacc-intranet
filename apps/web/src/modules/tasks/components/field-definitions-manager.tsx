@@ -28,8 +28,11 @@ import { cn } from "@/lib/utils";
 import { archiveFieldDefinition, trashFieldDefinition, updateFieldDefinition } from "../actions";
 import {
   CUSTOM_FIELD_LABEL_POSITIONS,
+  CUSTOM_FIELD_OPTION_COLOR_DISPLAYS,
   normalizeCustomFieldLabelPosition,
+  normalizeOptionColorDisplay,
   type CustomFieldLabelPosition,
+  type CustomFieldOptionColorDisplay,
 } from "../lib/custom-field-presentation";
 import { FieldDefinitionForm } from "./field-definition-form";
 
@@ -38,6 +41,7 @@ export type FieldDefRow = {
   label: string;
   description: string | null;
   labelPosition: string;
+  optionColorDisplay?: string | null;
   type: string;
   options: unknown;
   isRequired: boolean;
@@ -113,6 +117,9 @@ function FieldEditDialog({
   const [labelPosition, setLabelPosition] = useState<CustomFieldLabelPosition>(() =>
     normalizeCustomFieldLabelPosition(field.labelPosition),
   );
+  const [optionColorDisplay, setOptionColorDisplay] = useState<CustomFieldOptionColorDisplay>(
+    () => normalizeOptionColorDisplay(field.optionColorDisplay),
+  );
   const [isRequired, setIsRequired] = useState(field.isRequired);
   const [options, setOptions] = useState<OptionDraft[]>(() => optionsFromField(field));
   const [error, setError] = useState<string | null>(null);
@@ -128,6 +135,7 @@ function FieldEditDialog({
       setLabel(field.label);
       setDescription(field.description ?? "");
       setLabelPosition(normalizeCustomFieldLabelPosition(field.labelPosition));
+      setOptionColorDisplay(normalizeOptionColorDisplay(field.optionColorDisplay));
       setIsRequired(field.isRequired);
       setOptions(optionsFromField(field));
       setError(null);
@@ -149,7 +157,7 @@ function FieldEditDialog({
         { key: newKey(), label: "", color: "#007582" },
       ]);
     } else {
-      setOptions((cur) => [...cur, { key: newKey(), label: "" }]);
+      setOptions((cur) => [...cur, { key: newKey(), label: "", color: "#ec4899" }]);
     }
   }
 
@@ -192,6 +200,7 @@ function FieldEditDialog({
             label: trimmed,
             description,
             labelPosition,
+            optionColorDisplay,
             isRequired,
             options: cleaned,
           });
@@ -212,6 +221,7 @@ function FieldEditDialog({
           label: trimmed,
           description,
           labelPosition,
+          optionColorDisplay: hasOptions ? optionColorDisplay : undefined,
           isRequired,
         });
         toast.success("Field updated");
@@ -281,6 +291,31 @@ function FieldEditDialog({
               ))}
             </select>
           </div>
+
+          {hasOptions && (
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="edit-field-color-display">Color in the list</Label>
+              <select
+                id="edit-field-color-display"
+                value={optionColorDisplay}
+                onChange={(e) =>
+                  setOptionColorDisplay(e.target.value as CustomFieldOptionColorDisplay)
+                }
+                className="h-9 rounded-md border bg-transparent px-3 text-sm"
+                disabled={pending}
+              >
+                {CUSTOM_FIELD_OPTION_COLOR_DISPLAYS.map((choice) => (
+                  <option key={choice.value} value={choice.value}>
+                    {choice.label} — {choice.description}
+                  </option>
+                ))}
+              </select>
+              <p className="text-xs text-muted-foreground">
+                Tag shows a compact colored pill, like ClickUp. Add a color on each option
+                below.
+              </p>
+            </div>
+          )}
 
           <label className="flex items-center gap-2 text-sm">
             <input
@@ -366,9 +401,15 @@ function FieldEditDialog({
                 <ul className="flex flex-col gap-1.5">
                   {options.map((o) => (
                     <li key={o.key} className="flex items-center gap-2">
-                      <span
-                        className="size-2.5 shrink-0 rounded-full bg-muted-foreground/40"
-                        title={o.id ? "Existing option" : "New option"}
+                      <input
+                        type="color"
+                        value={
+                          o.color && /^#[0-9A-Fa-f]{6}$/.test(o.color) ? o.color : "#ec4899"
+                        }
+                        onChange={(e) => updateOption(o.key, { color: e.target.value })}
+                        className="size-8 shrink-0 cursor-pointer rounded border bg-transparent p-0.5"
+                        title="Option color"
+                        disabled={pending}
                       />
                       <Input
                         value={o.label}

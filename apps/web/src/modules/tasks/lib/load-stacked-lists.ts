@@ -47,6 +47,7 @@ export async function loadStackedListBundles(
         label: d.label,
         type: d.type,
         options: d.options,
+        optionColorDisplay: d.optionColorDisplay,
         isRequired: Boolean(d.isRequired),
       })),
       canEdit: role === "owner" || role === "member",

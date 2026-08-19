@@ -209,9 +209,9 @@ export default async function ListSettingsPage(props: {
                 <CardTitle>Custom fields</CardTitle>
                 <CardDescription>
                   Fields attached to every task in this list. Use <strong>Edit</strong> to rename a
-                  field, add help text, choose its label location, or manage dropdown / color
-                  options. Archiving hides the field from forms but keeps historical values
-                  readable.
+                  field, add help text, choose its label location, pick circle or tag colors,
+                  or manage dropdown / color options. Archiving hides the field from forms but keeps
+                  historical values readable.
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -222,6 +222,7 @@ export default async function ListSettingsPage(props: {
                     label: f.label,
                     description: f.description,
                     labelPosition: f.labelPosition,
+                    optionColorDisplay: f.optionColorDisplay,
                     type: f.type,
                     options: f.options,
                     isRequired: f.isRequired,

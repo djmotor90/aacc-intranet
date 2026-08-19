@@ -13,7 +13,10 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { assertSpaceRole, requireUser } from "@/lib/rbac";
 import { logActivity } from "../lib/activity";
-import { CUSTOM_FIELD_LABEL_POSITION_VALUES } from "../lib/custom-field-presentation";
+import {
+  CUSTOM_FIELD_LABEL_POSITION_VALUES,
+  CUSTOM_FIELD_OPTION_COLOR_DISPLAY_VALUES,
+} from "../lib/custom-field-presentation";
 import { invalidateListMetaCache } from "../queries";
 import { listPath, requireList, revalidateTrashAndTasks, slugify } from "./shared";
 
@@ -34,6 +37,7 @@ const fieldTypeSchema = z.enum([
 ]);
 
 const fieldLabelPositionSchema = z.enum(CUSTOM_FIELD_LABEL_POSITION_VALUES);
+const optionColorDisplaySchema = z.enum(CUSTOM_FIELD_OPTION_COLOR_DISPLAY_VALUES);
 
 const HEX_COLOR = /^#([0-9A-Fa-f]{3}|[0-9A-Fa-f]{6}|[0-9A-Fa-f]{8})$/;
 
@@ -91,6 +95,9 @@ export async function createFieldDefinition(formData: FormData) {
   const labelPosition = fieldLabelPositionSchema.parse(
     formData.get("labelPosition") ?? "top",
   );
+  const optionColorDisplay = optionColorDisplaySchema.parse(
+    formData.get("optionColorDisplay") ?? "dot",
+  );
   const type = fieldTypeSchema.parse(formData.get("type"));
   const isRequired = formData.get("isRequired") === "on";
   const optionsRaw = String(formData.get("options") ?? "").trim();
@@ -124,6 +131,10 @@ export async function createFieldDefinition(formData: FormData) {
       label,
       description,
       labelPosition,
+      optionColorDisplay:
+        type === "dropdown" || type === "multi_select" || type === "color"
+          ? optionColorDisplay
+          : "dot",
       type,
       options,
       isRequired,
@@ -299,6 +310,7 @@ export async function updateFieldDefinition(params: {
   label: string;
   description?: string | null;
   labelPosition?: z.infer<typeof fieldLabelPositionSchema>;
+  optionColorDisplay?: z.infer<typeof optionColorDisplaySchema>;
   isRequired?: boolean;
   options?: { id?: string; label: string; color?: string }[] | null;
 }) {
@@ -316,6 +328,10 @@ export async function updateFieldDefinition(params: {
       : fieldLabelPositionSchema.parse(params.labelPosition);
   const isRequired =
     params.isRequired === undefined ? undefined : z.boolean().parse(params.isRequired);
+  const optionColorDisplay =
+    params.optionColorDisplay === undefined
+      ? undefined
+      : optionColorDisplaySchema.parse(params.optionColorDisplay);
 
   const [field] = await db
     .select()
@@ -369,6 +385,7 @@ export async function updateFieldDefinition(params: {
         label,
         ...(description !== undefined ? { description } : {}),
         ...(labelPosition !== undefined ? { labelPosition } : {}),
+        ...(optionColorDisplay !== undefined ? { optionColorDisplay } : {}),
         ...(isRequired !== undefined ? { isRequired } : {}),
         ...(nextOptions !== undefined ? { options: nextOptions } : {}),
         updatedAt: new Date(),

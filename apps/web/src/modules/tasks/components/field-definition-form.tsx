@@ -15,7 +15,10 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { createFieldDefinition } from "../actions";
-import { CUSTOM_FIELD_LABEL_POSITIONS } from "../lib/custom-field-presentation";
+import {
+  CUSTOM_FIELD_LABEL_POSITIONS,
+  CUSTOM_FIELD_OPTION_COLOR_DISPLAYS,
+} from "../lib/custom-field-presentation";
 
 const FIELD_TYPES = [
   { value: "text", label: "Text" },
@@ -177,6 +180,24 @@ export function FieldDefinitionForm({ listId }: { listId: string }) {
         <div className="flex flex-col gap-1">
           <Label htmlFor="f-options">Options — one per line</Label>
           <Textarea id="f-options" name="options" rows={3} className="max-w-sm" />
+        </div>
+      )}
+
+      {(OPTIONS_TYPES.has(type) || type === "color") && (
+        <div className="flex max-w-sm flex-col gap-1">
+          <Label htmlFor="f-option-color-display">Color in the list</Label>
+          <select
+            id="f-option-color-display"
+            name="optionColorDisplay"
+            defaultValue="dot"
+            className="h-9 rounded-md border bg-transparent px-3 text-sm"
+          >
+            {CUSTOM_FIELD_OPTION_COLOR_DISPLAYS.map((choice) => (
+              <option key={choice.value} value={choice.value}>
+                {choice.label} — {choice.description}
+              </option>
+            ))}
+          </select>
         </div>
       )}
 

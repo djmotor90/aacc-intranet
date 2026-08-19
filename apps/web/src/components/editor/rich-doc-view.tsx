@@ -9,11 +9,12 @@
  */
 import type { JSONContent } from "@tiptap/react";
 import type { ReactNode } from "react";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { linkifyJsonContent } from "@/lib/linkify";
 import { ensureContrast, onColorText } from "@/lib/color-contrast";
 import { cn } from "@/lib/utils";
 import { isImageAttachmentMeta, storedToDoc, type StoredRichDoc } from "./doc-utils";
+import { ImageLightbox, type ImageLightboxTarget } from "./image-lightbox";
 
 type Mark = { type: string; attrs?: Record<string, unknown> };
 
@@ -111,24 +112,73 @@ function applyMarks(text: string, marks: Mark[] | undefined, key: string): React
   return <span key={key}>{node}</span>;
 }
 
-function renderChildren(nodes: JSONContent[] | undefined, keyPrefix: string): ReactNode[] {
-  if (!nodes?.length) return [];
-  return nodes.map((n, i) => renderNode(n, `${keyPrefix}-${i}`));
+type RenderCtx = {
+  onOpenImage: (src: string, alt: string) => void;
+};
+
+function PreviewableImage({
+  src,
+  alt,
+  width,
+  height,
+  extraClassName,
+  onOpen,
+}: {
+  src: string;
+  alt: string;
+  width?: number;
+  height?: number;
+  extraClassName?: string;
+  onOpen: (src: string, alt: string) => void;
+}) {
+  return (
+    <button
+      type="button"
+      className="block max-w-full cursor-zoom-in rounded-lg border-0 bg-transparent p-0 text-left"
+      onClick={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        onOpen(src, alt);
+      }}
+      aria-label={`Open image: ${alt}`}
+    >
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={src}
+        alt={alt}
+        title={alt}
+        width={width && Number.isFinite(width) ? width : undefined}
+        height={height && Number.isFinite(height) ? height : undefined}
+        className={cn("aitim-editor-image", extraClassName)}
+        loading="lazy"
+        decoding="async"
+      />
+    </button>
+  );
 }
 
-function renderNode(node: JSONContent, key: string): ReactNode {
+function renderChildren(
+  nodes: JSONContent[] | undefined,
+  keyPrefix: string,
+  ctx: RenderCtx,
+): ReactNode[] {
+  if (!nodes?.length) return [];
+  return nodes.map((n, i) => renderNode(n, `${keyPrefix}-${i}`, ctx));
+}
+
+function renderNode(node: JSONContent, key: string, ctx: RenderCtx): ReactNode {
   switch (node.type) {
     case "doc":
       return (
         <div key={key} className="aitim-rich-doc">
-          {renderChildren(node.content, key)}
+          {renderChildren(node.content, key, ctx)}
         </div>
       );
 
     case "paragraph":
       return (
         <p key={key} className="my-1 leading-relaxed">
-          {node.content?.length ? renderChildren(node.content, key) : <br />}
+          {node.content?.length ? renderChildren(node.content, key, ctx) : <br />}
         </p>
       );
 
@@ -143,7 +193,7 @@ function renderNode(node: JSONContent, key: string): ReactNode {
       };
       return (
         <Tag key={key} className={sizes[level]}>
-          {renderChildren(node.content, key)}
+          {renderChildren(node.content, key, ctx)}
         </Tag>
       );
     }
@@ -161,17 +211,13 @@ function renderNode(node: JSONContent, key: string): ReactNode {
       const width = node.attrs?.width != null ? Number(node.attrs.width) : undefined;
       const height = node.attrs?.height != null ? Number(node.attrs.height) : undefined;
       return (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
+        <PreviewableImage
           key={key}
           src={src}
           alt={alt}
-          title={alt}
-          width={width && Number.isFinite(width) ? width : undefined}
-          height={height && Number.isFinite(height) ? height : undefined}
-          className="aitim-editor-image"
-          loading="lazy"
-          decoding="async"
+          width={width}
+          height={height}
+          onOpen={ctx.onOpenImage}
         />
       );
     }
@@ -221,16 +267,11 @@ function renderNode(node: JSONContent, key: string): ReactNode {
       );
       if (isImageAttachmentMeta(node.attrs) && href && href !== "#") {
         return (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
+          <PreviewableImage
             key={key}
             src={href}
             alt={name}
-            title={name}
-            className="aitim-editor-image"
-            data-type="file-attachment"
-            loading="lazy"
-            decoding="async"
+            onOpen={ctx.onOpenImage}
           />
         );
       }
@@ -272,24 +313,24 @@ function renderNode(node: JSONContent, key: string): ReactNode {
     case "bulletList":
       return (
         <ul key={key} className="my-2 list-disc pl-5">
-          {renderChildren(node.content, key)}
+          {renderChildren(node.content, key, ctx)}
         </ul>
       );
 
     case "orderedList":
       return (
         <ol key={key} className="my-2 list-decimal pl-5">
-          {renderChildren(node.content, key)}
+          {renderChildren(node.content, key, ctx)}
         </ol>
       );
 
     case "listItem":
-      return <li key={key}>{renderChildren(node.content, key)}</li>;
+      return <li key={key}>{renderChildren(node.content, key, ctx)}</li>;
 
     case "taskList":
       return (
         <ul key={key} className="my-2 list-none space-y-1 pl-0" data-type="taskList">
-          {renderChildren(node.content, key)}
+          {renderChildren(node.content, key, ctx)}
         </ul>
       );
 
@@ -298,7 +339,7 @@ function renderNode(node: JSONContent, key: string): ReactNode {
       return (
         <li key={key} className="flex items-start gap-2" data-checked={checked || undefined}>
           <input type="checkbox" checked={checked} readOnly className="mt-1" />
-          <div className="min-w-0 flex-1">{renderChildren(node.content, key)}</div>
+          <div className="min-w-0 flex-1">{renderChildren(node.content, key, ctx)}</div>
         </li>
       );
     }
@@ -309,7 +350,7 @@ function renderNode(node: JSONContent, key: string): ReactNode {
           key={key}
           className="my-2 border-l-2 border-border pl-3 text-muted-foreground"
         >
-          {renderChildren(node.content, key)}
+          {renderChildren(node.content, key, ctx)}
         </blockquote>
       );
 
@@ -319,7 +360,7 @@ function renderNode(node: JSONContent, key: string): ReactNode {
           key={key}
           className="my-2 overflow-x-auto rounded-lg border border-border bg-muted/60 px-3.5 py-3 font-mono text-[13px] leading-relaxed"
         >
-          <code>{renderChildren(node.content, key)}</code>
+          <code>{renderChildren(node.content, key, ctx)}</code>
         </pre>
       );
 
@@ -331,7 +372,7 @@ function renderNode(node: JSONContent, key: string): ReactNode {
           data-type="banner"
           className={`aitim-banner aitim-banner--${variant} my-2`}
         >
-          {renderChildren(node.content, key)}
+          {renderChildren(node.content, key, ctx)}
         </div>
       );
     }
@@ -343,7 +384,7 @@ function renderNode(node: JSONContent, key: string): ReactNode {
           data-type="pull-quote"
           className="aitim-pull-quote my-2"
         >
-          {renderChildren(node.content, key)}
+          {renderChildren(node.content, key, ctx)}
         </blockquote>
       );
 
@@ -354,13 +395,13 @@ function renderNode(node: JSONContent, key: string): ReactNode {
       return (
         <div key={key} className="my-2 overflow-x-auto">
           <table className="aitim-table w-full border-collapse text-sm">
-            <tbody>{renderChildren(node.content, key)}</tbody>
+            <tbody>{renderChildren(node.content, key, ctx)}</tbody>
           </table>
         </div>
       );
 
     case "tableRow":
-      return <tr key={key}>{renderChildren(node.content, key)}</tr>;
+      return <tr key={key}>{renderChildren(node.content, key, ctx)}</tr>;
 
     case "tableHeader":
       return (
@@ -368,14 +409,14 @@ function renderNode(node: JSONContent, key: string): ReactNode {
           key={key}
           className="border border-border bg-muted/50 px-2 py-1.5 text-left font-medium"
         >
-          {renderChildren(node.content, key)}
+          {renderChildren(node.content, key, ctx)}
         </th>
       );
 
     case "tableCell":
       return (
         <td key={key} className="border border-border px-2 py-1.5 align-top">
-          {renderChildren(node.content, key)}
+          {renderChildren(node.content, key, ctx)}
         </td>
       );
 
@@ -384,7 +425,7 @@ function renderNode(node: JSONContent, key: string): ReactNode {
       if (node.content?.length) {
         return (
           <div key={key} data-type={node.type ?? "unknown"}>
-            {renderChildren(node.content, key)}
+            {renderChildren(node.content, key, ctx)}
           </div>
         );
       }
@@ -405,10 +446,17 @@ export function RichDocView({
   content: StoredRichDoc | JSONContent | string | null | undefined;
   className?: string;
 }) {
+  const [preview, setPreview] = useState<ImageLightboxTarget | null>(null);
   const doc = useMemo(() => {
     const raw = storedToDoc(content as StoredRichDoc);
     return linkifyJsonContent(raw) ?? raw;
   }, [content]);
+  const ctx = useMemo<RenderCtx>(
+    () => ({
+      onOpenImage: (src, alt) => setPreview({ src, alt }),
+    }),
+    [],
+  );
 
   return (
     <div
@@ -420,7 +468,8 @@ export function RichDocView({
         className,
       )}
     >
-      {renderNode(doc, "root")}
+      {renderNode(doc, "root", ctx)}
+      <ImageLightbox image={preview} onClose={() => setPreview(null)} />
     </div>
   );
 }

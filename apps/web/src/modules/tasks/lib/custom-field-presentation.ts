@@ -38,3 +38,27 @@ export function normalizeCustomFieldLabelPosition(
     ? (value as CustomFieldLabelPosition)
     : "top";
 }
+
+export const CUSTOM_FIELD_OPTION_COLOR_DISPLAY_VALUES = ["dot", "fill"] as const;
+
+export type CustomFieldOptionColorDisplay =
+  (typeof CUSTOM_FIELD_OPTION_COLOR_DISPLAY_VALUES)[number];
+
+export const CUSTOM_FIELD_OPTION_COLOR_DISPLAYS: {
+  value: CustomFieldOptionColorDisplay;
+  label: string;
+  description: string;
+}[] = [
+  { value: "dot", label: "Circle", description: "A color dot next to the name" },
+  { value: "fill", label: "Tag", description: "A colored pill, like ClickUp" },
+];
+
+export function normalizeOptionColorDisplay(
+  value: string | null | undefined,
+): CustomFieldOptionColorDisplay {
+  return CUSTOM_FIELD_OPTION_COLOR_DISPLAY_VALUES.includes(
+    value as CustomFieldOptionColorDisplay,
+  )
+    ? (value as CustomFieldOptionColorDisplay)
+    : "dot";
+}

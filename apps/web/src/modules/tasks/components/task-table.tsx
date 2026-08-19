@@ -45,6 +45,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { optionTagStyle } from "@/lib/color-contrast";
 import { cn } from "@/lib/utils";
 import type { TaskFilterCondition, TaskTypeMeta, TaskWithMeta } from "../queries";
 import {
@@ -81,6 +82,7 @@ import {
 import { TagChips, TagPicker, type TagOption } from "./tag-picker";
 import type { WritableListOption } from "../queries";
 import { DEFAULT_TASK_TYPE } from "../lib/task-types";
+import { normalizeOptionColorDisplay } from "../lib/custom-field-presentation";
 
 /** Compact solid chip for table display cells (matches board card fills). */
 export function TableChip({
@@ -114,7 +116,27 @@ export interface StatusLike {
   color: string;
   category?: string;
 }
-export interface FieldDefLike { id: string; key: string; label: string; type: string; options: unknown }
+export interface FieldDefLike {
+  id: string;
+  key: string;
+  label: string;
+  type: string;
+  options: unknown;
+  optionColorDisplay?: string | null;
+}
+
+type FieldOption = { id: string; label: string; color?: string };
+
+function fieldOptionsOf(def: FieldDefLike): FieldOption[] {
+  return (def.options ?? []) as FieldOption[];
+}
+
+function usesFillColor(def: FieldDefLike, option: FieldOption | undefined): boolean {
+  if (!option?.color) return false;
+  if (normalizeOptionColorDisplay(def.optionColorDisplay) === "fill") return true;
+  // Unlabeled color swatches already paint the whole cell.
+  return def.type === "color" && !option.label?.trim();
+}
 
 const CALCULABLE_TYPES = new Set(["number", "date"]);
 
@@ -159,13 +181,25 @@ export function renderFieldValue(
 ): ReactNode {
   if (value === null || value === undefined || value === "") return "—";
   if (def.type === "color" || def.type === "dropdown") {
-    const options = (def.options ?? []) as { id: string; label: string; color?: string }[];
+    const options = fieldOptionsOf(def);
     const o = options.find((opt) => opt.id === value);
     if (!o) return String(value);
+    const title = o.label || o.color || undefined;
+    if (usesFillColor(def, o) && o.color) {
+      return (
+        <span
+          className="inline-flex max-w-full items-center rounded-full px-2.5 py-[3px] text-[12px] font-medium"
+          style={optionTagStyle(o.color)}
+          title={title}
+        >
+          <span className="truncate">{o.label || o.color}</span>
+        </span>
+      );
+    }
     return (
       <span
         className="inline-flex items-center gap-1.5"
-        title={o.label || o.color || undefined}
+        title={title}
       >
         {o.color && (
           <span
@@ -174,6 +208,42 @@ export function renderFieldValue(
           />
         )}
         {o.label ? <span className="truncate">{o.label}</span> : null}
+      </span>
+    );
+  }
+  if (def.type === "multi_select") {
+    const ids = Array.isArray(value) ? (value as string[]) : [];
+    if (ids.length === 0) return "—";
+    const options = fieldOptionsOf(def);
+    const picked = ids
+      .map((id) => options.find((o) => o.id === id))
+      .filter((o): o is FieldOption => Boolean(o));
+    if (picked.length === 0) return fieldOptionLabel(def, value, userNames);
+    const fill = picked.some((o) => usesFillColor(def, o));
+    return (
+      <span className="inline-flex min-w-0 max-w-full flex-wrap items-center gap-1">
+        {picked.map((o) =>
+          fill && o.color ? (
+            <span
+              key={o.id}
+              className="inline-flex max-w-full items-center rounded-full px-2.5 py-[3px] text-[12px] font-medium"
+              style={optionTagStyle(o.color)}
+              title={o.label}
+            >
+              <span className="truncate">{o.label}</span>
+            </span>
+          ) : (
+            <span key={o.id} className="inline-flex items-center gap-1" title={o.label}>
+              {o.color && (
+                <span
+                  className="size-3 shrink-0 rounded-full border border-border"
+                  style={{ backgroundColor: o.color }}
+                />
+              )}
+              <span className="truncate">{o.label}</span>
+            </span>
+          ),
+        )}
       </span>
     );
   }
@@ -772,38 +842,43 @@ const TaskRow = memo(function TaskRow({
                   def={def}
                   value={cf[defId]}
                   users={activeUsers}
+                  defaultOpen={def.type === "dropdown" || def.type === "color"}
+                  onOpenChange={(open) => {
+                    if (!open) closeEdit();
+                  }}
                   onSaved={(next) => {
                     onPatchCustomField(task.id, defId, next);
-                    // Keep open for multi-step fields; click outside handled by row reuse.
                   }}
                 />
               </TableCell>
             );
           }
 
-          // Unlabeled color: fill the whole cell with the swatch color.
+          // Unlabeled color swatch: compact color block when not using tags.
           if (def.type === "color") {
-            const opts = (def.options ?? []) as { id: string; label: string; color?: string }[];
-            const picked = opts.find((o) => o.id === cf[defId]);
-            const fill =
-              picked && !picked.label?.trim() && picked.color ? picked.color : null;
-            if (fill) {
+            const picked = fieldOptionsOf(def).find((o) => o.id === cf[defId]);
+            const unlabeledSwatch =
+              picked && !picked.label?.trim() && picked.color &&
+              normalizeOptionColorDisplay(def.optionColorDisplay) !== "fill"
+                ? picked.color
+                : null;
+            if (unlabeledSwatch) {
               return (
                 <TableCell key={colId} className="p-0.5">
                   {canEdit ? (
                     <button
                       type="button"
-                      title={fill}
-                      aria-label={`Color ${fill}`}
+                      title={unlabeledSwatch}
+                      aria-label={`Color ${unlabeledSwatch}`}
                       onClick={() => openEdit(colId)}
                       className="block h-7 w-full rounded-sm border border-border/40 transition-[filter] hover:brightness-95"
-                      style={{ backgroundColor: fill }}
+                      style={{ backgroundColor: unlabeledSwatch }}
                     />
                   ) : (
                     <span
-                      title={fill}
+                      title={unlabeledSwatch}
                       className="block h-7 w-full rounded-sm border border-border/40"
-                      style={{ backgroundColor: fill }}
+                      style={{ backgroundColor: unlabeledSwatch }}
                     />
                   )}
                 </TableCell>
@@ -824,11 +899,25 @@ const TaskRow = memo(function TaskRow({
                   onSaved={(next) => onPatchCustomField(task.id, defId, next)}
                 />
               ) : canEdit ? (
-                <button type="button" onClick={() => openEdit(colId)} className={CELL_BTN}>
+                <button
+                  type="button"
+                  onClick={() => openEdit(colId)}
+                  className={
+                    normalizeOptionColorDisplay(def.optionColorDisplay) === "fill"
+                      ? "inline-flex h-7 max-w-full items-center rounded-md px-0.5 text-left hover:opacity-90"
+                      : CELL_BTN
+                  }
+                >
                   {renderFieldValue(def, cf[defId], userNames)}
                 </button>
               ) : (
-                <span className="block h-7 truncate px-1.5 text-sm">
+                <span
+                  className={
+                    normalizeOptionColorDisplay(def.optionColorDisplay) === "fill"
+                      ? "inline-flex h-7 max-w-full items-center px-0.5"
+                      : "block h-7 truncate px-1.5 text-sm"
+                  }
+                >
                   {renderFieldValue(def, cf[defId], userNames)}
                 </span>
               )}

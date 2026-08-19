@@ -1226,6 +1226,10 @@ function GridRow({
                 def={def}
                 value={cf[defId]}
                 users={activeUsers}
+                defaultOpen={def.type === "dropdown" || def.type === "color"}
+                onOpenChange={(open) => {
+                  if (!open) onStopEdit();
+                }}
                 onSaved={(next) => onPatchCustomField(task.id, defId, next)}
               />
             </TableCell>
