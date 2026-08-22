@@ -7,7 +7,7 @@
  * Fingerprint: GURVER-KG-AITIM-2026-7F3C9E2A
  * License: Proprietary. All rights reserved. See LICENSE / COPYRIGHT.
  */
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight, Menu } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -20,6 +20,8 @@ import {
   type ReactNode,
 } from "react";
 import { MAIN_CONTENT_ID } from "@/components/a11y";
+import { Button } from "@/components/ui/button";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
 import type { NavItem } from "@/modules/types";
 import { PresenceHeartbeat } from "./presence-heartbeat";
@@ -98,19 +100,33 @@ export function AppShell({
     pathname === "/chat" ||
     (pathname.startsWith("/chat/") && !pathname.startsWith("/chat/agents")) ||
     isTaskListWorkspacePath(pathname);
+  // `width` is the user's preferred width — only an explicit drag or the
+  // expand/collapse toggle should change (and persist) it. A shrunk viewport
+  // must never overwrite this preference, or it stays shrunk forever once the
+  // window widens back out (it's saved to localStorage, so it'd follow the
+  // user to their next, wider session too).
   const [width, setWidth] = useState(DEFAULT_WIDTH);
   const [collapsed, setCollapsed] = useState(false);
   const [hydrated, setHydrated] = useState(false);
   const [dragging, setDragging] = useState(false);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  // Live viewport cap, recomputed on resize — purely a render-time clamp, never persisted.
+  const [viewportMax, setViewportMax] = useState(MAX_PX_CAP);
   const dragRef = useRef<{ startX: number; startWidth: number } | null>(null);
+
+  // Off-canvas nav is a one-shot overlay — never carry it open across a navigation.
+  useEffect(() => {
+    setMobileNavOpen(false);
+  }, [pathname]);
 
   useEffect(() => {
     // Defer out of the effect body: hydrating from localStorage is an external
     // sync, and setState directly in the effect body triggers cascading renders.
     queueMicrotask(() => {
       const s = loadStored();
-      setWidth(Math.min(s.width, maxWidthPx()));
+      setWidth(s.width);
       setCollapsed(s.collapsed);
+      setViewportMax(maxWidthPx());
       setHydrated(true);
     });
   }, []);
@@ -129,7 +145,7 @@ export function AppShell({
 
   useEffect(() => {
     function onResize() {
-      setWidth((w) => Math.min(w, maxWidthPx()));
+      setViewportMax(maxWidthPx());
     }
     window.addEventListener("resize", onResize);
     return () => window.removeEventListener("resize", onResize);
@@ -184,7 +200,7 @@ export function AppShell({
     setWidth(Math.min(maxWidthPx(), Math.max(MIN_EXPANDED, next)));
   }
 
-  const railWidth = collapsed ? COLLAPSED_WIDTH : width;
+  const railWidth = collapsed ? COLLAPSED_WIDTH : Math.min(width, viewportMax);
 
   return (
     <UserProfileProvider>
@@ -192,7 +208,7 @@ export function AppShell({
     <div className="flex h-svh overflow-hidden">
       <aside
         className={cn(
-          "relative flex h-full shrink-0 flex-col border-r bg-sidebar",
+          "relative hidden h-full shrink-0 flex-col border-r bg-sidebar md:flex",
           !dragging && "transition-[width] duration-150 ease-out",
         )}
         style={{ width: railWidth }}
@@ -325,12 +341,68 @@ export function AppShell({
         </div>
       </aside>
 
+      <Sheet open={mobileNavOpen} onOpenChange={setMobileNavOpen}>
+        <SheetContent side="left" className="w-4/5 max-w-xs gap-0 p-0 md:hidden">
+          <SheetHeader className="sr-only">
+            <SheetTitle>Workspace navigation</SheetTitle>
+          </SheetHeader>
+          <div className="flex h-full flex-col">
+            <div
+              className={cn(
+                "relative flex h-28 shrink-0 items-center border-b border-sidebar-border bg-sidebar px-4 py-3",
+                "after:absolute after:inset-x-0 after:bottom-0 after:h-0.5 after:bg-brand-orange",
+              )}
+            >
+              <Link
+                href="/"
+                className="w-full rounded-md font-semibold tracking-tight focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring"
+                title="AACC Hub"
+              >
+                <span className="flex w-full flex-col items-center gap-1.5">
+                  <span className="block w-full overflow-hidden rounded-sm bg-white px-2 py-1 shadow-sm ring-1 ring-black/5">
+                    <Image
+                      src="/brand/aacc-logo.jpg"
+                      alt="Anne Arundel Community College"
+                      width={1263}
+                      height={715}
+                      className="mx-auto h-16 w-auto max-w-full"
+                      priority
+                    />
+                  </span>
+                  <span className="text-xs font-bold uppercase tracking-[0.2em] text-primary">
+                    AACC Hub
+                  </span>
+                </span>
+              </Link>
+            </div>
+            <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden bg-sidebar p-3">
+              <SidebarNav
+                items={items}
+                taskNavTree={taskNavTree}
+                isAdmin={isAdmin}
+                collapsed={false}
+              />
+            </div>
+          </div>
+        </SheetContent>
+      </Sheet>
+
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
         <header
-          className="flex min-h-14 shrink-0 items-center justify-end border-b border-t-[3px] border-t-primary bg-background px-4 py-1 sm:px-6"
+          className="flex min-h-14 shrink-0 items-center justify-between gap-2 border-b border-t-[3px] border-t-primary bg-background px-4 py-1 sm:px-6"
           aria-label="Application"
         >
-          {header}
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-sm"
+            className="md:hidden"
+            onClick={() => setMobileNavOpen(true)}
+            aria-label="Open navigation"
+          >
+            <Menu className="size-5" />
+          </Button>
+          <div className="flex flex-1 items-center justify-end">{header}</div>
         </header>
         <main
           id={MAIN_CONTENT_ID}

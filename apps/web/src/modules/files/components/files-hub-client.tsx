@@ -18,6 +18,7 @@ import {
   LayoutGrid,
   List,
   MoreHorizontal,
+  Paperclip,
   Plus,
   Search,
   Star,
@@ -88,9 +89,45 @@ const FILTERS: { id: DriveSection; label: string }[] = [
   { id: "all", label: "All" },
   { id: "recent", label: "Recent" },
   { id: "starred", label: "Starred" },
-  { id: "tasks", label: "On tasks" },
+  { id: "tasks", label: "Task files" },
   { id: "trash", label: "Trash" },
 ];
+
+type PreviewTarget = {
+  kind: "drive" | "task";
+  id: string;
+  fileName: string;
+  mimeType: string;
+};
+
+function previewUrl(file: PreviewTarget, download = false) {
+  const base = file.kind === "drive" ? `/api/files/${file.id}` : `/api/attachments/${file.id}`;
+  return download ? `${base}?download=1` : base;
+}
+
+function groupTaskFiles(files: TaskFileItem[]) {
+  const order: string[] = [];
+  const map = new Map<
+    string,
+    { taskNumber: string; taskTitle: string; spaceName: string; files: TaskFileItem[] }
+  >();
+  for (const file of files) {
+    const key = String(file.taskNumber);
+    let group = map.get(key);
+    if (!group) {
+      group = {
+        taskNumber: key,
+        taskTitle: file.taskTitle,
+        spaceName: file.spaceName,
+        files: [],
+      };
+      map.set(key, group);
+      order.push(key);
+    }
+    group.files.push(file);
+  }
+  return order.map((key) => map.get(key)!);
+}
 
 export function FilesHubClient({
   section,
@@ -121,7 +158,7 @@ export function FilesHubClient({
   const [creatingFolder, setCreatingFolder] = useState(false);
   const [folderName, setFolderName] = useState("");
   const [folderSpaceId, setFolderSpaceId] = useState(currentFolderSpaceId || spaces[0]?.id || "");
-  const [preview, setPreview] = useState<DriveFileItem | null>(null);
+  const [preview, setPreview] = useState<PreviewTarget | null>(null);
   const [renaming, setRenaming] = useState<{ kind: "file" | "folder"; id: string; name: string } | null>(null);
   const [moving, setMoving] = useState<{ kind: "file" | "folder"; id: string; spaceId: string } | null>(null);
   const [moveTargets, setMoveTargets] = useState<{ id: string; name: string }[]>([]);
@@ -137,7 +174,12 @@ export function FilesHubClient({
     [files, needle],
   );
   const visibleTaskFiles = useMemo(
-    () => taskFiles.filter((f) => !needle || `${f.fileName} ${f.taskTitle}`.toLowerCase().includes(needle)),
+    () =>
+      taskFiles.filter(
+        (f) =>
+          !needle ||
+          `${f.fileName} ${f.taskTitle} ${f.taskNumber} ${f.spaceName}`.toLowerCase().includes(needle),
+      ),
     [taskFiles, needle],
   );
 
@@ -198,9 +240,29 @@ export function FilesHubClient({
   function onDropFiles(e: DragEvent) {
     e.preventDefault();
     setSurfaceOver(false);
+    if (section !== "all") return;
     const dropped = [...e.dataTransfer.files];
     if (dropped.length > 0) void uploadFiles(dropped);
   }
+
+  const taskGroups = useMemo(() => groupTaskFiles(visibleTaskFiles), [visibleTaskFiles]);
+  const isLibrary = section === "all";
+  const heading =
+    section === "tasks"
+      ? "Task files"
+      : section === "starred"
+        ? "Starred"
+        : section === "recent"
+          ? "Recent"
+          : section === "trash"
+            ? "Trash"
+            : "All Files";
+  const intro =
+    section === "tasks"
+      ? "Files people added on tasks. They stay on the task — this list is only for finding them."
+      : "Shared folders for the team. Anyone with space access can open them. Drop files anywhere to upload (" +
+        MAX_ATTACHMENT_LABEL +
+        " max).";
 
   const empty = section === "tasks" ? visibleTaskFiles.length === 0 : visibleFolders.length === 0 && visibleFiles.length === 0;
 
@@ -208,6 +270,7 @@ export function FilesHubClient({
     <div
       className={cn("mx-auto flex w-full max-w-6xl flex-col gap-5", surfaceOver && "ring-2 ring-primary/30 rounded-2xl")}
       onDragOver={(e) => {
+        if (section !== "all") return;
         if ([...e.dataTransfer.types].includes("Files")) {
           e.preventDefault();
           setSurfaceOver(true);
@@ -218,13 +281,10 @@ export function FilesHubClient({
     >
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-xl font-semibold tracking-tight">All Files</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Shared folders for the team. Anyone with space access can open them. Drop files anywhere to upload
-            ({MAX_ATTACHMENT_LABEL} max).
-          </p>
+          <h1 className="text-xl font-semibold tracking-tight">{heading}</h1>
+          <p className="mt-1 text-sm text-muted-foreground">{intro}</p>
         </div>
-        {section === "all" && (
+        {isLibrary && (
           <div className="flex flex-wrap gap-2">
             <Button type="button" variant="outline" className="gap-1.5" onClick={() => setCreatingFolder(true)}>
               <FolderPlus className="size-3.5" />
@@ -246,32 +306,46 @@ export function FilesHubClient({
       </div>
 
       <nav aria-label="Folder path" className="flex flex-wrap items-center gap-0.5 text-sm">
-        <button
-          type="button"
-          onClick={() => go({ section: "all", folder: null })}
-          className={cn(
-            "rounded-md px-2 py-1 font-medium transition-colors hover:bg-muted",
-            !currentFolderId && section === "all" ? "text-foreground" : "text-muted-foreground",
-          )}
-        >
-          All Files
-        </button>
-        {section === "all" &&
-          breadcrumbs.map((crumb) => (
-            <span key={crumb.id} className="flex items-center gap-0.5">
-              <ChevronRight className="size-3.5 text-muted-foreground/60" />
-              <button type="button" className="rounded-md px-2 py-1 font-medium hover:bg-muted" onClick={() => go({ folder: crumb.id })}>
-                {crumb.name}
-              </button>
-            </span>
-          ))}
+        {section === "tasks" ? (
+          <span className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 font-medium">
+            <Paperclip className="size-3.5 text-muted-foreground" />
+            Task files
+          </span>
+        ) : (
+          <>
+            <button
+              type="button"
+              onClick={() => go({ section: "all", folder: null })}
+              className={cn(
+                "rounded-md px-2 py-1 font-medium transition-colors hover:bg-muted",
+                !currentFolderId && section === "all" ? "text-foreground" : "text-muted-foreground",
+              )}
+            >
+              All Files
+            </button>
+            {section === "all" &&
+              breadcrumbs.map((crumb) => (
+                <span key={crumb.id} className="flex items-center gap-0.5">
+                  <ChevronRight className="size-3.5 text-muted-foreground/60" />
+                  <button type="button" className="rounded-md px-2 py-1 font-medium hover:bg-muted" onClick={() => go({ folder: crumb.id })}>
+                    {crumb.name}
+                  </button>
+                </span>
+              ))}
+          </>
+        )}
       </nav>
 
       <div className="flex flex-wrap items-center gap-2">
         <label className="relative min-w-[12rem] flex-1">
           <span className="sr-only">Search files</span>
           <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
-          <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search files" className="h-9 pl-8" />
+          <Input
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder={section === "tasks" ? "Search files or tasks" : "Search files"}
+            className="h-9 pl-8"
+          />
         </label>
         {FILTERS.map((item) => (
           <Button
@@ -279,8 +353,10 @@ export function FilesHubClient({
             type="button"
             size="sm"
             variant={section === item.id ? "default" : "outline"}
+            className="gap-1.5"
             onClick={() => go({ section: item.id, folder: item.id === "all" ? currentFolderId : null })}
           >
+            {item.id === "tasks" && <Paperclip className="size-3.5" />}
             {item.label}
           </Button>
         ))}
@@ -297,10 +373,14 @@ export function FilesHubClient({
       <div>
         {empty ? (
           <div className="rounded-2xl border border-dashed p-12 text-center">
-            <Folder className="mx-auto size-10 fill-amber-400/80 text-amber-500" />
+            {section === "tasks" ? (
+              <Paperclip className="mx-auto size-10 text-muted-foreground" />
+            ) : (
+              <Folder className="mx-auto size-10 fill-amber-400/80 text-amber-500" />
+            )}
             <p className="mt-3 font-medium">
               {section === "tasks"
-                ? "No files on tasks you can open"
+                ? "No task files yet"
                 : section === "starred"
                   ? "No starred files yet"
                   : section === "trash"
@@ -310,9 +390,11 @@ export function FilesHubClient({
                       : "No shared files yet"}
             </p>
             <p className="mt-1 text-sm text-muted-foreground">
-              {section === "all"
-                ? "Create a folder for a space, or upload a file the whole team can use."
-                : "Shared files from this view will show up here."}
+              {section === "tasks"
+                ? "When someone adds a file on a task you can open, it will show up here — still stored on that task."
+                : section === "all"
+                  ? "Create a folder for a space, or upload a file the whole team can use."
+                  : "Shared files from this view will show up here."}
             </p>
             {section === "all" && (
               <Button type="button" className="mt-4" variant="outline" onClick={() => inputRef.current?.click()}>
@@ -322,20 +404,92 @@ export function FilesHubClient({
             )}
           </div>
         ) : section === "tasks" ? (
-          <ul className="mt-4 grid gap-1">
-            {visibleTaskFiles.map((file) => (
-              <li key={file.id} className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm hover:bg-muted/50">
-                <FileGlyph mime={file.mimeType} name={file.fileName} />
-                <a href={`/api/attachments/${file.id}`} className="min-w-0 flex-1 truncate font-medium hover:underline" target="_blank" rel="noreferrer">
-                  {file.fileName}
-                </a>
-                <Link href={`/tasks/task/${file.taskNumber}`} className="hidden text-xs text-primary hover:underline sm:block">
-                  {file.taskTitle}
-                </Link>
-                <span className="hidden w-24 text-xs text-muted-foreground sm:block">{formatBytes(file.sizeBytes)}</span>
-              </li>
-            ))}
-          </ul>
+          view === "grid" ? (
+            <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+              {visibleTaskFiles.map((file) => (
+                <div
+                  key={file.id}
+                  role="button"
+                  tabIndex={0}
+                  onClick={() =>
+                    setPreview({
+                      kind: "task",
+                      id: file.id,
+                      fileName: file.fileName,
+                      mimeType: file.mimeType,
+                    })
+                  }
+                  onKeyDown={(e) =>
+                    e.key === "Enter" &&
+                    setPreview({
+                      kind: "task",
+                      id: file.id,
+                      fileName: file.fileName,
+                      mimeType: file.mimeType,
+                    })
+                  }
+                  className="group relative flex flex-col items-center gap-2 rounded-2xl border border-border bg-background p-3 text-center hover:shadow-sm"
+                >
+                  <span className="flex size-12 items-center justify-center rounded-xl bg-muted">
+                    <FileGlyph mime={file.mimeType} name={file.fileName} size="lg" />
+                  </span>
+                  <span className="line-clamp-2 text-xs font-medium">{file.fileName}</span>
+                  <Link
+                    href={`/tasks/task/${file.taskNumber}`}
+                    className="line-clamp-1 text-[10px] font-medium text-primary hover:underline"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    {String(file.taskNumber)}
+                  </Link>
+                  <span className="line-clamp-1 text-[10px] text-muted-foreground">{file.spaceName}</span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="mt-2 flex flex-col gap-5">
+              {taskGroups.map((group) => (
+                <section key={group.taskNumber} className="min-w-0">
+                  <div className="mb-1 flex flex-wrap items-baseline gap-x-2 gap-y-0.5 px-2">
+                    <Link
+                      href={`/tasks/task/${group.taskNumber}`}
+                      className="font-mono text-xs font-semibold text-primary hover:underline"
+                    >
+                      {group.taskNumber}
+                    </Link>
+                    <span className="min-w-0 truncate text-sm font-medium">{group.taskTitle}</span>
+                    <span className="text-[11px] text-muted-foreground">{group.spaceName}</span>
+                  </div>
+                  <ul className="grid gap-0.5">
+                    {group.files.map((file) => (
+                      <li key={file.id} className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm hover:bg-muted/50">
+                        <button
+                          type="button"
+                          className="flex min-w-0 flex-1 items-center gap-2 text-left"
+                          onClick={() =>
+                            setPreview({
+                              kind: "task",
+                              id: file.id,
+                              fileName: file.fileName,
+                              mimeType: file.mimeType,
+                            })
+                          }
+                        >
+                          <FileGlyph mime={file.mimeType} name={file.fileName} />
+                          <span className="truncate font-medium">{file.fileName}</span>
+                        </button>
+                        <span className="hidden w-24 text-xs text-muted-foreground sm:block">
+                          {formatBytes(file.sizeBytes)}
+                        </span>
+                        <span className="hidden w-20 text-xs text-muted-foreground sm:block">
+                          {formatRelativeDate(file.updatedAt)}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              ))}
+            </div>
+          )
         ) : view === "grid" ? (
           <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
             {visibleFolders.map((folder) => (
@@ -377,15 +531,22 @@ export function FilesHubClient({
                 key={file.id}
                 role="button"
                 tabIndex={0}
-                onDoubleClick={() => setPreview(file)}
-                onKeyDown={(e) => e.key === "Enter" && setPreview(file)}
+                onDoubleClick={() =>
+                  setPreview({ kind: "drive", id: file.id, fileName: file.fileName, mimeType: file.mimeType })
+                }
+                onKeyDown={(e) =>
+                  e.key === "Enter" &&
+                  setPreview({ kind: "drive", id: file.id, fileName: file.fileName, mimeType: file.mimeType })
+                }
                 className="group relative flex flex-col items-center gap-2 rounded-2xl border border-border bg-background p-3 text-center hover:shadow-sm"
               >
                 <div className="absolute right-1.5 top-1.5">
                   <FileMenu
                     file={file}
                     trash={section === "trash"}
-                    onPreview={() => setPreview(file)}
+                    onPreview={() =>
+                      setPreview({ kind: "drive", id: file.id, fileName: file.fileName, mimeType: file.mimeType })
+                    }
                     onRename={() => setRenaming({ kind: "file", id: file.id, name: file.fileName })}
                     onMove={() => {
                       setMoving({ kind: "file", id: file.id, spaceId: file.homeSpaceId });
@@ -417,7 +578,13 @@ export function FilesHubClient({
             ))}
             {visibleFiles.map((file) => (
               <li key={file.id} className="group flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm hover:bg-muted/50">
-                <button type="button" className="flex min-w-0 flex-1 items-center gap-2 text-left" onClick={() => setPreview(file)}>
+                <button
+                  type="button"
+                  className="flex min-w-0 flex-1 items-center gap-2 text-left"
+                  onClick={() =>
+                    setPreview({ kind: "drive", id: file.id, fileName: file.fileName, mimeType: file.mimeType })
+                  }
+                >
                   <FileGlyph mime={file.mimeType} name={file.fileName} />
                   <span className="truncate font-medium">{file.fileName}</span>
                   {file.starred && <Star className="size-3 fill-amber-400 text-amber-500" />}
@@ -427,7 +594,9 @@ export function FilesHubClient({
                 <FileMenu
                   file={file}
                   trash={section === "trash"}
-                  onPreview={() => setPreview(file)}
+                  onPreview={() =>
+                    setPreview({ kind: "drive", id: file.id, fileName: file.fileName, mimeType: file.mimeType })
+                  }
                   onRename={() => setRenaming({ kind: "file", id: file.id, name: file.fileName })}
                   onMove={() => {
                     setMoving({ kind: "file", id: file.id, spaceId: file.homeSpaceId });
@@ -570,9 +739,9 @@ export function FilesHubClient({
             <div className="min-h-[50vh] flex-1 overflow-auto bg-muted/40 p-4">
               {fileKind(preview.mimeType, preview.fileName) === "image" ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={`/api/files/${preview.id}`} alt={preview.fileName} className="mx-auto max-h-[70vh] max-w-full object-contain" />
+                <img src={previewUrl(preview)} alt={preview.fileName} className="mx-auto max-h-[70vh] max-w-full object-contain" />
               ) : fileKind(preview.mimeType, preview.fileName) === "pdf" ? (
-                <iframe title={preview.fileName} src={`/api/files/${preview.id}`} className="h-[70vh] w-full rounded-md bg-white" />
+                <iframe title={preview.fileName} src={previewUrl(preview)} className="h-[70vh] w-full rounded-md bg-white" />
               ) : (
                 <p className="text-center text-sm text-muted-foreground">Preview isn’t available. Download the file instead.</p>
               )}
@@ -581,7 +750,7 @@ export function FilesHubClient({
           <DialogFooter className="m-0">
             {preview && (
               <Button asChild>
-                <a href={`/api/files/${preview.id}?download=1`}>Download</a>
+                <a href={previewUrl(preview, true)}>Download</a>
               </Button>
             )}
           </DialogFooter>

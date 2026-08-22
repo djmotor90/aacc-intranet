@@ -19,6 +19,17 @@ export const whatsNewFeed: WhatsNewFeed = {
   schemaVersion: 1,
   entries: [
     {
+      id: "2026-08-21-files-task-attachments",
+      date: "2026-08-21",
+      publishedAt: "2026-08-21T12:00:00.000Z",
+      kind: "improved",
+      module: "shell",
+      title: "Find task files without mixing them into All Files",
+      body: "Files has a Task files view for attachments people added on tasks. They stay on the task — this is only a finder. Shared folders in All Files are unchanged, and you cannot upload here.",
+      href: "/files?section=tasks",
+      tags: ["files", "tasks", "attachments"],
+    },
+    {
       id: "2026-08-19-custom-field-full-cell-color",
       date: "2026-08-19",
       publishedAt: "2026-08-19T20:00:00.000Z",

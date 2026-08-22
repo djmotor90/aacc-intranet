@@ -271,6 +271,9 @@ export async function listDriveFoldersForMove(user: SessionUserLike, spaceId?: s
 }
 
 export async function listTaskFiles(user: SessionUserLike): Promise<TaskFileItem[]> {
+  const spaceIds = await accessibleSpaceIds(user);
+  if (spaceIds !== "all" && spaceIds.length === 0) return [];
+
   const rows = await db
     .select({
       id: attachments.id,
@@ -287,15 +290,31 @@ export async function listTaskFiles(user: SessionUserLike): Promise<TaskFileItem
     .innerJoin(tasks, eq(attachments.taskId, tasks.id))
     .innerJoin(lists, eq(tasks.listId, lists.id))
     .innerJoin(spaces, eq(lists.spaceId, spaces.id))
-    .where(and(isNull(lists.deletedAt), isNull(spaces.deletedAt)))
+    .where(
+      and(
+        isNull(tasks.deletedAt),
+        isNull(lists.deletedAt),
+        isNull(spaces.deletedAt),
+        eq(spaces.isArchived, false),
+        spaceIds === "all" ? undefined : inArray(spaces.id, spaceIds),
+      ),
+    )
     .orderBy(desc(attachments.updatedAt))
-    .limit(200);
+    .limit(400);
 
-  const out: TaskFileItem[] = [];
-  for (const row of rows) {
-    const role = await getListRole(user.id, row.listId, user.platformRole);
-    if (!role) continue;
-    out.push({
+  const uniqueListIds = [...new Set(rows.map((row) => row.listId))];
+  const allowedLists = new Set<string>();
+  await Promise.all(
+    uniqueListIds.map(async (listId) => {
+      const role = await getListRole(user.id, listId, user.platformRole);
+      if (role) allowedLists.add(listId);
+    }),
+  );
+
+  return rows
+    .filter((row) => allowedLists.has(row.listId))
+    .slice(0, 200)
+    .map((row) => ({
       id: row.id,
       fileName: row.fileName,
       mimeType: row.mimeType,
@@ -304,10 +323,7 @@ export async function listTaskFiles(user: SessionUserLike): Promise<TaskFileItem
       taskTitle: row.taskTitle,
       spaceName: row.spaceName,
       updatedAt: row.updatedAt.toISOString(),
-    });
-    if (out.length >= 80) break;
-  }
-  return out;
+    }));
 }
 
 export async function getDriveFileForUser(user: SessionUserLike, fileId: string) {
